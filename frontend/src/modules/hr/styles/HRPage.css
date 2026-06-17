@@ -1,0 +1,16 @@
+.hr-overview {
+  background: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px solid #e4e7ec;
+}
+
+.hr-overview h3 {
+  margin-bottom: 12px;
+  color: #2c3e50;
+}
+
+.hr-overview p {
+  color: #5a6572;
+  line-height: 1.6;
+}

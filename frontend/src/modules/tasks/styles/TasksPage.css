@@ -1,0 +1,16 @@
+.tasks-board {
+  background: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px solid #e4e7ec;
+}
+
+.tasks-board h3 {
+  margin-bottom: 12px;
+  color: #2c3e50;
+}
+
+.tasks-board p {
+  color: #5a6572;
+  line-height: 1.6;
+}

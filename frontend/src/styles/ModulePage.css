@@ -1,0 +1,16 @@
+.module-page {
+  background: var(--sidebar);
+  padding: 24px;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(2,6,23,0.06);
+}
+
+.module-page h2 {
+  color: var(--text);
+  margin-bottom: 18px;
+}
+
+.module-page p {
+  color: var(--text);
+  line-height: 1.8;
+}

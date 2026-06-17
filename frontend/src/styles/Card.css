@@ -1,0 +1,9 @@
+.ui-card {
+  background: var(--sidebar);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(2,6,23,0.06);
+}
+
+.login-card-new { max-width: 420px; margin: 0 auto; }

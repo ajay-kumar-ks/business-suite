@@ -71,6 +71,20 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+@router.get("/users")
+async def list_users(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    users = db.query(UserDB).all()
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "full_name": u.full_name,
+        }
+        for u in users
+    ]
+
+
 @router.get("/dashboard")
 async def dashboard(current_user: User = Depends(get_current_user)):
     return {

@@ -35,11 +35,8 @@ export const authAPI = {
     api.post('/auth/login', { username, password }),
   getDashboard: () =>
     api.get('/auth/dashboard'),
-}
-
-export const hrAPI = {
-  getStatus: () =>
-    api.get('/hr/'),
+  getUsers: () =>
+    api.get('/auth/users'),
 }
 
 const getTenantId = () => {

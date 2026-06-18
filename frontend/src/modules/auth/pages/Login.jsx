@@ -1,5 +1,6 @@
 import React from 'react'
 import { useAuth } from '../../../context/AuthContext'
+import { useNavigate } from 'react-router-dom'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import Card from '../../../components/ui/Card'
@@ -13,6 +14,7 @@ const Login = ({ onLoginSuccess }) => {
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState('')
   const { login } = useAuth()
+  const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -21,7 +23,8 @@ const Login = ({ onLoginSuccess }) => {
 
     const success = await login(username, password)
     if (success) {
-      onLoginSuccess()
+      if (onLoginSuccess) onLoginSuccess()
+      else navigate('/dashboard')
     } else {
       setError('Invalid username or password')
     }

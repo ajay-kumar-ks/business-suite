@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI
 from app.core.config import settings
 from app.core.event_bus import event_bus
@@ -10,6 +11,8 @@ from app.modules.hr.routers import router as hr_router
 from app.modules.accounts.routers import router as accounts_router
 from app.modules.crm.routers import router as crm_router
 from app.modules.tasks.routers import router as tasks_router
+from app.modules.tasks.scheduler import run_overdue_scheduler
+from app.modules.tasks.event_handlers import register_handlers
 
 app = FastAPI(title="Business Suite Backend", version="0.1.0")
 app.add_middleware(TenantMiddleware)
@@ -37,6 +40,12 @@ async def startup_event():
 
     register_event_handlers()
     event_bus.connect()
+
+    # Register tasks module event handlers
+    register_handlers()
+
+    # Start overdue task scheduler
+    asyncio.create_task(run_overdue_scheduler())
 
 
 @app.on_event("shutdown")

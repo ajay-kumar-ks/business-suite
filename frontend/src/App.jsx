@@ -8,6 +8,7 @@ import TasksPage from './modules/tasks/pages/TasksPage'
 import HRPage from './modules/hr/pages/HRPage'
 import AccountsPage from './modules/accounts/pages/AccountsPage'
 import PageShell from './components/PageShell'
+import { TaskNotificationProvider } from './context/TaskNotificationContext'
 import './App.css'
 
 function App() {
@@ -28,29 +29,29 @@ function App() {
 
         <Route
           path="/dashboard"
-          element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />}
+          element={isAuthenticated ? <TaskNotificationProvider><Dashboard /></TaskNotificationProvider> : <Navigate to="/login" />}
         />
 
         <Route
           path="/crm"
-          element={isAuthenticated ? <PageShell><CRMPage /></PageShell> : <Navigate to="/login" />}
+          element={isAuthenticated ? <TaskNotificationProvider><PageShell><CRMPage /></PageShell></TaskNotificationProvider> : <Navigate to="/login" />}
         />
 
         <Route
           path="/tasks"
-          element={isAuthenticated ? <PageShell><TasksPage /></PageShell> : <Navigate to="/login" />}
+          element={isAuthenticated ? <TaskNotificationProvider><PageShell><TasksPage /></PageShell></TaskNotificationProvider> : <Navigate to="/login" />}
         />
 
         <Route path="/task" element={<Navigate to="/tasks" />} />
 
         <Route
           path="/hr"
-          element={isAuthenticated ? <PageShell><HRPage /></PageShell> : <Navigate to="/login" />}
+          element={isAuthenticated ? <TaskNotificationProvider><PageShell><HRPage /></PageShell></TaskNotificationProvider> : <Navigate to="/login" />}
         />
 
         <Route
           path="/accounts"
-          element={isAuthenticated ? <PageShell><AccountsPage /></PageShell> : <Navigate to="/login" />}
+          element={isAuthenticated ? <TaskNotificationProvider><PageShell><AccountsPage /></PageShell></TaskNotificationProvider> : <Navigate to="/login" />}
         />
 
         <Route path="*" element={<Navigate to="/dashboard" />} />

@@ -3,29 +3,36 @@ import Sidebar from '../components/Sidebar'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../../../context/AuthContext'
 import { authAPI } from '../../../services/api'
-import { LogOut, User, Mail, Shield } from 'lucide-react'
+import { User, Mail, Shield } from 'lucide-react'
 import Loader from '../../../components/ui/Loader'
 import HRPage from '../../hr/pages/HRPage'
 import AccountsPage from '../../accounts/pages/AccountsPage'
+import COAPage from '../../accounts/pages/COAPage'
+import JournalsPage from '../../accounts/pages/JournalsPage'
+import LedgerPage from '../../accounts/pages/LedgerPage'
+import TransactionsPage from '../../accounts/pages/TransactionsPage'
+import ARPage from '../../accounts/pages/ARPage'
+import APPage from '../../accounts/pages/APPage'
+import BudgetsPage from '../../accounts/pages/BudgetsPage'
+import ReportsPage from '../../accounts/pages/ReportsPage'
 import TasksPage from '../../tasks/pages/TasksPage'
 import CRMPage from '../../crm/pages/CRMPage'
 import '../../../styles/Dashboard.css'
+import '../../../styles/AccountsModule.css'
+import '../../../styles/AccountsTheme.css'
 
 const Dashboard = () => {
   const { user, logout } = useAuth()
-  const [dashboardData, setDashboardData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeModule, setActiveModule] = useState('overview')
+  const [activeAccountPage, setActiveAccountPage] = useState('overview')
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
-        const response = await authAPI.getDashboard()
-        setDashboardData(response.data)
-      } catch (error) {
-        console.error('Failed to load dashboard:', error)
+          await authAPI.getDashboard()
       } finally {
         setLoading(false)
       }
@@ -88,9 +95,37 @@ const Dashboard = () => {
             </div>
           )}
 
-          {activeModule === 'accounts' && <AccountsPage />}
-          {activeModule === 'tasks' && <TasksPage />}
-          {activeModule === 'crm' && <CRMPage />}
+          {activeModule === 'accounts' ? (
+            <div>
+              <div className="accounts-navigation">
+                <button className={activeAccountPage === 'overview' ? 'active' : ''} onClick={() => setActiveAccountPage('overview')}>Overview</button>
+                <button className={activeAccountPage === 'coa' ? 'active' : ''} onClick={() => setActiveAccountPage('coa')}>Chart of Accounts</button>
+                <button className={activeAccountPage === 'journals' ? 'active' : ''} onClick={() => setActiveAccountPage('journals')}>Journals</button>
+                <button className={activeAccountPage === 'ledger' ? 'active' : ''} onClick={() => setActiveAccountPage('ledger')}>Ledger</button>
+                <button className={activeAccountPage === 'transactions' ? 'active' : ''} onClick={() => setActiveAccountPage('transactions')}>Transactions</button>
+                <button className={activeAccountPage === 'ar' ? 'active' : ''} onClick={() => setActiveAccountPage('ar')}>Accounts Receivable</button>
+                <button className={activeAccountPage === 'ap' ? 'active' : ''} onClick={() => setActiveAccountPage('ap')}>Accounts Payable</button>
+                <button className={activeAccountPage === 'budgets' ? 'active' : ''} onClick={() => setActiveAccountPage('budgets')}>Budgets</button>
+                <button className={activeAccountPage === 'reports' ? 'active' : ''} onClick={() => setActiveAccountPage('reports')}>Reports</button>
+              </div>
+              <div className="accounts-page-wrapper">
+                {activeAccountPage === 'overview' && <AccountsPage />}
+                {activeAccountPage === 'coa' && <COAPage />}
+                {activeAccountPage === 'journals' && <JournalsPage />}
+                {activeAccountPage === 'ledger' && <LedgerPage />}
+                {activeAccountPage === 'transactions' && <TransactionsPage />}
+                {activeAccountPage === 'ar' && <ARPage />}
+                {activeAccountPage === 'ap' && <APPage />}
+                {activeAccountPage === 'budgets' && <BudgetsPage />}
+                {activeAccountPage === 'reports' && <ReportsPage />}
+              </div>
+            </div>
+          ) : (
+            <>
+              {activeModule === 'tasks' && <TasksPage />}
+              {activeModule === 'crm' && <CRMPage />}
+            </>
+          )}
         </div>
       </div>
     </div>

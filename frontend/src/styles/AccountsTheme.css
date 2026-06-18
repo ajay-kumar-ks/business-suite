@@ -1,0 +1,41 @@
+.accounts-navigation button {
+  border: 1px solid var(--border);
+  background: var(--sidebar);
+  color: var(--text);
+}
+
+.accounts-navigation button.active,
+.accounts-navigation button:hover {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.accounts-table th,
+.accounts-table td {
+  border: 1px solid var(--border);
+  background: var(--sidebar);
+  color: var(--text);
+}
+
+.ui-input-field,
+select {
+  background: var(--sidebar);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.report-card {
+  border: 1px solid var(--border);
+  background: var(--sidebar);
+  color: var(--text);
+}
+
+.error-message {
+  background: rgba(254, 226, 226, 0.2);
+  color: #9b1c1c;
+}
+
+.success-message {
+  background: rgba(230, 255, 237, 0.2);
+  color: #166534;
+}

@@ -1,9 +1,9 @@
-/* From Uiverse.io by mrhyddenn */
+/* From Uiverse.io by mrhyddenn — adapted for system theme support */
 .loader {
   width: 50px;
   height: 50px;
   display: inline-block;
-  border: 5px solid rgb(255, 17, 0);
+  border: 5px solid var(--primary);
   border-radius: 50%;
   border-top-color: transparent;
   border-bottom-color: transparent;
@@ -17,8 +17,8 @@
 
   50% {
     transform: rotate(180deg);
-    border-top-color: rgb(139, 46, 46);
-    border-bottom-color: rgb(243, 92, 33);
+    border-top-color: color-mix(in srgb, var(--primary) 60%, transparent);
+    border-bottom-color: color-mix(in srgb, var(--primary) 80%, var(--text));
     border-right-color: transparent;
     border-left-color: transparent;
   }

@@ -33,6 +33,7 @@ class Task(BaseModel):
     status = Column(SqlEnum(Status), nullable=False, default=Status.TODO)
     reason_note = Column(Text, nullable=True)
     due_date = Column(DateTime, nullable=False)
+    proof_attachment = Column(Text, nullable=True)
 
     def __repr__(self):
         return f"<Task(id={self.id}, title={self.title}, status={self.status}, priority={self.priority})>"

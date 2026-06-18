@@ -15,6 +15,7 @@ def create_task(db: Session, task_data: TaskCreate, created_by: int) -> Task:
         priority=task_data.priority,
         status=task_data.status,
         reason_note=task_data.reason_note,
+        proof_attachment=task_data.proof_attachment,
         due_date=task_data.due_date,
     )
     db.add(task)

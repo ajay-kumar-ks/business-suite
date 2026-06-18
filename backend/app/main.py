@@ -1,5 +1,7 @@
+import os
 import asyncio
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.core.event_bus import event_bus
 from app.core.event_handlers import register_event_handlers
@@ -11,6 +13,7 @@ from app.modules.hr.routers import router as hr_router
 from app.modules.accounts.routers import router as accounts_router
 from app.modules.crm.routers import router as crm_router
 from app.modules.tasks.routers import router as tasks_router
+from app.modules.tasks.upload import router as upload_router
 from app.modules.tasks.scheduler import run_overdue_scheduler
 from app.modules.tasks.event_handlers import register_handlers
 
@@ -22,6 +25,12 @@ app.include_router(tasks_router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(hr_router, prefix="/api/hr", tags=["hr"])
 app.include_router(accounts_router, prefix="/api/accounts", tags=["accounts"])
 app.include_router(crm_router, prefix="/api/crm", tags=["crm"])
+app.include_router(upload_router, prefix="/api/tasks", tags=["tasks"])
+
+# Serve uploaded files
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
 @app.get("/api/health")

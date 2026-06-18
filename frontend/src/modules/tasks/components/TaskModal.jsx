@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import { X, Paperclip, Upload, FileText, Check } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
+import { taskApi } from '../services/taskApi'
 
 const STATUS_OPTIONS = [
   { value: 'TODO', label: 'Todo' },
@@ -36,13 +37,52 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
   const [priority, setPriority] = useState(task?.priority || 'MEDIUM')
   const [status, setStatus] = useState(task?.status || 'TODO')
   const [reasonNote, setReasonNote] = useState(task?.reason_note || '')
+  const [proofAttachment, setProofAttachment] = useState(task?.proof_attachment || '')
   const [dueDate, setDueDate] = useState(
     task?.due_date ? task.due_date.slice(0, 10) : ''
   )
   const [saving, setSaving] = useState(false)
 
+  // File upload state
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const fileInputRef = useRef(null)
+
   const reasonLabel = REASON_LABELS[status] || 'Reason note'
   const isReasonReadOnly = status === 'OVERDUE'
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('File is too large. Maximum size is 10 MB.')
+      setSelectedFile(null)
+      return
+    }
+
+    setSelectedFile(file)
+    setUploadError('')
+  }
+
+  const handleUpload = async () => {
+    if (!selectedFile) return
+
+    setUploading(true)
+    setUploadError('')
+
+    try {
+      const res = await taskApi.uploadProof(selectedFile)
+      setProofAttachment(res.data.url)
+      setSelectedFile(null)
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Upload failed. Please try again.'
+      setUploadError(msg)
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -57,6 +97,7 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
         priority,
         status,
         reason_note: reasonNote.trim() || null,
+        proof_attachment: proofAttachment.trim() || null,
         due_date: new Date(dueDate).toISOString(),
       }
       await onSave(payload, task?.id)
@@ -67,6 +108,12 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
 
   const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) onClose()
+  }
+
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
   return (
@@ -158,6 +205,122 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
                 Reason is auto-set when status is Overdue
               </small>
             )}
+          </div>
+
+          {/* Proof Attachment - File Upload */}
+          <div className="filter-group reason-text">
+            <label htmlFor="task-proof" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Paperclip size={14} />
+              Proof Attachment
+            </label>
+
+            <input
+              ref={fileInputRef}
+              id="task-proof"
+              type="file"
+              onChange={handleFileSelect}
+              accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              style={{ display: 'none' }}
+            />
+
+            {proofAttachment && (
+              <div style={{
+                border: '1px solid #22c55e',
+                borderRadius: 12,
+                padding: '12px 16px',
+                background: 'rgba(34, 197, 94, 0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                marginBottom: 8,
+              }}>
+                <Check size={18} style={{ color: '#22c55e', flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: 'var(--text)', wordBreak: 'break-all', flex: 1 }}>
+                  {proofAttachment}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setProofAttachment('')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#ef4444',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    flexShrink: 0,
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+
+            {!proofAttachment && (
+              <>
+                {selectedFile ? (
+                  <div style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: 12,
+                    padding: '12px 16px',
+                    background: 'var(--bg)',
+                    marginBottom: 8,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <FileText size={20} style={{ opacity: 0.5, flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontWeight: 600, color: 'var(--text)', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedFile.name}
+                        </p>
+                        <p style={{ fontSize: 11, opacity: 0.5, color: 'var(--text)' }}>
+                          {formatFileSize(selectedFile.size)}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={handleUpload}
+                        disabled={uploading}
+                        style={{ flexShrink: 0, fontSize: 12, padding: '6px 12px' }}
+                      >
+                        {uploading ? 'Uploading...' : 'Upload'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      border: '2px dashed var(--border)',
+                      borderRadius: 12,
+                      padding: '24px 16px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      background: 'var(--bg)',
+                      marginBottom: 8,
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--primary)'}
+                    onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+                  >
+                    <Upload size={24} style={{ opacity: 0.3, marginBottom: 4 }} />
+                    <p style={{ fontWeight: 600, color: 'var(--text)', fontSize: 13, marginBottom: 2 }}>
+                      Click to upload proof
+                    </p>
+                    <p style={{ fontSize: 11, opacity: 0.4, color: 'var(--text)' }}>
+                      PNG, JPG, PDF — up to 10 MB
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {uploadError && (
+              <p style={{ color: '#ef4444', fontSize: 13, marginTop: 4 }}>{uploadError}</p>
+            )}
+
+            <small style={{ opacity: 0.5, fontSize: 12, marginTop: 4, display: 'block' }}>
+              Required when changing task status. Upload a screenshot or document as evidence.
+            </small>
           </div>
 
           <div className="form-actions">

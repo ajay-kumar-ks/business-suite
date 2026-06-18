@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import '../../../styles/ModulePage.css'
 import { accountsAPI } from '../../../services/api'
+import Loader from '../../../components/ui/Loader'
 
 const AccountsPage = () => {
   const [status, setStatus] = useState(null)
@@ -30,7 +31,7 @@ const AccountsPage = () => {
             {status.tenant_id && <p><strong>Tenant ID:</strong> {status.tenant_id}</p>}
           </div>
         ) : (
-          <p>Loading accounts status...</p>
+          <Loader size={24} />
         )}
       </div>
       <div className="accounts-summary" style={{ marginTop: '24px' }}>

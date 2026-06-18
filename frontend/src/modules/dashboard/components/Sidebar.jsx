@@ -12,6 +12,7 @@ import {
   LogOut,
 } from 'lucide-react'
 import { useAuth } from '../../../context/AuthContext'
+import { useNavigate } from 'react-router-dom'
 import { useTheme } from '../../../context/ThemeContext'
 import Avatar from '../../../components/ui/Avatar'
 import '../styles/Sidebar.css'
@@ -56,16 +57,7 @@ const Sidebar = ({ activeModule, setActiveModule, collapsed, setCollapsed, mobil
               const IconComponent = module.icon
               return (
                 <li key={module.id}>
-                  <button
-                    title={module.label}
-                    className={`nav-link ${activeModule === module.id ? 'active' : ''}`}
-                    onClick={() => setActiveModule(module.id)}
-                  >
-                    <span className="nav-icon">
-                      <IconComponent size={20} />
-                    </span>
-                    <span className="nav-label">{module.label}</span>
-                  </button>
+                  <ModuleButton module={module} IconComponent={IconComponent} activeModule={activeModule} setActiveModule={setActiveModule} />
                 </li>
               )
             })}
@@ -111,3 +103,22 @@ const Sidebar = ({ activeModule, setActiveModule, collapsed, setCollapsed, mobil
 }
 
 export default Sidebar
+
+function ModuleButton({ module, IconComponent, activeModule, setActiveModule }) {
+  const navigate = useNavigate()
+  return (
+    <button
+      title={module.label}
+      className={`nav-link ${activeModule === module.id ? 'active' : ''}`}
+      onClick={() => {
+        setActiveModule(module.id)
+        navigate(`/${module.id}`)
+      }}
+    >
+      <span className="nav-icon">
+        <IconComponent size={20} />
+      </span>
+      <span className="nav-label">{module.label}</span>
+    </button>
+  )
+}

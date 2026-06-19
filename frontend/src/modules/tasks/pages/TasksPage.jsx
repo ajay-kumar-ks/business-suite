@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, RotateCcw, RotateCw } from 'lucide-react'
 import Loader from '../../../components/ui/Loader'
 import Button from '../../../components/ui/Button'
 import TaskBoard from '../components/TaskBoard'
+import { STATUS_LABELS } from '../components/TaskCard'
 import TaskModal from '../components/TaskModal'
 import ProofModal from '../components/ProofModal'
 import TaskFilters from '../components/TaskFilters'
@@ -31,7 +32,16 @@ const TasksPage = () => {
   const [editingTask, setEditingTask] = useState(null)
   const [saving, setSaving] = useState(false)
   const [proofPending, setProofPending] = useState(null) // { task, newStatus }
+  // Undo/redo state: { taskId, prevStatus, prevProof, taskTitle, newStatus }
+  const [lastChange, setLastChange] = useState(null)
+  const [lastUndo, setLastUndo] = useState(null)
+  const [undoAnimating, setUndoAnimating] = useState(false)
+  const [redoAnimating, setRedoAnimating] = useState(false)
   const debounceRef = useRef(null)
+  // Stable refs for keyboard shortcut handlers (avoids re-registering listeners on every render)
+  // Refs are set to null initially, then populated after handlers are defined
+  const handleUndoRef = useRef(null)
+  const handleRedoRef = useRef(null)
 
   const fetchTasks = useCallback(async (appliedFilters = {}) => {
     try {
@@ -70,11 +80,29 @@ const TasksPage = () => {
       setEmployees([])
     }
   }, [])
-
   useEffect(() => {
     fetchTasks(filters)
     fetchEmployees()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Y (redo)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Don't trigger when typing in an input/select
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault()
+        handleUndoRef.current()
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault()
+        handleRedoRef.current()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, []) // Stable — uses refs to always call the latest handlers
 
   // Debounced search
   useEffect(() => {
@@ -101,8 +129,19 @@ const TasksPage = () => {
   }
 
   const doStatusChange = useCallback(async (taskId, newStatus, proofUrl) => {
+    // Capture previous state before optimistically updating
+    let prevStatus = null
+    let prevProof = null
+    let taskTitle = ''
+
     // Optimistically update the UI
     setTasks((prev) => {
+      const task = prev.find((t) => t.id === taskId)
+      if (task) {
+        prevStatus = task.status
+        prevProof = task.proof_attachment
+        taskTitle = task.title
+      }
       const updated = prev.map((t) =>
         t.id === taskId ? { ...t, status: newStatus, proof_attachment: proofUrl } : t
       )
@@ -110,10 +149,20 @@ const TasksPage = () => {
       return updated
     })
 
+    // Don't record undo if we couldn't capture the previous state
+    if (prevStatus === null) return
+
+    // Clear redo — a new change invalidates the redo stack
+    setLastUndo(null)
+
     try {
       await taskApi.updateTask(taskId, { status: newStatus, proof_attachment: proofUrl })
+
+      // Record as the latest change for undo (include proofUrl so redo can replay it)
+      setLastChange({ taskId, prevStatus, prevProof, proofUrl, taskTitle, newStatus })
     } catch (err) {
       console.error('Failed to update task status:', err)
+      setLastChange(null)
       fetchTasks(filters)
     }
   }, [filters, fetchTasks, updateOverdueCount])
@@ -122,9 +171,13 @@ const TasksPage = () => {
     const task = tasks.find((t) => t.id === taskId)
     if (!task) return
 
-    // Always show the proof modal — new proof required for every status change
-    setProofPending({ task, newStatus })
-  }, [tasks])
+    // Only require proof when moving to COMPLETED
+    if (newStatus === 'COMPLETED') {
+      setProofPending({ task, newStatus })
+    } else {
+      doStatusChange(taskId, newStatus, null)
+    }
+  }, [tasks, doStatusChange])
 
   const handleProofConfirm = useCallback((proofUrl) => {
     if (!proofPending) return
@@ -136,6 +189,73 @@ const TasksPage = () => {
   const handleProofCancel = useCallback(() => {
     setProofPending(null)
   }, [])
+
+  const handleUndo = useCallback(async () => {
+    if (!lastChange) return
+
+    const { taskId, prevStatus, prevProof, proofUrl, taskTitle, newStatus } = lastChange
+    setLastChange(null)
+
+    // Store redo info so user can reapply (carry over proofUrl if it existed)
+    setLastUndo({ taskId, prevStatus: newStatus, proofUrl, taskTitle, newStatus: prevStatus })
+
+    // Show animation feedback
+    setUndoAnimating(true)
+    setTimeout(() => setUndoAnimating(false), 600)
+
+    // Optimistically revert the UI
+    setTasks((prev) => {
+      const updated = prev.map((t) =>
+        t.id === taskId ? { ...t, status: prevStatus, proof_attachment: prevProof } : t
+      )
+      updateOverdueCount(updated.filter((t) => t.status === 'OVERDUE').length)
+      return updated
+    })
+
+    // Fire-and-forget the API call (no blocking)
+    taskApi.updateTask(taskId, { status: prevStatus, proof_attachment: prevProof })
+      .catch((err) => {
+        console.error('Failed to undo status change:', err)
+        fetchTasks(filters)
+      })
+  }, [lastChange, fetchTasks, updateOverdueCount])
+
+  const handleRedo = useCallback(async () => {
+    if (!lastUndo) return
+
+    const { taskId, prevStatus: redoStatus, proofUrl, taskTitle } = lastUndo
+    setLastUndo(null)
+
+    // Store as a new change for undo
+    const task = tasks.find((t) => t.id === taskId)
+    if (task) {
+      setLastChange({ taskId, prevStatus: task.status, prevProof: task.proof_attachment, proofUrl, taskTitle, newStatus: redoStatus })
+    }
+
+    // Show animation feedback
+    setRedoAnimating(true)
+    setTimeout(() => setRedoAnimating(false), 600)
+
+    // Optimistically re-apply the status
+    setTasks((prev) => {
+      const updated = prev.map((t) =>
+        t.id === taskId ? { ...t, status: redoStatus, proof_attachment: proofUrl || null } : t
+      )
+      updateOverdueCount(updated.filter((t) => t.status === 'OVERDUE').length)
+      return updated
+    })
+
+    // Fire-and-forget the API call
+    taskApi.updateTask(taskId, { status: redoStatus, proof_attachment: proofUrl || null })
+      .catch((err) => {
+        console.error('Failed to redo status change:', err)
+        fetchTasks(filters)
+      })
+  }, [lastUndo, tasks, fetchTasks, updateOverdueCount])
+
+  // Keep refs in sync with latest handler closures
+  handleUndoRef.current = handleUndo
+  handleRedoRef.current = handleRedo
 
   const handleOpenEdit = (task) => {
     setEditingTask(task)
@@ -169,12 +289,56 @@ const TasksPage = () => {
           <h1>Tasks</h1>
           <p>Manage, assign, and track team tasks</p>
         </div>
-        {user?.is_admin && (
-          <Button onClick={handleOpenCreate}>
-            <Plus size={18} />
-            New Task
-          </Button>
-        )}
+        <div className="header-actions">
+          <div className={`undo-wrapper ${undoAnimating ? 'animating' : ''}`}>
+            <button
+              className="action-btn undo-btn"
+              onClick={handleUndo}
+              title={lastChange
+                ? `Undo: Move "${lastChange.taskTitle}" back to ${STATUS_LABELS[lastChange.prevStatus] || lastChange.prevStatus} (Ctrl+Z)`
+                : 'Undo last status change (Ctrl+Z)'
+              }
+            >
+              <RotateCcw size={15} />
+              <span className="action-btn-text">
+                {lastChange ? (
+                  <>
+                    Undo <strong>"{lastChange.taskTitle}"</strong>
+                  </>
+                ) : (
+                  'Undo'
+                )}
+              </span>
+            </button>
+          </div>
+          <div className={`redo-wrapper ${redoAnimating ? 'animating' : ''}`}>
+            <button
+              className="action-btn redo-btn"
+              onClick={handleRedo}
+              title={lastUndo
+                ? `Redo: Move "${lastUndo.taskTitle}" to ${STATUS_LABELS[lastUndo.newStatus] || lastUndo.newStatus} (Ctrl+Y)`
+                : 'Redo undone status change (Ctrl+Y)'
+              }
+            >
+              <RotateCw size={15} />
+              <span className="action-btn-text">
+                {lastUndo ? (
+                  <>
+                    Redo <strong>"{lastUndo.taskTitle}"</strong>
+                  </>
+                ) : (
+                  'Redo'
+                )}
+              </span>
+            </button>
+          </div>
+          {user?.is_admin && (
+            <Button onClick={handleOpenCreate}>
+              <Plus size={18} />
+              New Task
+            </Button>
+          )}
+        </div>
       </div>
 
       <TaskFilters

@@ -10,6 +10,16 @@ from app.modules.tasks.crud import create_task, get_tasks, get_task, update_task
 from app.modules.tasks.schemas import TaskCreate, TaskUpdate, TaskResponse, Priority, Status
 from app.modules.tasks.event_handlers import get_employees
 
+# Define the status progression order (higher = later in workflow)
+STATUS_ORDER = {
+    Status.TODO: 0,
+    Status.ON_PROGRESS: 1,
+    Status.ON_HOLD: 2,
+    Status.ON_REVIEW: 3,
+    Status.COMPLETED: 4,
+    Status.OVERDUE: 5,
+}
+
 router = APIRouter()
 
 
@@ -104,12 +114,38 @@ async def update_task_by_id(
             detail="Only the assignee or an admin can update this task",
         )
 
-    # Require proof_attachment when changing status
+    # Validate status transitions
     if update_data.status is not None and update_data.status != task.status:
+        current_order = STATUS_ORDER.get(task.status, -1)
+        new_order = STATUS_ORDER.get(update_data.status, -1)
+
+        # Allowed transitions that go backward:
+        #   OVERDUE  → ON_REVIEW    (overdue task completed, send for review)
+        #   ON_HOLD  → ON_PROGRESS  (resume a held task)
+        is_allowed_backward = (
+            (task.status == Status.OVERDUE and update_data.status == Status.ON_REVIEW)
+            or (task.status == Status.ON_HOLD and update_data.status == Status.ON_PROGRESS)
+        )
+
+        if new_order <= current_order and not is_allowed_backward:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot move from {task.status.value} back to {update_data.status.value}. Status can only move forward.",
+            )
+
+    # Cannot manually set to OVERDUE (only the auto-scheduler can)
+    if update_data.status is not None and update_data.status == Status.OVERDUE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Overdue status is automatically assigned by the system when a task's deadline passes.",
+        )
+
+    # Require proof_attachment only when moving to COMPLETED
+    if update_data.status is not None and update_data.status == Status.COMPLETED:
         if not update_data.proof_attachment or not update_data.proof_attachment.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Proof attachment is required to change task status",
+                detail="Proof attachment is required when marking a task as completed",
             )
 
     old_status = task.status

@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from enum import Enum
 
 
@@ -30,6 +30,12 @@ class TaskCreate(BaseModel):
     reason_note: Optional[str] = None
     due_date: datetime
     proof_attachment: Optional[str] = None
+
+    @model_validator(mode='after')
+    def set_overdue_if_past_due(cls, values):
+        if values.due_date < datetime.now(timezone.utc):
+            values.status = Status.OVERDUE
+        return values
 
 
 class TaskUpdate(BaseModel):

@@ -5,7 +5,6 @@ const VIEW_TABS = [
   { id: 'leads', label: 'Leads' },
   { id: 'clients', label: 'Clients' },
   { id: 'activities', label: 'Activities' },
-  { id: 'settings', label: 'Settings' },
 ]
 
 const CRMViewTabs = ({ activeView, setActiveView }) => {

@@ -26,34 +26,38 @@ frontend/src/modules/crm/
 
 ---
 
-## Phase 1 — Contacts
+## Phase 1 — Contacts ✅
 
 > Central entity. Every person/company your business interacts with.
 
-### 1.1 Core Contact Record
+### 1.1 Core Contact Record ✅
 - **Required fields:** Name + (Email OR Phone — at least one mandatory)
 - **Standard fields:** Company, Job Title, Address, Notes, Tags, Avatar
 - **Dynamic fields:** User-defined key-value pairs stored as a JSON array
   ```
   custom_fields: [{ label: "Budget", value: "$10k" }, { label: "Source", value: "Referral" }]
   ```
+- ✅ **Implemented:** SQLAlchemy model with JSON fields, Pydantic schemas, API endpoints
 
-### 1.2 Dynamic Field Management
+### 1.2 Dynamic Field Management ✅
 - Add/remove/reorder custom fields per contact at any time
 - Field types: text, number, date, URL, dropdown (future)
 - No schema migration needed — stored as flexible JSON column
+- ✅ **Implemented:** Frontend form UI allows adding/removing/editing custom fields dynamically
 
-### 1.3 Contact Actions
+### 1.3 Contact Actions ✅
 - Create contact (standalone or from Lead conversion)
 - Edit, archive, delete
 - Merge duplicate contacts
 - Add activity log (call, email, meeting, note) — timeline view
 - Attach files/documents
+- ✅ **Implemented:** Create, Read, Update, Delete, Archive endpoints; Contact merge endpoint; Activity logging with timeline component
 
-### 1.4 Contact List View
+### 1.4 Contact List View ✅
 - Search, filter by tags/source/status
 - Sortable columns
 - Bulk actions: tag, assign, export
+- ✅ **Implemented:** Table view with search, tag filtering, bulk select, inline actions (edit, archive, delete)
 
 ---
 
@@ -61,55 +65,57 @@ frontend/src/modules/crm/
 
 > A Lead is a potential deal/opportunity being tracked through a sales process.
 
-### 2.1 Lead Creation
-- Create directly from scratch
-- Create from a Contact (auto-links, prefills name/email/phone)
-- Required: Title + Contact link (or inline contact creation)
+### 2.1 Lead Creation ✅
+- ✅ Create directly from scratch
+- ✅ Create from a Contact (auto-links, prefills name/email/phone)
+- ✅ Required: Title + Contact link (or inline contact creation)
 - Optional: Value, Expected Close Date, Assignee, Source, Notes
 
 ### 2.2 Lead Statuses (Kanban Phases)
-- Phases are **fully dynamic** — users can add, edit, reorder, delete phases
+- Backend pipeline/phase support exists; pipeline editor UI is pending
 - Default phases (editable): `New → Contacted → Qualified → Proposal → Negotiation → Won / Lost`
-- Each phase has: name, color, order index, is_terminal flag (Won/Lost)
-- Phases are **pipeline-scoped** (different pipelines have different phases)
+- ✅ Each phase has: name, color, order index, is_terminal flag (Won/Lost)
+- ✅ Phases are **pipeline-scoped** (different pipelines have different phases)
 
-### 2.3 Kanban Board
-- Drag-and-drop cards between phases (react-beautiful-dnd or dnd-kit)
-- Card shows: lead title, contact name, value, assignee avatar, due date badge
-- Phase column shows: count + total value
-- Move triggers event bus notification (for activity log, notifications)
+### 2.3 Kanban Board ✅
+- ✅ Drag-and-drop board UI for phase movement
+- ✅ Card view with value, assignee, and converted badge
+- ✅ Phase column shows count and total value
+- Pending: event bus notifications
 
-### 2.4 Lead Detail View
-- Full timeline: status changes, notes, calls, emails
-- Linked contact (click-through to Contact)
-- Linked pipeline
-- Convert lead → Client (Phase 4)
+### 2.4 Lead Detail View ✅
+- ✅ Notes + detail panel
+- ✅ Timeline of lead events (creation, phase changes, conversion)
+- ✅ Linked contact and pipeline info
+- Pending: convert lead → Client (Phase 4)
 
-### 2.5 Lead Filters & Views
-- Filter by pipeline, phase, assignee, date range, value range
-- Switch between Kanban and List views
-- Saved filters / personal views
+### 2.5 Lead Filters & Views ✅
+- ✅ Filter by pipeline, phase, assignee, date range, value range
+- ✅ Switch between Kanban and List views
+- Pending: saved filters / personal views
 
 ---
 
-## Phase 3 — Pipelines
+## Phase 3 — Pipelines (In progress)
 
 > A Pipeline is a named workflow that organizes Leads through defined phases.
 
 ### 3.1 Pipeline Management
-- Create multiple pipelines (e.g., Sales, Partnerships, Enterprise)
-- Each pipeline has its own independent set of phases
-- Set a default pipeline
-- Archive/delete pipelines (with lead migration prompt)
+- [x] Create multiple pipelines (e.g., Sales, Partnerships, Enterprise)
+- [x] Each pipeline has its own independent set of phases
+- [ ] Set a default pipeline
+- [ ] Archive/delete pipelines (with lead migration prompt)
 
 ### 3.2 Pipeline Configuration
-- Name, description, owner/team
-- Phase setup (order, color, terminal flags) — managed per pipeline
-- Visibility: private / team / org
+- [x] Name, description, owner/team
+- [x] Phase setup (order, color, terminal flags) — managed per pipeline
+- [ ] Visibility: private / team / org
 
 ### 3.3 Pipeline Dashboard
-- Per-pipeline summary: total leads, total value, conversion rate by phase
-- Funnel chart showing drop-off per stage
+- [ ] Per-pipeline summary: total leads, total value, conversion rate by phase
+- [ ] Funnel chart showing drop-off per stage
+
+> Phase 3 will be marked ✅ once all subphases above are completed.
 
 ---
 

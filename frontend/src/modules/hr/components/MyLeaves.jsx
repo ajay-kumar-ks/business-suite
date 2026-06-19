@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { Plus, X, Calendar } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import { hrAPI } from '../services/hrApi'
 import Loader from '../../../components/ui/Loader'
@@ -129,7 +130,7 @@ const MyLeaves = () => {
         <div className="leave-form-card">
           <div className="leave-form-header">
             <h3>Leave Application</h3>
-            <button className="modal-close" onClick={resetForm} type="button">✕</button>
+            <button className="modal-close" onClick={resetForm} type="button" title="Close"><X size={18} /></button>
           </div>
           <form onSubmit={handleSubmit} className="leave-form-body">
             {error && <div className="form-error">{error}</div>}
@@ -210,7 +211,8 @@ const MyLeaves = () => {
       ) : (
         <div style={{ marginBottom: '24px' }}>
           <Button variant="primary" onClick={() => { setShowForm(true); setSuccess(''); }}>
-            + Request Leave
+            <Plus size={16} style={{ marginRight: 4 }} />
+            Request Leave
           </Button>
         </div>
       )}
@@ -223,7 +225,7 @@ const MyLeaves = () => {
         </div>
         {!leaves.length ? (
           <div className="emp-empty-state">
-            <div className="empty-icon">📅</div>
+            <div className="empty-icon" style={{ opacity: 0.5 }}><Calendar size={40} /></div>
             <div className="empty-text">No leave requests yet.</div>
           </div>
         ) : (

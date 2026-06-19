@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Pencil, Trash2, Plus, X } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import { hrAPI } from '../services/hrApi'
 import '../styles/HRPage.css'
@@ -84,7 +85,9 @@ const DepartmentTable = ({ departments = [], loading, onRefresh }) => {
         <div className="inline-form">
           <div className="inline-form-header">
             <h4>{editingDept ? 'Edit Department' : 'Create Department'}</h4>
-            <button className="modal-close" onClick={resetForm} type="button">✕</button>
+            <button className="modal-close" onClick={resetForm} type="button" title="Close">
+              <X size={18} />
+            </button>
           </div>
           <form onSubmit={handleSubmit} className="inline-form-body">
             {error && <div className="form-error">{error}</div>}
@@ -123,13 +126,19 @@ const DepartmentTable = ({ departments = [], loading, onRefresh }) => {
       {!departments.length && !showForm ? (
         <div className="table-status empty">
           <span>No departments defined yet.</span>
-          <Button variant="primary" onClick={handleAdd}>+ Add First Department</Button>
+          <Button variant="primary" onClick={handleAdd}>
+            <Plus size={16} style={{ marginRight: 4 }} />
+            Add First Department
+          </Button>
         </div>
       ) : (
         <div>
           <div className="inline-table-header">
             <span className="count-badge">{departments.length} departments</span>
-            <Button variant="primary" size="sm" onClick={handleAdd}>+ Add Department</Button>
+            <Button variant="primary" size="sm" onClick={handleAdd}>
+              <Plus size={16} style={{ marginRight: 4 }} />
+              Add Department
+            </Button>
           </div>
           <div className="table-wrapper">
             <table className="data-table">
@@ -151,14 +160,14 @@ const DepartmentTable = ({ departments = [], loading, onRefresh }) => {
                         onClick={() => handleEdit(dept)}
                         title="Edit"
                       >
-                        ✏️
+                        <Pencil size={16} />
                       </button>
                       <button
                         className="action-btn delete"
                         onClick={() => handleDelete(dept)}
                         title="Delete"
                       >
-                        🗑️
+                        <Trash2 size={16} />
                       </button>
                     </td>
                   </tr>

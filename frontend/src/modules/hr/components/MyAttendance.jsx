@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { LogIn, LogOut, ClipboardList, Hourglass } from 'lucide-react'
 import Loader from '../../../components/ui/Loader'
 import { hrAPI } from '../services/hrApi'
 import '../styles/HRPage.css'
@@ -155,14 +156,14 @@ const MyAttendance = () => {
             onClick={handleCheckIn}
             disabled={isCheckedIn || checkingIn}
           >
-            {checkingIn ? '⏳ Checking In...' : '✅ Check In'}
+            {checkingIn ? <><Hourglass size={18} /> Checking In...</> : <><LogIn size={18} /> Check In</>}
           </button>
           <button
             className="btn-checkout"
             onClick={handleCheckOut}
             disabled={!isCheckedIn || isCheckedOut || checkingOut}
           >
-            {checkingOut ? '⏳ Checking Out...' : '🔒 Check Out'}
+            {checkingOut ? <><Hourglass size={18} /> Checking Out...</> : <><LogOut size={18} /> Check Out</>}
           </button>
         </div>
 
@@ -181,7 +182,7 @@ const MyAttendance = () => {
         </div>
         {!records.length ? (
           <div className="emp-empty-state">
-            <div className="empty-icon">📋</div>
+            <div className="empty-icon" style={{ opacity: 0.5 }}><ClipboardList size={40} /></div>
             <div className="empty-text">No attendance records yet.</div>
           </div>
         ) : (

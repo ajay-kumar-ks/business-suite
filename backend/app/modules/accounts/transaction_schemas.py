@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import List
 from pydantic import BaseModel, Field
@@ -13,7 +14,7 @@ class ExpenseCreate(BaseModel):
 
 class ExpenseRead(BaseModel):
     id: int
-    tenant_id: int
+    tenant_id: uuid.UUID
     description: str
     amount: float
     expense_date: datetime
@@ -38,7 +39,7 @@ class IncomeCreate(BaseModel):
 
 class IncomeRead(BaseModel):
     id: int
-    tenant_id: int
+    tenant_id: uuid.UUID
     description: str
     amount: float
     income_date: datetime

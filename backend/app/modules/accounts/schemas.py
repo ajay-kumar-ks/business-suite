@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import List
 from pydantic import BaseModel, Field
@@ -10,7 +11,7 @@ class TenantCreate(BaseModel):
 
 
 class TenantRead(BaseModel):
-    id: int
+    id: uuid.UUID
     name: str
     status: str
     is_active: bool
@@ -31,7 +32,7 @@ class ChartOfAccountCreate(BaseModel):
 
 class ChartOfAccountRead(BaseModel):
     id: int
-    tenant_id: int
+    tenant_id: uuid.UUID
     account_code: str
     account_name: str
     account_type: str
@@ -74,7 +75,7 @@ class JournalEntryCreate(BaseModel):
 
 class JournalEntryRead(BaseModel):
     id: int
-    tenant_id: int
+    tenant_id: uuid.UUID
     reference: str | None = None
     description: str | None = None
     status: str
@@ -92,7 +93,7 @@ class JournalEntryRead(BaseModel):
 
 class LedgerEntryRead(BaseModel):
     id: int
-    tenant_id: int
+    tenant_id: uuid.UUID
     journal_id: int
     account_id: int
     debit: float

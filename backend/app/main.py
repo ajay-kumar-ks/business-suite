@@ -33,10 +33,10 @@ async def health_check():
 async def startup_event():
     try:
         Base.metadata.create_all(bind=engine)
-        print("✓ Database tables created")
+        print("[OK] Database tables created")
     except Exception as e:
-        print(f"⚠ Database connection warning: {str(e)[:100]}")
-        print("✓ Server started (database connection failed - check your DATABASE_URL credentials in .env)")
+        print(f"[WARN] Database connection warning: {str(e)[:100]}")
+        print("[OK] Server started (database connection failed - check your DATABASE_URL credentials in .env)")
 
     register_event_handlers()
     event_bus.connect()

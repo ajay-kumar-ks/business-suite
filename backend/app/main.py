@@ -17,6 +17,7 @@ from app.modules.tasks.routers import router as tasks_router
 from app.modules.tasks.upload import router as upload_router
 from app.modules.tasks.scheduler import run_overdue_scheduler
 from app.modules.tasks.event_handlers import register_handlers
+from app.modules.recruitment.routers import router as recruitment_router
 
 app = FastAPI(title="Business Suite Backend", version="0.1.0")
 app.add_middleware(TenantMiddleware)
@@ -29,6 +30,7 @@ app.include_router(crm_router, prefix="/crm", tags=["crm"])
 app.include_router(crm_leads_router, prefix="/crm", tags=["crm"])
 app.include_router(crm_pipelines_router, prefix="/crm", tags=["crm"])
 app.include_router(upload_router, prefix="/tasks", tags=["tasks"])
+app.include_router(recruitment_router, prefix="/recruitment", tags=["recruitment"])
 
 # Also expose same API under /api/* so frontend can use /api prefixes
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
@@ -39,6 +41,7 @@ app.include_router(crm_router, prefix="/api/crm", tags=["crm"])
 app.include_router(crm_leads_router, prefix="/api/crm", tags=["crm"])
 app.include_router(crm_pipelines_router, prefix="/api/crm", tags=["crm"])
 app.include_router(upload_router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(recruitment_router, prefix="/api/recruitment", tags=["recruitment"])
 
 # Serve uploaded files
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads")

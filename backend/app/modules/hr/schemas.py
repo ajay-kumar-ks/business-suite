@@ -14,11 +14,19 @@ class UserCreate(BaseModel):
     is_admin: bool = False
 
 
+class UserUpdate(BaseModel):
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    password: Optional[str] = None
+    is_admin: Optional[bool] = None
+
+
 class UserResponse(BaseModel):
     id: int
     username: str
     email: str
     full_name: Optional[str] = None
+    is_admin: bool = False
 
     model_config = {"from_attributes": True}
 

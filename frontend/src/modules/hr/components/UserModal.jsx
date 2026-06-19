@@ -11,17 +11,28 @@ const EMPTY_FORM = {
   is_admin: false,
 }
 
-const UserModal = ({ isOpen, onClose, onSave }) => {
+const UserModal = ({ isOpen, onClose, onSave, initialData }) => {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const isEditing = !!initialData
 
   useEffect(() => {
     if (isOpen) {
-      setForm(EMPTY_FORM)
+      if (initialData) {
+        setForm({
+          username: initialData.username || '',
+          email: initialData.email || '',
+          full_name: initialData.full_name || '',
+          password: '',
+          is_admin: initialData.is_admin || false,
+        })
+      } else {
+        setForm(EMPTY_FORM)
+      }
       setError('')
     }
-  }, [isOpen])
+  }, [isOpen, initialData])
 
   if (!isOpen) return null
 
@@ -42,21 +53,26 @@ const UserModal = ({ isOpen, onClose, onSave }) => {
       setError('Email is required')
       return
     }
-    if (!form.password) {
+    if (!isEditing && !form.password) {
       setError('Password is required')
       return
     }
-    if (form.password.length < 6) {
+    if (form.password && form.password.length < 6) {
       setError('Password must be at least 6 characters')
       return
     }
 
     const payload = {
-      username: form.username.trim(),
       email: form.email.trim(),
       full_name: form.full_name.trim() || form.username.trim(),
-      password: form.password,
       is_admin: form.is_admin,
+    }
+
+    if (!isEditing) {
+      payload.username = form.username.trim()
+      payload.password = form.password
+    } else if (form.password) {
+      payload.password = form.password
     }
 
     setSaving(true)
@@ -64,7 +80,7 @@ const UserModal = ({ isOpen, onClose, onSave }) => {
       await onSave(payload)
       onClose()
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Failed to create user')
+      setError(err.response?.data?.detail || err.message || `Failed to ${isEditing ? 'update' : 'create'} user`)
     } finally {
       setSaving(false)
     }
@@ -74,7 +90,7 @@ const UserModal = ({ isOpen, onClose, onSave }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Create User</h3>
+          <h3>{isEditing ? 'Edit User' : 'Create User'}</h3>
           <button className="modal-close" onClick={onClose} type="button" title="Close">
             <X size={18} />
           </button>
@@ -92,7 +108,8 @@ const UserModal = ({ isOpen, onClose, onSave }) => {
                 value={form.username}
                 onChange={handleChange('username')}
                 placeholder="e.g. john"
-                autoFocus
+                autoFocus={!isEditing}
+                disabled={isEditing}
                 required
               />
             </div>
@@ -121,15 +138,17 @@ const UserModal = ({ isOpen, onClose, onSave }) => {
               />
             </div>
             <div className="form-group">
-              <label htmlFor="password">Password *</label>
+              <label htmlFor="password">
+                {isEditing ? 'New Password (leave blank to keep current)' : 'Password *'}
+              </label>
               <input
                 id="password"
                 type="password"
                 value={form.password}
                 onChange={handleChange('password')}
-                placeholder="Min 6 characters"
-                required
+                placeholder={isEditing ? 'Leave blank to keep current' : 'Min 6 characters'}
                 minLength={6}
+                required={!isEditing}
               />
             </div>
           </div>
@@ -152,7 +171,7 @@ const UserModal = ({ isOpen, onClose, onSave }) => {
               Cancel
             </Button>
             <Button type="submit" variant="primary" disabled={saving}>
-              {saving ? 'Creating...' : 'Create User'}
+              {saving ? 'Saving...' : isEditing ? 'Update User' : 'Create User'}
             </Button>
           </div>
         </form>

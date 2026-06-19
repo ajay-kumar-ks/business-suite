@@ -21,28 +21,31 @@ def create_expense_journal(db: Session, expense: Expense) -> JournalEntry:
         status="draft",
         date=expense.expense_date,
     )
+    db.add(journal)
+    db.flush()
 
     debit_line = JournalLine(
+        tenant_id=expense.tenant_id,
+        journal_id=journal.id,
         account_id=expense.account_id,
         memo=expense.description,
         debit=Decimal(str(expense.amount)),
         credit=Decimal("0"),
     )
+    db.add(debit_line)
 
     credit_line = JournalLine(
+        tenant_id=expense.tenant_id,
+        journal_id=journal.id,
         account_id=cash_account_id,
         memo=f"Payment for {expense.description}",
         debit=Decimal("0"),
         credit=Decimal(str(expense.amount)),
     )
+    db.add(credit_line)
 
-    journal.lines.append(debit_line)
-    journal.lines.append(credit_line)
-
-    db.add(journal)
     db.commit()
     db.refresh(journal)
-
     return journal
 
 
@@ -61,26 +64,29 @@ def create_income_journal(db: Session, income: Income) -> JournalEntry:
         status="draft",
         date=income.income_date,
     )
+    db.add(journal)
+    db.flush()
 
     debit_line = JournalLine(
+        tenant_id=income.tenant_id,
+        journal_id=journal.id,
         account_id=cash_account_id,
         memo=f"Receipt from {income.description}",
         debit=Decimal(str(income.amount)),
         credit=Decimal("0"),
     )
+    db.add(debit_line)
 
     credit_line = JournalLine(
+        tenant_id=income.tenant_id,
+        journal_id=journal.id,
         account_id=income.account_id,
         memo=income.description,
         debit=Decimal("0"),
         credit=Decimal(str(income.amount)),
     )
+    db.add(credit_line)
 
-    journal.lines.append(debit_line)
-    journal.lines.append(credit_line)
-
-    db.add(journal)
     db.commit()
     db.refresh(journal)
-
     return journal

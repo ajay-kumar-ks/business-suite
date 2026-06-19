@@ -52,10 +52,10 @@ async def startup_event():
                     conn.execute(text('ALTER TABLE contacts ADD COLUMN deleted_at TIMESTAMP NULL'))
                     print('✓ Added missing contacts.deleted_at column')
         Base.metadata.create_all(bind=engine)
-        print("✓ Database tables created")
+        print("[OK] Database tables created")
     except Exception as e:
-        print(f"⚠ Database connection warning: {str(e)[:100]}")
-        print("✓ Server started (database connection failed - check your DATABASE_URL credentials in .env)")
+        print(f"[WARN] Database connection warning: {str(e)[:100]}")
+        print("[OK] Server started (database connection failed - check your DATABASE_URL credentials in .env)")
 
     register_event_handlers()
     event_bus.connect()

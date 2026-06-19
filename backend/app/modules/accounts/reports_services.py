@@ -1,12 +1,13 @@
 from decimal import Decimal
+import uuid
 from datetime import datetime
-from sqlalchemy import func
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 from app.modules.accounts.models import LedgerEntry, ChartOfAccount, JournalEntry
 
 
 class TrialBalance:
-    def __init__(self, tenant_id: int):
+    def __init__(self, tenant_id: uuid.UUID):
         self.tenant_id = tenant_id
         self.accounts: dict = {}
         self.total_debit = Decimal("0")
@@ -24,7 +25,14 @@ class TrialBalance:
                 func.sum(LedgerEntry.debit).label("total_debit"),
                 func.sum(LedgerEntry.credit).label("total_credit"),
             )
-            .join(ChartOfAccount)
+            .select_from(LedgerEntry)
+            .join(
+                ChartOfAccount,
+                and_(
+                    ChartOfAccount.id == LedgerEntry.account_id,
+                    ChartOfAccount.tenant_id == LedgerEntry.tenant_id,
+                ),
+            )
             .filter(LedgerEntry.tenant_id == self.tenant_id)
             .group_by(
                 LedgerEntry.account_id,
@@ -64,7 +72,7 @@ class TrialBalance:
 
 
 class ProfitLoss:
-    def __init__(self, tenant_id: int):
+    def __init__(self, tenant_id: uuid.UUID):
         self.tenant_id = tenant_id
         self.revenue = Decimal("0")
         self.expenses = Decimal("0")
@@ -74,7 +82,14 @@ class ProfitLoss:
         """Generate P&L statement from ledger entries."""
         revenue_data = (
             db.query(func.sum(LedgerEntry.credit).label("total_revenue"))
-            .join(ChartOfAccount)
+            .select_from(LedgerEntry)
+            .join(
+                ChartOfAccount,
+                and_(
+                    ChartOfAccount.id == LedgerEntry.account_id,
+                    ChartOfAccount.tenant_id == LedgerEntry.tenant_id,
+                ),
+            )
             .filter(
                 LedgerEntry.tenant_id == self.tenant_id,
                 ChartOfAccount.account_type == "Revenue",
@@ -84,7 +99,14 @@ class ProfitLoss:
 
         expense_data = (
             db.query(func.sum(LedgerEntry.debit).label("total_expense"))
-            .join(ChartOfAccount)
+            .select_from(LedgerEntry)
+            .join(
+                ChartOfAccount,
+                and_(
+                    ChartOfAccount.id == LedgerEntry.account_id,
+                    ChartOfAccount.tenant_id == LedgerEntry.tenant_id,
+                ),
+            )
             .filter(
                 LedgerEntry.tenant_id == self.tenant_id,
                 ChartOfAccount.account_type == "Expense",
@@ -92,8 +114,8 @@ class ProfitLoss:
             .first()
         )
 
-        self.revenue = revenue_data.total_revenue or Decimal("0")
-        expenses = expense_data.total_expense or Decimal("0")
+        self.revenue = getattr(revenue_data, "total_revenue", None) or Decimal("0")
+        expenses = getattr(expense_data, "total_expense", None) or Decimal("0")
         self.expenses = expenses
         self.net_profit = self.revenue - self.expenses
 
@@ -107,7 +129,7 @@ class ProfitLoss:
 
 
 class BalanceSheet:
-    def __init__(self, tenant_id: int):
+    def __init__(self, tenant_id: uuid.UUID):
         self.tenant_id = tenant_id
         self.assets = Decimal("0")
         self.liabilities = Decimal("0")
@@ -117,7 +139,14 @@ class BalanceSheet:
         """Generate balance sheet from ledger entries."""
         asset_data = (
             db.query(func.sum(LedgerEntry.debit).label("total_assets"))
-            .join(ChartOfAccount)
+            .select_from(LedgerEntry)
+            .join(
+                ChartOfAccount,
+                and_(
+                    ChartOfAccount.id == LedgerEntry.account_id,
+                    ChartOfAccount.tenant_id == LedgerEntry.tenant_id,
+                ),
+            )
             .filter(
                 LedgerEntry.tenant_id == self.tenant_id,
                 ChartOfAccount.account_type == "Asset",
@@ -127,7 +156,14 @@ class BalanceSheet:
 
         liability_data = (
             db.query(func.sum(LedgerEntry.credit).label("total_liabilities"))
-            .join(ChartOfAccount)
+            .select_from(LedgerEntry)
+            .join(
+                ChartOfAccount,
+                and_(
+                    ChartOfAccount.id == LedgerEntry.account_id,
+                    ChartOfAccount.tenant_id == LedgerEntry.tenant_id,
+                ),
+            )
             .filter(
                 LedgerEntry.tenant_id == self.tenant_id,
                 ChartOfAccount.account_type == "Liability",
@@ -137,7 +173,14 @@ class BalanceSheet:
 
         equity_data = (
             db.query(func.sum(LedgerEntry.credit).label("total_equity"))
-            .join(ChartOfAccount)
+            .select_from(LedgerEntry)
+            .join(
+                ChartOfAccount,
+                and_(
+                    ChartOfAccount.id == LedgerEntry.account_id,
+                    ChartOfAccount.tenant_id == LedgerEntry.tenant_id,
+                ),
+            )
             .filter(
                 LedgerEntry.tenant_id == self.tenant_id,
                 ChartOfAccount.account_type == "Equity",
@@ -145,9 +188,9 @@ class BalanceSheet:
             .first()
         )
 
-        self.assets = asset_data.total_assets or Decimal("0")
-        self.liabilities = liability_data.total_liabilities or Decimal("0")
-        self.equity = equity_data.total_equity or Decimal("0")
+        self.assets = getattr(asset_data, "total_assets", None) or Decimal("0")
+        self.liabilities = getattr(liability_data, "total_liabilities", None) or Decimal("0")
+        self.equity = getattr(equity_data, "total_equity", None) or Decimal("0")
 
         is_balanced = self.assets == (self.liabilities + self.equity)
 

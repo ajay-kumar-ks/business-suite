@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import List
@@ -16,7 +17,8 @@ DEFAULT_COA_ENTRIES = [
 ]
 
 
-def seed_default_chart_of_accounts(db: Session, tenant_id: int) -> None:
+
+def seed_default_chart_of_accounts(db: Session, tenant_id: uuid.UUID) -> None:
     existing_codes = {
         row[0]
         for row in db.query(ChartOfAccount.account_code)
@@ -42,6 +44,7 @@ def seed_default_chart_of_accounts(db: Session, tenant_id: int) -> None:
         db.commit()
 
 
+
 def validate_journal_lines(lines: List[JournalLine]) -> None:
     if not lines or len(lines) < 2:
         raise ValueError("Journal entry requires at least two lines.")
@@ -58,6 +61,7 @@ def validate_journal_lines(lines: List[JournalLine]) -> None:
         raise ValueError("Journal entry cannot contain only zero values.")
 
 
+
 def post_journal_entry(db: Session, journal_entry: JournalEntry) -> JournalEntry:
     if journal_entry.status != "approved":
         raise ValueError("Only approved journal entries can be posted.")
@@ -70,8 +74,13 @@ def post_journal_entry(db: Session, journal_entry: JournalEntry) -> JournalEntry
     if existing_ledger_entry:
         raise ValueError("This journal entry has already been posted to the ledger.")
 
-    ledger_entries = []
-    for line in journal_entry.lines:
+    # Query lines explicitly since relationship was removed
+    lines = db.query(JournalLine).filter(
+        JournalLine.journal_id == journal_entry.id,
+        JournalLine.tenant_id == journal_entry.tenant_id
+    ).all()
+
+    for line in lines:
         ledger_entry = LedgerEntry(
             tenant_id=journal_entry.tenant_id,
             journal_id=journal_entry.id,
@@ -80,7 +89,6 @@ def post_journal_entry(db: Session, journal_entry: JournalEntry) -> JournalEntry
             credit=line.credit,
             posting_date=journal_entry.date,
         )
-        ledger_entries.append(ledger_entry)
         db.add(ledger_entry)
 
     journal_entry.status = "posted"
@@ -91,7 +99,7 @@ def post_journal_entry(db: Session, journal_entry: JournalEntry) -> JournalEntry
     event_bus.publish(
         "journal.posted",
         {
-            "tenant_id": journal_entry.tenant_id,
+            "tenant_id": str(journal_entry.tenant_id),
             "journal_id": journal_entry.id,
             "reference": journal_entry.reference,
             "description": journal_entry.description,
@@ -102,7 +110,7 @@ def post_journal_entry(db: Session, journal_entry: JournalEntry) -> JournalEntry
                     "debit": float(line.debit),
                     "credit": float(line.credit),
                 }
-                for line in journal_entry.lines
+                for line in lines
             ],
         },
     )

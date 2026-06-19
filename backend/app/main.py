@@ -1,6 +1,7 @@
 import os
 import asyncio
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 from app.core.config import settings
 from app.core.event_bus import event_bus

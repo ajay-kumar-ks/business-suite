@@ -16,8 +16,10 @@ export const taskApi = {
   deleteTask: (id) =>
     api.delete(`/tasks/${id}`),
 
-  getEmployees: () =>
-    api.get('/tasks/employees'),
+  getEmployees: (search) => {
+    const params = search ? { search } : {}
+    return api.get('/tasks/employees', { params })
+  },
 
   uploadProof: (file) => {
     const formData = new FormData()

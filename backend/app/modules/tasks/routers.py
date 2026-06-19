@@ -1,14 +1,13 @@
 import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.core.database import get_db
 from app.core.event_bus import event_bus
 from app.modules.auth.models import User
 from app.modules.auth.routers import get_current_user
 from app.modules.tasks.crud import create_task, get_tasks, get_task, update_task, delete_task
 from app.modules.tasks.schemas import TaskCreate, TaskUpdate, TaskResponse, Priority, Status
-from app.modules.tasks.event_handlers import get_employees
 
 # Define the status progression order (higher = later in workflow)
 STATUS_ORDER = {
@@ -23,12 +22,83 @@ STATUS_ORDER = {
 router = APIRouter()
 
 
+def _get_employee_by_user_id(db: Session, user_id: int):
+    """Look up an employee record by the auth user's ID."""
+    try:
+        from app.modules.hr.db_models import Employee
+        return db.query(Employee).filter(Employee.user_id == user_id).first()
+    except Exception:
+        return None
+
+
+def _get_employee_id(db: Session, current_user: User) -> Optional[int]:
+    """Get the employee ID for the current user, if they have an employee record."""
+    employee = _get_employee_by_user_id(db, current_user.id)
+    return employee.id if employee else None
+
+
+# ──────────────────────────────────────────────
+# Employees — fetch from HR module for assignee dropdown
+# ──────────────────────────────────────────────
+
+
 @router.get("/employees", response_model=list[dict])
 async def list_employees(
+    search: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the cached list of employees for the assignee dropdown."""
-    return get_employees()
+    """Return employees from the HR module for the assignee dropdown.
+
+    Queries the HR employees table directly, joining with users and departments.
+    All authenticated users can access this (for dropdown rendering).
+    """
+    try:
+        from app.modules.hr.db_models import Employee, EmployeeStatus
+        from app.modules.auth.db_models import User as UserDB
+
+        query = (
+            db.query(Employee)
+            .join(UserDB, Employee.user_id == UserDB.id)
+            .options(joinedload(Employee.user), joinedload(Employee.department), joinedload(Employee.role))
+            .filter(Employee.status == EmployeeStatus.ACTIVE)
+        )
+
+        if search:
+            query = query.filter(
+                UserDB.full_name.ilike(f"%{search}%")
+            )
+
+        employees = query.order_by(UserDB.full_name).all()
+
+        return [
+            {
+                "id": emp.id,
+                "user_id": emp.user_id,
+                "employee_code": emp.employee_code,
+                "name": emp.user.full_name if emp.user else None,
+                "email": emp.user.email if emp.user else None,
+                "department": emp.department.name if emp.department else None,
+                "department_id": emp.department_id,
+                "designation": emp.role.name if emp.role else None,
+                "role_id": emp.role_id,
+                "status": emp.status.value if emp.status else None,
+            }
+            for emp in employees
+        ]
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Failed to query HR employees table, falling back to event-bus cache: %s", e
+        )
+        # Fall back to the deprecated event-bus cache if HR tables don't exist
+        from app.modules.tasks.event_handlers import get_employees as get_cached_employees
+        return get_cached_employees()
+
+
+# ──────────────────────────────────────────────
+# Task CRUD
+# ──────────────────────────────────────────────
 
 
 @router.get("/", response_model=list[TaskResponse])
@@ -40,13 +110,26 @@ async def list_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List all tasks, optionally filtered by status, priority, assignee, or title search."""
+    """List tasks.
+
+    Admins see all tasks (with optional filters).
+    Non-admin employees see only tasks assigned to them.
+    """
+    # Auto-filter for non-admin users
+    employee_id = None
+    if not current_user.is_admin:
+        employee_id = _get_employee_id(db, current_user)
+        if employee_id is None:
+            # User has no employee record — return empty
+            return []
+
     tasks = get_tasks(
         db,
         status=status_filter,
         priority=priority,
         assignee_id=assignee_id,
         search=search,
+        employee_id=employee_id,
     )
     return tasks
 
@@ -57,7 +140,7 @@ async def create_new_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new task. Admin/manager only."""
+    """Create a new task. Admin only."""
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -82,13 +165,26 @@ async def get_task_by_id(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Fetch a single task by ID."""
+    """Fetch a single task by ID.
+
+    Employees can only access tasks assigned to them.
+    """
     task = get_task(db, task_id)
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found",
         )
+
+    # Non-admin users can only view their own tasks
+    if not current_user.is_admin:
+        employee_id = _get_employee_id(db, current_user)
+        if employee_id is None or task.assignee_id != employee_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view tasks assigned to you",
+            )
+
     return task
 
 
@@ -99,7 +195,11 @@ async def update_task_by_id(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update a task. Assignee and admins can update."""
+    """Update a task.
+
+    Admins can update any field.
+    Assignee employees can only update status, reason_note, and proof_attachment.
+    """
     task = get_task(db, task_id)
     if not task:
         raise HTTPException(
@@ -107,12 +207,26 @@ async def update_task_by_id(
             detail="Task not found",
         )
 
-    # Only the assignee or an admin can update
-    if task.assignee_id != current_user.id and not current_user.is_admin:
+    # Permission checks
+    employee_id = _get_employee_id(db, current_user)
+    is_assignee = employee_id is not None and task.assignee_id == employee_id
+
+    if not current_user.is_admin and not is_assignee:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the assignee or an admin can update this task",
         )
+
+    # Non-admin employees can only change status, reason_note, and proof_attachment
+    if not current_user.is_admin:
+        allowed_fields = {"status", "reason_note", "proof_attachment"}
+        update_fields = set(update_data.model_dump(exclude_unset=True).keys())
+        disallowed = update_fields - allowed_fields
+        if disallowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Employees can only update status, reason_note, and proof_attachment. Cannot update: {', '.join(sorted(disallowed))}",
+            )
 
     # Validate status transitions
     if update_data.status is not None and update_data.status != task.status:
@@ -165,7 +279,6 @@ async def update_task_by_id(
             "reason_note": update_data.reason_note,
         })
 
-        # Special case: completed
         if update_data.status == Status.COMPLETED:
             event_bus.publish("task.completed", {
                 "task_id": str(task_id),

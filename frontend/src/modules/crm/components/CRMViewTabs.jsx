@@ -1,6 +1,7 @@
 import React from 'react'
 
 const VIEW_TABS = [
+  { id: 'analytics', label: 'Analytics' },
   { id: 'contacts', label: 'Contacts' },
   { id: 'leads', label: 'Leads' },
   { id: 'clients', label: 'Clients' },

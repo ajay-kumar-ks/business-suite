@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from app.core.database import get_db
-from .db_models import Contact, Tag, Activity, Lead, Pipeline, Phase
+from .db_models import Contact, Tag, Activity, Lead, Pipeline, Phase, Client
 from .schemas import (
     ContactCreateSchema,
     ContactUpdateSchema,
@@ -27,9 +27,16 @@ from .schemas import (
     PhaseSchema,
     PhaseCreateSchema,
     PhaseUpdateSchema,
+    ClientCreateSchema,
+    ClientUpdateSchema,
+    ClientSchema,
+    ClientDetailSchema,
 )
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
+
+# ============= CLIENTS ENDPOINTS (Phase 4) =============
+clients_router = APIRouter(prefix="/clients", tags=["clients"])
 
 # ============= LEADS ENDPOINTS (Phase 2) =============
 leads_router = APIRouter(prefix="/leads", tags=["leads"])
@@ -254,6 +261,11 @@ async def move_lead(lead_id: str, phase_id: str = Query(...), db: Session = Depe
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    # Check if destination phase creates clients
+    destination_phase = db.query(Phase).filter(Phase.id == phase_id).first()
+    if not destination_phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+
     old_phase_id = lead.phase_id
     lead.phase_id = phase_id
     extra_data = lead.extra_data or {}
@@ -266,13 +278,39 @@ async def move_lead(lead_id: str, phase_id: str = Query(...), db: Session = Depe
         'timestamp': datetime.utcnow().isoformat(),
     })
     extra_data['history'] = history
+    extra_data['converted'] = destination_phase.creates_client
     lead.extra_data = extra_data
 
     db.add(lead)
+    db.flush()
+
+    # Auto-create client if destination phase is a client-conversion phase
+    created_client_id = None
+    if destination_phase.creates_client and lead.contact_id:
+        # Check if client already exists
+        existing_client = db.query(Client).filter(Client.lead_id == lead.id).first()
+        if not existing_client:
+            client = Client(
+                id=str(uuid.uuid4()),
+                contact_id=lead.contact_id,
+                lead_id=lead.id,
+                tier="Standard",
+                status="Active",
+                account_manager=lead.assignee,
+            )
+            db.add(client)
+            db.flush()
+            created_client_id = client.id
+
     db.commit()
     db.refresh(lead)
-    # In a full implementation, publish event bus message here
-    return {"success": True, "lead_id": lead.id, "phase_id": phase_id}
+    
+    response = {"success": True, "lead_id": lead.id, "phase_id": phase_id}
+    if created_client_id:
+        response["client_created"] = True
+        response["client_id"] = created_client_id
+    
+    return response
 
 
 @leads_router.post("/{lead_id}/convert")
@@ -280,23 +318,151 @@ async def convert_lead(lead_id: str, db: Session = Depends(get_db)):
     lead = db.query(Lead).filter(Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Update lead history
     extra_data = lead.extra_data or {}
     history = extra_data.get('history', [])
     history.append({
         'type': 'converted',
-        'message': 'Lead converted',
+        'message': 'Lead converted to Client',
         'timestamp': datetime.utcnow().isoformat(),
     })
     extra_data['history'] = history
     extra_data['converted'] = True
     lead.extra_data = extra_data
 
+    # Create Client record from Lead
+    client = Client(
+        id=str(uuid.uuid4()),
+        contact_id=lead.contact_id,
+        lead_id=lead.id,
+        tier="Standard",
+        status="Active",
+    )
+    
     db.add(lead)
+    db.add(client)
     db.commit()
     db.refresh(lead)
-    # TODO: create Client record and publish event bus message
-    return {"success": True, "lead_id": lead.id}
+    db.refresh(client)
+    
+    # TODO: publish event_bus message for crm.lead.converted
+    return {"success": True, "lead_id": lead.id, "client_id": client.id}
 
+
+# ============= CLIENTS ENDPOINTS (Phase 4) ✅ 4.1 ✅ 4.2 =============
+
+@clients_router.post("/", response_model=ClientSchema, status_code=201)
+async def create_client(client_data: ClientCreateSchema, db: Session = Depends(get_db)):
+    """Create a new client (from lead or directly)"""
+    # Validate contact exists
+    contact = db.query(Contact).filter(Contact.id == client_data.contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    # Check if client already exists for this contact
+    existing_client = db.query(Client).filter(Client.contact_id == client_data.contact_id).first()
+    if existing_client:
+        raise HTTPException(status_code=400, detail="Client already exists for this contact")
+    
+    client = Client(
+        id=str(uuid.uuid4()),
+        contact_id=client_data.contact_id,
+        lead_id=client_data.lead_id,
+        account_manager=client_data.account_manager,
+        tier=client_data.tier or "Standard",
+    )
+    
+    db.add(client)
+    db.commit()
+    db.refresh(client)
+    return client
+
+
+@clients_router.get("/", response_model=List[ClientSchema])
+async def list_clients(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=500),
+    tier: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    account_manager: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """List clients with filtering"""
+    query = db.query(Client)
+    
+    if tier:
+        query = query.filter(Client.tier == tier)
+    if status:
+        query = query.filter(Client.status == status)
+    if account_manager:
+        query = query.filter(Client.account_manager.ilike(f"%{account_manager}%"))
+    if search:
+        # Search in linked contact name
+        search_term = f"%{search}%"
+        query = query.join(Contact).filter(Contact.name.ilike(search_term))
+    
+    clients = query.offset(skip).limit(limit).all()
+    return clients
+
+
+@clients_router.get("/{client_id}", response_model=ClientDetailSchema)
+async def get_client(client_id: str, db: Session = Depends(get_db)):
+    """Get client details with contact info"""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return client
+
+
+@clients_router.put("/{client_id}", response_model=ClientSchema)
+async def update_client(client_id: str, client_data: ClientUpdateSchema, db: Session = Depends(get_db)):
+    """Update client information"""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    update_data = client_data.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(client, key, value)
+    
+    db.add(client)
+    db.commit()
+    db.refresh(client)
+    return client
+
+
+@clients_router.delete("/{client_id}", status_code=204)
+async def delete_client(client_id: str, db: Session = Depends(get_db)):
+    """Delete a client"""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    db.delete(client)
+    db.commit()
+
+
+@clients_router.post("/{client_id}/add-project")
+async def add_project_to_client(client_id: str, project_data: dict, db: Session = Depends(get_db)):
+    """Link a project/deal to client"""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    linked_projects = client.linked_projects or []
+    linked_projects.append({
+        "project_id": project_data.get("project_id"),
+        "project_name": project_data.get("project_name"),
+        "module": project_data.get("module"),  # tasks, accounts, etc
+        "added_at": datetime.utcnow().isoformat()
+    })
+    client.linked_projects = linked_projects
+    
+    db.add(client)
+    db.commit()
+    db.refresh(client)
+    return {"success": True, "client_id": client.id}
 
 
 # ============= CONTACTS ENDPOINTS =============
@@ -587,6 +753,39 @@ async def get_activities(contact_id: str, db: Session = Depends(get_db)):
     
     activities = db.query(Activity).filter(Activity.contact_id == contact_id).order_by(Activity.created_at.desc()).all()
     return activities
+
+
+@router.get("/activities", response_model=List[ActivitySchema])
+async def list_activities(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=500),
+    db: Session = Depends(get_db)
+):
+    """List recent activities across contacts"""
+    query = db.query(Activity).order_by(Activity.created_at.desc())
+    activities = query.offset(skip).limit(limit).all()
+    return activities
+
+
+@router.get("/notifications/followups")
+async def get_due_followups(limit: int = 10, db: Session = Depends(get_db)):
+    """Return due follow-up activities (follow_up_date <= now)."""
+    now = datetime.utcnow()
+    base_q = db.query(Activity).filter(Activity.follow_up_date != None, Activity.follow_up_date <= now)
+    total = base_q.count()
+    items = base_q.order_by(Activity.follow_up_date.asc()).limit(limit).all()
+
+    results = []
+    for a in items:
+        results.append({
+            "id": a.id,
+            "contact_id": a.contact_id,
+            "title": a.title,
+            "follow_up_date": a.follow_up_date.isoformat() if a.follow_up_date else None,
+            "activity_type": a.activity_type,
+        })
+
+    return {"count": total, "items": results}
 
 
 # ============= TAGS ENDPOINTS =============

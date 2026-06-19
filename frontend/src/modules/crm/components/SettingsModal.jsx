@@ -1,12 +1,14 @@
 import React, { useState } from 'react'
 import { X, Zap, Shuffle, Users, ChevronLeft } from 'lucide-react'
 import PipelineSettings from './PipelineSettings'
+import CreatePipelinePanel from './CreatePipelinePanel'
 import '../styles/SettingsModal.css'
 
 const SettingsModal = ({ onClose, onPipelineCreated }) => {
   const [activeTab, setActiveTab] = useState(null)
 
   const handleManagePipelineClick = () => setActiveTab('manage')
+  const handleCreatePipelineClick = () => setActiveTab('create')
   const handleBackClick = () => setActiveTab(null)
 
   return (
@@ -25,6 +27,10 @@ const SettingsModal = ({ onClose, onPipelineCreated }) => {
               <Zap size={48} />
               <span>Manage Pipeline</span>
             </button>
+            <button className="settings-card" onClick={handleCreatePipelineClick}>
+              <Shuffle size={48} />
+              <span>Create Pipeline</span>
+            </button>
             <button className="settings-card" disabled>
               <Users size={48} />
               <span>Assign Member</span>
@@ -35,7 +41,11 @@ const SettingsModal = ({ onClose, onPipelineCreated }) => {
             <button className="back-btn" onClick={handleBackClick}>
               ← Back
             </button>
-            <PipelineSettings onPipelineCreated={onPipelineCreated} />
+            {activeTab === 'create' ? (
+              <CreatePipelinePanel onClose={() => setActiveTab(null)} onPipelineCreated={onPipelineCreated} />
+            ) : (
+              <PipelineSettings onPipelineCreated={onPipelineCreated} />
+            )}
           </div>
         )}
       </div>

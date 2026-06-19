@@ -3,10 +3,14 @@ import CRMViewTabs from '../components/CRMViewTabs'
 import ContactList from '../components/ContactList'
 import ContactForm from '../components/ContactForm'
 import ActivityTimeline from '../components/ActivityTimeline'
+import ActivitiesPage from './ActivitiesPage'
 import LeadsPage from './LeadsPage'
+import ClientsPage from './ClientsPage'
+import CRMAnalyticsDashboard from '../components/CRMAnalyticsDashboard'
 import '../../../styles/ModulePage.css'
 import '../styles/CRMPageLayout.css'
 import '../styles/LeadsView.css'
+import '../styles/CRMAnalyticsDashboard.css'
 
 const CRMPage = () => {
   const [activeView, setActiveView] = useState('contacts')
@@ -197,22 +201,20 @@ const CRMPage = () => {
         </div>
       )}
 
+      {activeView === 'analytics' && (
+        <CRMAnalyticsDashboard />
+      )}
+
       {activeView === 'leads' && (
         <LeadsPage prefillContact={leadContactPrefill} />
       )}
 
       {activeView === 'clients' && (
-        <section className="crm-card">
-          <h3>Clients</h3>
-          <p>Client management features coming soon...</p>
-        </section>
+        <ClientsPage />
       )}
 
       {activeView === 'activities' && (
-        <section className="crm-card">
-          <h3>Activities</h3>
-          <p>Global activity view coming soon...</p>
-        </section>
+        <ActivitiesPage />
       )}
     </div>
   )

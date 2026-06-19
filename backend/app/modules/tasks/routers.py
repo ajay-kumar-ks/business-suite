@@ -104,6 +104,14 @@ async def update_task_by_id(
             detail="Only the assignee or an admin can update this task",
         )
 
+    # Require proof_attachment when changing status
+    if update_data.status is not None and update_data.status != task.status:
+        if not update_data.proof_attachment or not update_data.proof_attachment.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Proof attachment is required to change task status",
+            )
+
     old_status = task.status
     updated = update_task(db, task_id, update_data)
     if not updated:

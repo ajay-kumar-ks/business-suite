@@ -18,4 +18,12 @@ export const taskApi = {
 
   getEmployees: () =>
     api.get('/tasks/employees'),
+
+  uploadProof: (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/tasks/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
 }

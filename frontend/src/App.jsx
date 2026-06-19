@@ -8,6 +8,7 @@ import TasksPage from './modules/tasks/pages/TasksPage'
 import HRPage from './modules/hr/pages/HRPage'
 import AccountsPage from './modules/accounts/pages/AccountsPage'
 import PageShell from './components/PageShell'
+import Loader from './components/ui/Loader'
 import { TaskNotificationProvider } from './context/TaskNotificationContext'
 import './App.css'
 
@@ -19,7 +20,7 @@ function App() {
     setMounted(true)
   }, [])
 
-  if (!mounted) return <div>Loading...</div>
+  if (!mounted) return <Loader fullScreen={true} />
 
   return (
     <div className="app">

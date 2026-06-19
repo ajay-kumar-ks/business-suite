@@ -9,3 +9,4 @@ pydantic-settings
 SQLAlchemy>=2.0
 psycopg2-binary
 alembic
+python-multipart

@@ -29,6 +29,7 @@ class TaskCreate(BaseModel):
     status: Status = Status.TODO
     reason_note: Optional[str] = None
     due_date: datetime
+    proof_attachment: Optional[str] = None
 
 
 class TaskUpdate(BaseModel):
@@ -39,6 +40,7 @@ class TaskUpdate(BaseModel):
     status: Optional[Status] = None
     reason_note: Optional[str] = None
     due_date: Optional[datetime] = None
+    proof_attachment: Optional[str] = None
 
 
 class TaskResponse(BaseModel):
@@ -50,6 +52,7 @@ class TaskResponse(BaseModel):
     priority: Priority
     status: Status
     reason_note: Optional[str] = None
+    proof_attachment: Optional[str] = None
     due_date: datetime
     created_at: datetime
     updated_at: datetime

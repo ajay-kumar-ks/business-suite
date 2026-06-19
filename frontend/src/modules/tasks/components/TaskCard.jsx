@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react'
-import { Calendar } from 'lucide-react'
+import { Calendar, Paperclip } from 'lucide-react'
 import Avatar from '../../../components/ui/Avatar'
 
 const PRIORITY_LABELS = {
@@ -111,6 +111,13 @@ const TaskCard = ({ task, employees = [], onClick, onStatusChange }) => {
           {formatDate(task.due_date)}
         </div>
       </div>
+
+      {task.proof_attachment && (
+        <div className="task-card-reason" style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--primary)' }}>
+          <Paperclip size={12} />
+          <span style={{ fontSize: 11 }}>Proof attached</span>
+        </div>
+      )}
 
       {task.reason_note && (
         <div className="task-card-reason">{task.reason_note}</div>

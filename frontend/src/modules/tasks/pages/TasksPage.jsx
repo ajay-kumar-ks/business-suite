@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Loader } from 'lucide-react'
+import { Plus } from 'lucide-react'
+import Loader from '../../../components/ui/Loader'
 import Button from '../../../components/ui/Button'
 import TaskBoard from '../components/TaskBoard'
 import TaskModal from '../components/TaskModal'
+import ProofModal from '../components/ProofModal'
 import TaskFilters from '../components/TaskFilters'
 import { taskApi } from '../services/taskApi'
 import { useAuth } from '../../../context/AuthContext'
@@ -28,6 +30,7 @@ const TasksPage = () => {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [proofPending, setProofPending] = useState(null) // { task, newStatus }
   const debounceRef = useRef(null)
 
   const fetchTasks = useCallback(async (appliedFilters = {}) => {
@@ -97,25 +100,42 @@ const TasksPage = () => {
     setModalOpen(true)
   }
 
-  const handleStatusChange = useCallback(async (taskId, newStatus) => {
-    // Optimistically update the UI — avoids flicker from a full re-fetch
+  const doStatusChange = useCallback(async (taskId, newStatus, proofUrl) => {
+    // Optimistically update the UI
     setTasks((prev) => {
       const updated = prev.map((t) =>
-        t.id === taskId ? { ...t, status: newStatus } : t
+        t.id === taskId ? { ...t, status: newStatus, proof_attachment: proofUrl } : t
       )
-      // Update overdue notification count from the optimistic state
       updateOverdueCount(updated.filter((t) => t.status === 'OVERDUE').length)
       return updated
     })
 
     try {
-      await taskApi.updateTask(taskId, { status: newStatus })
+      await taskApi.updateTask(taskId, { status: newStatus, proof_attachment: proofUrl })
     } catch (err) {
       console.error('Failed to update task status:', err)
-      // Revert by re-fetching
       fetchTasks(filters)
     }
   }, [filters, fetchTasks, updateOverdueCount])
+
+  const handleStatusChange = useCallback(async (taskId, newStatus) => {
+    const task = tasks.find((t) => t.id === taskId)
+    if (!task) return
+
+    // Always show the proof modal — new proof required for every status change
+    setProofPending({ task, newStatus })
+  }, [tasks])
+
+  const handleProofConfirm = useCallback((proofUrl) => {
+    if (!proofPending) return
+    const { task, newStatus } = proofPending
+    setProofPending(null)
+    doStatusChange(task.id, newStatus, proofUrl)
+  }, [proofPending, doStatusChange])
+
+  const handleProofCancel = useCallback(() => {
+    setProofPending(null)
+  }, [])
 
   const handleOpenEdit = (task) => {
     setEditingTask(task)
@@ -202,6 +222,15 @@ const TasksPage = () => {
           employees={employees}
           onSave={handleSave}
           onClose={handleCloseModal}
+        />
+      )}
+
+      {proofPending && (
+        <ProofModal
+          task={proofPending.task}
+          newStatus={proofPending.newStatus}
+          onConfirm={handleProofConfirm}
+          onCancel={handleProofCancel}
         />
       )}
     </div>

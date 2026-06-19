@@ -1,4 +1,5 @@
 import React from 'react'
+import { Eye, Pencil, Trash2 } from 'lucide-react'
 import '../styles/HRPage.css'
 
 const STATUS_COLORS = {
@@ -59,23 +60,23 @@ const EmployeeTable = ({ employees = [], loading, onEdit, onDelete, onView }) =>
                 <button
                   className="action-btn view"
                   onClick={() => onView?.(emp)}
-                  title="View"
+                  title="View details"
                 >
-                  👁️
+                  <Eye size={16} />
                 </button>
                 <button
                   className="action-btn edit"
                   onClick={() => onEdit?.(emp)}
-                  title="Edit"
+                  title="Edit employee"
                 >
-                  ✏️
+                  <Pencil size={16} />
                 </button>
                 <button
                   className="action-btn delete"
                   onClick={() => onDelete?.(emp)}
-                  title="Delete"
+                  title="Delete employee"
                 >
-                  🗑️
+                  <Trash2 size={16} />
                 </button>
               </td>
             </tr>

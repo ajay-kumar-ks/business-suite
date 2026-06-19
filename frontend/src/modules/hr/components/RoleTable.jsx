@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Pencil, Trash2, Plus, X } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import { hrAPI } from '../services/hrApi'
 import '../styles/HRPage.css'
@@ -84,7 +85,9 @@ const RoleTable = ({ roles = [], loading, onRefresh }) => {
         <div className="inline-form">
           <div className="inline-form-header">
             <h4>{editingRole ? 'Edit Role' : 'Create Role'}</h4>
-            <button className="modal-close" onClick={resetForm} type="button">✕</button>
+            <button className="modal-close" onClick={resetForm} type="button" title="Close">
+              <X size={18} />
+            </button>
           </div>
           <form onSubmit={handleSubmit} className="inline-form-body">
             {error && <div className="form-error">{error}</div>}
@@ -123,13 +126,19 @@ const RoleTable = ({ roles = [], loading, onRefresh }) => {
       {!roles.length && !showForm ? (
         <div className="table-status empty">
           <span>No roles defined yet.</span>
-          <Button variant="primary" onClick={handleAdd}>+ Add First Role</Button>
+          <Button variant="primary" onClick={handleAdd}>
+            <Plus size={16} style={{ marginRight: 4 }} />
+            Add First Role
+          </Button>
         </div>
       ) : (
         <div>
           <div className="inline-table-header">
             <span className="count-badge">{roles.length} roles</span>
-            <Button variant="primary" size="sm" onClick={handleAdd}>+ Add Role</Button>
+            <Button variant="primary" size="sm" onClick={handleAdd}>
+              <Plus size={16} style={{ marginRight: 4 }} />
+              Add Role
+            </Button>
           </div>
           <div className="table-wrapper">
             <table className="data-table">
@@ -151,14 +160,14 @@ const RoleTable = ({ roles = [], loading, onRefresh }) => {
                         onClick={() => handleEdit(role)}
                         title="Edit"
                       >
-                        ✏️
+                        <Pencil size={16} />
                       </button>
                       <button
                         className="action-btn delete"
                         onClick={() => handleDelete(role)}
                         title="Delete"
                       >
-                        🗑️
+                        <Trash2 size={16} />
                       </button>
                     </td>
                   </tr>

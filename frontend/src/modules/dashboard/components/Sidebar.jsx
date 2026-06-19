@@ -17,7 +17,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import Avatar from '../../../components/ui/Avatar'
 import '../styles/Sidebar.css'
 
-const Sidebar = ({ activeModule, setActiveModule, collapsed, setCollapsed, mobileOpen, setMobileOpen, onLogout }) => {
+const Sidebar = ({ activeModule, setActiveModule, collapsed, setCollapsed, mobileOpen, setMobileOpen, onLogout, useLinks = true }) => {
   const { user } = useAuth()
   const { theme } = useTheme()
   const [profileOpen, setProfileOpen] = React.useState(false)
@@ -57,7 +57,7 @@ const Sidebar = ({ activeModule, setActiveModule, collapsed, setCollapsed, mobil
               const IconComponent = module.icon
               return (
                 <li key={module.id}>
-                  <ModuleButton module={module} IconComponent={IconComponent} activeModule={activeModule} setActiveModule={setActiveModule} />
+                  <ModuleButton module={module} IconComponent={IconComponent} activeModule={activeModule} setActiveModule={setActiveModule} useLinks={useLinks} />
                 </li>
               )
             })}
@@ -104,7 +104,7 @@ const Sidebar = ({ activeModule, setActiveModule, collapsed, setCollapsed, mobil
 
 export default Sidebar
 
-function ModuleButton({ module, IconComponent, activeModule, setActiveModule }) {
+function ModuleButton({ module, IconComponent, activeModule, setActiveModule, useLinks = true }) {
   const navigate = useNavigate()
   return (
     <button
@@ -112,7 +112,9 @@ function ModuleButton({ module, IconComponent, activeModule, setActiveModule }) 
       className={`nav-link ${activeModule === module.id ? 'active' : ''}`}
       onClick={() => {
         setActiveModule(module.id)
-        navigate(`/${module.id}`)
+        if (useLinks) {
+          navigate(`/${module.id}`)
+        }
       }}
     >
       <span className="nav-icon">

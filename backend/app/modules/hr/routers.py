@@ -28,6 +28,14 @@ from app.modules.hr.crud import (
     create_leave_request,
     update_leave_status,
     get_dashboard_stats,
+    get_hr_users,
+    create_hr_user,
+    get_employee_by_user_id,
+    check_in_employee,
+    check_out_employee,
+    get_my_attendance,
+    create_my_leave,
+    get_my_leaves,
 )
 from app.modules.hr.schemas import (
     EmployeeCreate,
@@ -46,11 +54,28 @@ from app.modules.hr.schemas import (
     LeaveCreate,
     LeaveStatusUpdate,
     LeaveResponse,
+    UserCreate,
+    UserResponse,
+    MyLeaveCreate,
 )
 from app.modules.hr.services import format_employee_response, format_attendance_response, format_leave_response
 from app.modules.hr.db_models import EmployeeStatus, AttendanceStatus, LeaveType, LeaveStatus
 
 router = APIRouter()
+
+
+# ──────────────────────────────────────────────
+# Helpers
+# ──────────────────────────────────────────────
+
+
+def require_admin(current_user: User = Depends(get_current_user)):
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return current_user
 
 
 # ──────────────────────────────────────────────
@@ -64,6 +89,129 @@ async def health():
 
 
 # ──────────────────────────────────────────────
+# Employee Self-Service
+# ──────────────────────────────────────────────
+
+
+@router.get("/me")
+async def api_my_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    employee = get_employee_by_user_id(db, current_user.id)
+    if not employee:
+        return {
+            "user": {
+                "id": current_user.id,
+                "username": current_user.username,
+                "email": current_user.email,
+                "full_name": current_user.full_name,
+                "is_admin": current_user.is_admin,
+            },
+            "employee": None,
+        }
+
+    return {
+        "user": {
+            "id": current_user.id,
+            "username": current_user.username,
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "is_admin": current_user.is_admin,
+        },
+        "employee": format_employee_response(employee),
+    }
+
+
+@router.get("/me/attendance")
+async def api_my_attendance(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    employee = get_employee_by_user_id(db, current_user.id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="No employee profile found")
+
+    records = get_my_attendance(db, employee.id)
+    return [format_attendance_response(r) for r in records]
+
+
+@router.post("/me/attendance/checkin")
+async def api_check_in(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    employee = get_employee_by_user_id(db, current_user.id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="No employee profile found")
+
+    record = check_in_employee(db, employee.id)
+    return format_attendance_response(record)
+
+
+@router.post("/me/attendance/checkout")
+async def api_check_out(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    employee = get_employee_by_user_id(db, current_user.id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="No employee profile found")
+
+    record = check_out_employee(db, employee.id)
+    return format_attendance_response(record)
+
+
+@router.get("/me/leaves")
+async def api_my_leaves(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    employee = get_employee_by_user_id(db, current_user.id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="No employee profile found")
+
+    leaves = get_my_leaves(db, employee.id)
+    return [format_leave_response(l) for l in leaves]
+
+
+@router.post("/me/leaves", response_model=LeaveResponse, status_code=status.HTTP_201_CREATED)
+async def api_create_my_leave(
+    data: MyLeaveCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    employee = get_employee_by_user_id(db, current_user.id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="No employee profile found")
+
+    leave = create_my_leave(db, employee.id, data)
+    return format_leave_response(leave)
+
+
+# ──────────────────────────────────────────────
+# HR User Management (Admin only)
+# ──────────────────────────────────────────────
+
+
+@router.get("/users", response_model=list[UserResponse])
+async def api_get_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    return get_hr_users(db)
+
+
+@router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def api_create_user(
+    data: UserCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    return create_hr_user(db, data)
+
+
+# ──────────────────────────────────────────────
 # Dashboard
 # ──────────────────────────────────────────────
 
@@ -71,7 +219,7 @@ async def health():
 @router.get("/dashboard")
 async def api_dashboard(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     return get_dashboard_stats(db)
 
@@ -85,7 +233,7 @@ async def api_dashboard(
 async def api_create_employee(
     data: EmployeeCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     employee = create_employee(db, data)
     return format_employee_response(employee)
@@ -98,7 +246,7 @@ async def api_get_employees(
     status: Optional[EmployeeStatus] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     employees, total = get_employees(
         db, skip=skip, limit=limit, status_filter=status, search=search
@@ -113,7 +261,7 @@ async def api_get_employees(
 async def api_get_employee(
     employee_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     employee = get_employee(db, employee_id)
     if not employee:
@@ -129,7 +277,7 @@ async def api_update_employee(
     employee_id: int,
     data: EmployeeUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     employee = update_employee(db, employee_id, data)
     if not employee:
@@ -144,7 +292,7 @@ async def api_update_employee(
 async def api_delete_employee(
     employee_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     deleted = delete_employee(db, employee_id)
     if not deleted:
@@ -162,7 +310,7 @@ async def api_delete_employee(
 @router.get("/roles", response_model=list[RoleResponse])
 async def api_get_roles(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     return get_roles(db)
 
@@ -171,7 +319,7 @@ async def api_get_roles(
 async def api_create_role(
     data: RoleCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     return create_role(db, data)
 
@@ -181,7 +329,7 @@ async def api_update_role(
     role_id: int,
     data: RoleUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     role = update_role(db, role_id, data)
     if not role:
@@ -196,7 +344,7 @@ async def api_update_role(
 async def api_delete_role(
     role_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     deleted = delete_role(db, role_id)
     if not deleted:
@@ -214,7 +362,7 @@ async def api_delete_role(
 @router.get("/departments", response_model=list[DepartmentResponse])
 async def api_get_departments(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     return get_departments(db)
 
@@ -223,7 +371,7 @@ async def api_get_departments(
 async def api_create_department(
     data: DepartmentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     return create_department(db, data)
 
@@ -233,7 +381,7 @@ async def api_update_department(
     department_id: int,
     data: DepartmentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     department = update_department(db, department_id, data)
     if not department:
@@ -248,7 +396,7 @@ async def api_update_department(
 async def api_delete_department(
     department_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     deleted = delete_department(db, department_id)
     if not deleted:
@@ -267,7 +415,7 @@ async def api_delete_department(
 async def api_mark_attendance(
     data: AttendanceCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     record = mark_attendance(db, data)
     return format_attendance_response(record)
@@ -281,7 +429,7 @@ async def api_get_attendance(
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     records, total = get_attendance(
         db, skip=skip, limit=limit, employee_id=employee_id,
@@ -297,7 +445,7 @@ async def api_get_attendance(
 async def api_get_employee_attendance(
     employee_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     return [format_attendance_response(r) for r in get_attendance_by_employee(db, employee_id)]
 
@@ -311,7 +459,7 @@ async def api_get_employee_attendance(
 async def api_create_leave(
     data: LeaveCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     leave = create_leave_request(db, data)
     return format_leave_response(leave)
@@ -322,7 +470,7 @@ async def api_get_leaves(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     leaves, total = get_leave_requests(db, skip=skip, limit=limit)
     return [format_leave_response(l) for l in leaves]
@@ -333,7 +481,7 @@ async def api_update_leave_status(
     leave_id: int,
     data: LeaveStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     leave = update_leave_status(db, leave_id, data)
     if not leave:

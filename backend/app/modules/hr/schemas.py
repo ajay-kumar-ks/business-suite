@@ -4,6 +4,25 @@ from datetime import date, datetime
 from app.modules.hr.db_models import EmployeeStatus, AttendanceStatus, LeaveType, LeaveStatus
 
 
+# --- HR User Management ---
+
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    full_name: str
+    password: str
+    is_admin: bool = False
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    full_name: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
 # --- Employee ---
 
 class EmployeeCreate(BaseModel):
@@ -133,6 +152,13 @@ class AttendanceListResponse(BaseModel):
 
 class LeaveCreate(BaseModel):
     employee_id: int
+    leave_type: LeaveType
+    start_date: date
+    end_date: date
+    reason: Optional[str] = None
+
+
+class MyLeaveCreate(BaseModel):
     leave_type: LeaveType
     start_date: date
     end_date: date

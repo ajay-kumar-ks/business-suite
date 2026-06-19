@@ -6,6 +6,7 @@ import { authAPI } from '../../../services/api'
 import { User, Mail, Shield } from 'lucide-react'
 import Loader from '../../../components/ui/Loader'
 import HRPage from '../../hr/pages/HRPage'
+import EmployeeDashboard from '../../hr/pages/EmployeeDashboard'
 import AccountsPage from '../../accounts/pages/AccountsPage'
 import COAPage from '../../accounts/pages/COAPage'
 import JournalsPage from '../../accounts/pages/JournalsPage'
@@ -59,6 +60,7 @@ const Dashboard = () => {
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
         onLogout={handleLogout}
+        useLinks={false}
       />
 
       <div className={`main-content ${collapsed ? 'collapsed' : ''}`}>
@@ -90,8 +92,7 @@ const Dashboard = () => {
 
           {activeModule === 'hr' && (
             <div className="module-section">
-              <h2>HR Module</h2>
-              <p>Human Resources management features coming soon...</p>
+              {user?.is_admin ? <HRPage /> : <EmployeeDashboard />}
             </div>
           )}
 

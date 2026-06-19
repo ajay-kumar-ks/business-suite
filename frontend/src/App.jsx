@@ -6,6 +6,7 @@ import Dashboard from './modules/dashboard/pages/Dashboard'
 import CRMPage from './modules/crm/pages/CRMPage'
 import TasksPage from './modules/tasks/pages/TasksPage'
 import HRPage from './modules/hr/pages/HRPage'
+import EmployeeDashboard from './modules/hr/pages/EmployeeDashboard'
 import AccountsPage from './modules/accounts/pages/AccountsPage'
 import PageShell from './components/PageShell'
 import Loader from './components/ui/Loader'
@@ -13,7 +14,7 @@ import { TaskNotificationProvider } from './context/TaskNotificationContext'
 import './App.css'
 
 function App() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -47,7 +48,13 @@ function App() {
 
         <Route
           path="/hr"
-          element={isAuthenticated ? <TaskNotificationProvider><PageShell><HRPage /></PageShell></TaskNotificationProvider> : <Navigate to="/login" />}
+          element={isAuthenticated ? (
+            <TaskNotificationProvider>
+              <PageShell>
+                {user?.is_admin ? <HRPage /> : <EmployeeDashboard />}
+              </PageShell>
+            </TaskNotificationProvider>
+          ) : <Navigate to="/login" />}
         />
 
         <Route

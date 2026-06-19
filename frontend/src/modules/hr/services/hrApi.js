@@ -67,6 +67,32 @@ export const hrAPI = {
   updateLeaveStatus: (id, data) =>
     api.patch(`/hr/leaves/${id}`, data),
 
+  // ── Users ──
+  getUsers: () =>
+    api.get('/hr/users'),
+
+  createUser: (data) =>
+    api.post('/hr/users', data),
+
+  // ── Employee Self-Service ──
+  getMyProfile: () =>
+    api.get('/hr/me'),
+
+  getMyAttendance: () =>
+    api.get('/hr/me/attendance'),
+
+  checkIn: () =>
+    api.post('/hr/me/attendance/checkin'),
+
+  checkOut: () =>
+    api.post('/hr/me/attendance/checkout'),
+
+  getMyLeaves: () =>
+    api.get('/hr/me/leaves'),
+
+  createMyLeave: (data) =>
+    api.post('/hr/me/leaves', data),
+
   // ── Dashboard ──
   getDashboard: () =>
     api.get('/hr/dashboard'),

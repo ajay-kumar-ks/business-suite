@@ -4,7 +4,8 @@ from datetime import date
 from fastapi import HTTPException, status
 from app.modules.hr.db_models import Employee, Role, Department, EmployeeStatus, Attendance, AttendanceStatus, LeaveRequest, LeaveType, LeaveStatus
 from app.modules.auth.db_models import User
-from app.modules.hr.schemas import EmployeeCreate, EmployeeUpdate, AttendanceCreate, LeaveCreate, LeaveStatusUpdate
+from app.modules.auth.utils import get_password_hash
+from app.modules.hr.schemas import EmployeeCreate, EmployeeUpdate, AttendanceCreate, LeaveCreate, LeaveStatusUpdate, UserCreate
 
 
 def get_employees(
@@ -424,6 +425,156 @@ def update_leave_status(db: Session, leave_id: int, data: LeaveStatusUpdate) -> 
 # ──────────────────────────────────────────────
 # Dashboard
 # ──────────────────────────────────────────────
+
+
+# ──────────────────────────────────────────────
+# HR User Management
+# ──────────────────────────────────────────────
+
+
+def get_hr_users(db: Session) -> list[User]:
+    """Get all auth users."""
+    return db.query(User).order_by(User.username).all()
+
+
+def create_hr_user(db: Session, data: UserCreate) -> User:
+    """Create a new auth user from HR module."""
+    existing_username = db.query(User).filter(User.username == data.username).first()
+    if existing_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Username '{data.username}' already exists",
+        )
+
+    existing_email = db.query(User).filter(User.email == data.email).first()
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Email '{data.email}' already exists",
+        )
+
+    user = User(
+        username=data.username,
+        email=data.email,
+        full_name=data.full_name,
+        hashed_password=get_password_hash(data.password),
+        disabled=False,
+        is_admin=data.is_admin,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+# ──────────────────────────────────────────────
+# Employee Self-Service
+# ──────────────────────────────────────────────
+
+
+def check_in_employee(db: Session, employee_id: int) -> Attendance:
+    """Employee check-in. Creates attendance record for today if not exists."""
+    from datetime import datetime
+    today = date.today()
+
+    existing = db.query(Attendance).filter(
+        Attendance.employee_id == employee_id,
+        Attendance.date == today,
+    ).first()
+
+    if existing:
+        if existing.check_in:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Already checked in today",
+            )
+        existing.check_in = datetime.now()
+        existing.status = AttendanceStatus.PRESENT
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    record = Attendance(
+        employee_id=employee_id,
+        date=today,
+        check_in=datetime.now(),
+        status=AttendanceStatus.PRESENT,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def check_out_employee(db: Session, employee_id: int) -> Attendance:
+    """Employee check-out. Updates today's attendance record."""
+    from datetime import datetime
+    today = date.today()
+
+    record = db.query(Attendance).filter(
+        Attendance.employee_id == employee_id,
+        Attendance.date == today,
+    ).first()
+
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No check-in found for today. Please check in first.",
+        )
+
+    if record.check_out:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Already checked out today",
+        )
+
+    record.check_out = datetime.now()
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def get_my_attendance(db: Session, employee_id: int) -> list[Attendance]:
+    """Get attendance records for a specific employee."""
+    return db.query(Attendance).filter(
+        Attendance.employee_id == employee_id
+    ).order_by(Attendance.date.desc()).all()
+
+
+def create_my_leave(db: Session, employee_id: int, data) -> LeaveRequest:
+    """Create a leave request for the logged-in employee."""
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not employee:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee record not found",
+        )
+
+    if data.start_date > data.end_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Start date cannot be after end date",
+        )
+
+    leave = LeaveRequest(
+        employee_id=employee_id,
+        leave_type=data.leave_type,
+        start_date=data.start_date,
+        end_date=data.end_date,
+        reason=data.reason,
+        status=LeaveStatus.PENDING,
+    )
+    db.add(leave)
+    db.commit()
+    db.refresh(leave)
+    return leave
+
+
+def get_my_leaves(db: Session, employee_id: int) -> list[LeaveRequest]:
+    """Get leave requests for a specific employee."""
+    return db.query(LeaveRequest).filter(
+        LeaveRequest.employee_id == employee_id
+    ).order_by(LeaveRequest.created_at.desc()).all()
 
 
 def get_dashboard_stats(db: Session) -> dict:

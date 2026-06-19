@@ -7,20 +7,22 @@ import RoleTable from '../components/RoleTable'
 import DepartmentTable from '../components/DepartmentTable'
 import AttendanceTable from '../components/AttendanceTable'
 import LeaveTable from '../components/LeaveTable'
+import UserTable from '../components/UserTable'
+import UserModal from '../components/UserModal'
 import { hrAPI } from '../services/hrApi'
-import { authAPI } from '../../../services/api'
 import Button from '../../../components/ui/Button'
 
 const TABS = [
-  { id: 'employees', label: 'Employees' },
+  { id: 'users', label: 'Users' },
   { id: 'roles', label: 'Roles' },
   { id: 'departments', label: 'Departments' },
+  { id: 'employees', label: 'Employees' },
   { id: 'attendance', label: 'Attendance' },
   { id: 'leaves', label: 'Leaves' },
 ]
 
 const HRPage = () => {
-  const [activeTab, setActiveTab] = useState('employees')
+  const [activeTab, setActiveTab] = useState('users')
 
   const [employees, setEmployees] = useState([])
   const [employeesLoading, setEmployeesLoading] = useState(true)
@@ -37,6 +39,8 @@ const HRPage = () => {
   const [editingEmployee, setEditingEmployee] = useState(null)
   const [dashboard, setDashboard] = useState(null)
   const [authUsers, setAuthUsers] = useState([])
+  const [usersLoading, setUsersLoading] = useState(true)
+  const [userModalOpen, setUserModalOpen] = useState(false)
 
   // ── Fetch dashboard ──
   const fetchDashboard = useCallback(async () => {
@@ -115,23 +119,26 @@ const HRPage = () => {
 
   // ── Fetch users ──
   const fetchUsers = useCallback(async () => {
+    setUsersLoading(true)
     try {
-      const res = await authAPI.getUsers()
+      const res = await hrAPI.getUsers()
       setAuthUsers(res.data || [])
     } catch (err) {
       console.error('Failed to fetch users:', err)
+    } finally {
+      setUsersLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchEmployees()
+    fetchUsers()
     fetchRoles()
     fetchDepartments()
+    fetchEmployees()
     fetchAttendance()
     fetchLeaves()
     fetchDashboard()
-    fetchUsers()
-  }, [fetchEmployees, fetchRoles, fetchDepartments, fetchAttendance, fetchLeaves, fetchDashboard, fetchUsers])
+  }, [fetchUsers, fetchRoles, fetchDepartments, fetchEmployees, fetchAttendance, fetchLeaves, fetchDashboard])
 
   // ── Employee handlers ──
   const handleAddEmployee = () => {
@@ -149,6 +156,7 @@ const HRPage = () => {
     try {
       await hrAPI.deleteEmployee(employee.id)
       fetchEmployees()
+      fetchDashboard()
     } catch (err) {
       console.error('Failed to delete employee:', err)
     }
@@ -174,6 +182,13 @@ const HRPage = () => {
       await hrAPI.createEmployee(data)
     }
     fetchEmployees()
+    fetchDashboard()
+  }
+
+  // ── User handlers ──
+  const handleCreateUser = async (data) => {
+    await hrAPI.createUser(data)
+    fetchUsers()
   }
 
   const DASHBOARD_CARDS = [
@@ -225,6 +240,60 @@ const HRPage = () => {
         ))}
       </div>
 
+      {/* ── Users Tab ── */}
+      {activeTab === 'users' && (
+        <div className="page-section">
+          <div className="section-header">
+            <h3>User Management</h3>
+            <div className="section-actions">
+              <span className="count-badge">{authUsers.length} users</span>
+              <Button variant="primary" size="sm" onClick={() => setUserModalOpen(true)}>
+                + Create User
+              </Button>
+            </div>
+          </div>
+          <UserTable
+            users={authUsers}
+            loading={usersLoading}
+            onRefresh={fetchUsers}
+          />
+
+          <UserModal
+            isOpen={userModalOpen}
+            onClose={() => setUserModalOpen(false)}
+            onSave={handleCreateUser}
+          />
+        </div>
+      )}
+
+      {/* ── Roles Tab ── */}
+      {activeTab === 'roles' && (
+        <div className="page-section">
+          <div className="section-header">
+            <h3>Role Tags</h3>
+          </div>
+          <RoleTable
+            roles={roles}
+            loading={rolesLoading}
+            onRefresh={fetchRoles}
+          />
+        </div>
+      )}
+
+      {/* ── Departments Tab ── */}
+      {activeTab === 'departments' && (
+        <div className="page-section">
+          <div className="section-header">
+            <h3>Departments</h3>
+          </div>
+          <DepartmentTable
+            departments={departments}
+            loading={departmentsLoading}
+            onRefresh={() => { fetchDepartments(); fetchDashboard(); }}
+          />
+        </div>
+      )}
+
       {/* ── Employees Tab ── */}
       {activeTab === 'employees' && (
         <div className="page-section">
@@ -257,34 +326,6 @@ const HRPage = () => {
         </div>
       )}
 
-      {/* ── Roles Tab ── */}
-      {activeTab === 'roles' && (
-        <div className="page-section">
-          <div className="section-header">
-            <h3>Role Tags</h3>
-          </div>
-          <RoleTable
-            roles={roles}
-            loading={rolesLoading}
-            onRefresh={fetchRoles}
-          />
-        </div>
-      )}
-
-      {/* ── Departments Tab ── */}
-      {activeTab === 'departments' && (
-        <div className="page-section">
-          <div className="section-header">
-            <h3>Departments</h3>
-          </div>
-          <DepartmentTable
-            departments={departments}
-            loading={departmentsLoading}
-            onRefresh={fetchDepartments}
-          />
-        </div>
-      )}
-
       {/* ── Attendance Tab ── */}
       {activeTab === 'attendance' && (
         <div className="page-section">
@@ -293,9 +334,7 @@ const HRPage = () => {
           </div>
           <AttendanceTable
             attendanceRecords={attendanceRecords}
-            employees={employees}
             loading={attendanceLoading}
-            onRefresh={fetchAttendance}
           />
         </div>
       )}
@@ -308,9 +347,8 @@ const HRPage = () => {
           </div>
           <LeaveTable
             leaves={leaves}
-            employees={employees}
             loading={leavesLoading}
-            onRefresh={fetchLeaves}
+            onRefresh={() => { fetchLeaves(); fetchDashboard(); }}
           />
         </div>
       )}

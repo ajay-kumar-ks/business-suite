@@ -86,7 +86,56 @@ export const accountsAPI = {
 }
 
 export const crmAPI = {
+  // Contacts
+  listContacts: (params = {}) => api.get('/crm/contacts', { params }),
+  getContact: (id) => api.get(`/crm/contacts/${id}`),
+  createContact: (data) => api.post('/crm/contacts', data),
+  updateContact: (id, data) => api.put(`/crm/contacts/${id}`, data),
+  deleteContact: (id) => api.delete(`/crm/contacts/${id}`),
+  archiveContact: (id) => api.patch(`/crm/contacts/${id}/archive`),
+  mergeContacts: (data) => api.post('/crm/contacts/merge', data),
+  
+  // Activities
+  getActivities: (contactId, params = {}) => api.get(`/crm/contacts/${contactId}/activities`, { params }),
+  createActivity: (contactId, data) => api.post(`/crm/contacts/${contactId}/activities`, data),
+  
+  // Leads
+  listLeads: (params = {}) => api.get('/crm/leads', { params }),
+  getLead: (id) => api.get(`/crm/leads/${id}`),
+  createLead: (data) => api.post('/crm/leads', data),
+  updateLead: (id, data) => api.put(`/crm/leads/${id}`, data),
+  deleteLead: (id) => api.delete(`/crm/leads/${id}`),
+  moveLead: (id, data) => api.put(`/crm/leads/${id}/move`, data),
+  convertLead: (id) => api.post(`/crm/leads/${id}/convert`),
+  
+  // Clients
+  listClients: (params = {}) => api.get('/crm/clients', { params }),
+  getClient: (id) => api.get(`/crm/clients/${id}`),
+  createClient: (data) => api.post('/crm/clients', data),
+  updateClient: (id, data) => api.put(`/crm/clients/${id}`, data),
+  deleteClient: (id) => api.delete(`/crm/clients/${id}`),
+  addProjectToClient: (id, data) => api.post(`/crm/clients/${id}/add-project`, data),
+  
+  // Pipelines
+  listPipelines: () => api.get('/crm/pipelines'),
+  getPipeline: (id) => api.get(`/crm/pipelines/${id}`),
+  createPipeline: (data) => api.post('/crm/pipelines', data),
+  updatePipeline: (id, data) => api.patch(`/crm/pipelines/${id}`, data),
+  
+  // Phases
+  getPhases: (pipelineId) => api.get(`/crm/pipelines/${pipelineId}/phases`),
+  createPhase: (pipelineId, data) => api.post(`/crm/pipelines/${pipelineId}/phases`, data),
+  updatePhase: (pipelineId, phaseId, data) => api.put(`/crm/pipelines/${pipelineId}/phases/${phaseId}`, data),
+  
+  // Tags
+  getTags: () => api.get('/crm/tags'),
+  
+  // General
   getStatus: () => api.get('/crm/'),
+  // Notifications
+  getDueFollowups: (params = {}) => api.get('/crm/contacts/notifications/followups', { params }),
+  // Activities
+  listActivities: (params = {}) => api.get('/crm/activities', { params }),
 }
 
 export const tasksAPI = {

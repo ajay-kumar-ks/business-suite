@@ -220,6 +220,25 @@
   min-height: 80px;
 }
 
+.pipeline-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--sidebar);
+  color: var(--text-secondary, #6b7280);
+}
+
+.loader-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 .pipeline-form input[type="checkbox"] {
   width: 18px;
   height: 18px;

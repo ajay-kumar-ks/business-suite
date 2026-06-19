@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
+import Loader from '../../../components/ui/Loader'
 import Select from '../../../components/ui/Select'
+import { hrAPI } from '../../hr/services/hrApi'
 import '../styles/LeadsView.css'
 
 const LeadForm = ({ contact = null, onSave, onCancel }) => {
@@ -13,14 +15,18 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
     phase_id: '',
     value: '',
     expected_close_date: '',
-    assignee: '',
+    assignee_id: '',
     source: '',
     notes: '',
   })
   const [pipelines, setPipelines] = useState([])
   const [phases, setPhases] = useState([])
+  const [employees, setEmployees] = useState([])
+  const [employeeLoading, setEmployeeLoading] = useState(true)
+  const [employeeDropdownOpen, setEmployeeDropdownOpen] = useState(false)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
+  const employeeDropdownRef = useRef(null)
 
   useEffect(() => {
     if (contact) {
@@ -31,6 +37,7 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
       }))
     }
     fetchPipelines()
+    fetchEmployees()
   }, [contact])
 
   useEffect(() => {
@@ -41,6 +48,17 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
       setFormData((prev) => ({ ...prev, phase_id: '' }))
     }
   }, [formData.pipeline_id])
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (employeeDropdownRef.current && !employeeDropdownRef.current.contains(event.target)) {
+        setEmployeeDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const fetchPipelines = async () => {
     try {
@@ -64,12 +82,43 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
     }
   }
 
+  const fetchEmployees = async () => {
+    try {
+      setEmployeeLoading(true)
+      const response = await hrAPI.getEmployees({ status: 'Active', limit: 100 })
+      setEmployees(response.data.employees || [])
+    } catch (error) {
+      console.error('Failed to fetch employees:', error)
+      setEmployees([])
+    } finally {
+      setEmployeeLoading(false)
+    }
+  }
+
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }))
     }
+  }
+
+  const selectedEmployee = useMemo(
+    () => employees.find((emp) => String(emp.id) === String(formData.assignee_id)),
+    [employees, formData.assignee_id]
+  )
+
+  const roleColorFor = (role) => {
+    const roleColors = ['#60a5fa', '#f472b6', '#34d399', '#f59e0b', '#a78bfa', '#f97316', '#22c55e']
+    if (!role) return '#94a3b8'
+    const index = Array.from(role).reduce((acc, char) => acc + char.charCodeAt(0), 0) % roleColors.length
+    return roleColors[index]
+  }
+
+  const handleAssigneeSelect = (employee) => {
+    setFormData((prev) => ({ ...prev, assignee_id: employee.id }))
+    setErrors((prev) => ({ ...prev, assignee_id: '' }))
+    setEmployeeDropdownOpen(false)
   }
 
   const validateForm = () => {
@@ -84,6 +133,9 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
     if (!validateForm()) return
     setLoading(true)
     try {
+      const selectedEmployee = employees.find(
+        (emp) => String(emp.id) === String(formData.assignee_id)
+      )
       const response = await fetch('/api/crm/leads/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -94,7 +146,9 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
           phase_id: formData.phase_id || null,
           value: formData.value ? Number(formData.value) : undefined,
           expected_close_date: formData.expected_close_date || null,
-          assignee: formData.assignee || null,
+          assignee: selectedEmployee
+            ? selectedEmployee.user_name || selectedEmployee.full_name || String(selectedEmployee.id)
+            : null,
           source: formData.source || null,
           notes: formData.notes || null,
         }),
@@ -172,12 +226,70 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
         </div>
 
         <div className="form-row two-col">
-          <Input
-            label="Assignee"
-            name="assignee"
-            value={formData.assignee}
-            onChange={handleChange}
-          />
+          <div className="custom-select-wrapper" ref={employeeDropdownRef}>
+            <label className="custom-select-label">Assignee</label>
+            <button
+              type="button"
+              className={`custom-select-trigger ${employeeDropdownOpen ? 'open' : ''}`}
+              onClick={() => setEmployeeDropdownOpen((prev) => !prev)}
+            >
+              <span className={`custom-select-value ${selectedEmployee ? '' : 'placeholder'}`}>
+                {selectedEmployee ? (
+                  <>
+                    <span>{selectedEmployee.user_name || selectedEmployee.full_name || `Employee #${selectedEmployee.id}`}</span>
+                    {selectedEmployee.role_name && (
+                      <span
+                        className="custom-role-chip"
+                        style={{ backgroundColor: roleColorFor(selectedEmployee.role_name) }}
+                      >
+                        {selectedEmployee.role_name}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  'Select assignee...'
+                )}
+              </span>
+            </button>
+            {employeeDropdownOpen && (
+              <div className="custom-select-menu">
+                {employeeLoading ? (
+                  <div className="custom-select-loading">
+                    <Loader size={20} />
+                    <span>Loading employees...</span>
+                  </div>
+                ) : employees.length === 0 ? (
+                  <div className="custom-select-empty">No employees available</div>
+                ) : (
+                  employees.map((emp) => (
+                    <button
+                      key={emp.id}
+                      type="button"
+                      className={`custom-select-item ${String(emp.id) === String(formData.assignee_id) ? 'selected' : ''}`}
+                      onClick={() => handleAssigneeSelect(emp)}
+                    >
+                      <div className="custom-select-item-main">
+                        <span className="custom-select-item-name">
+                          {emp.user_name || emp.full_name || `Employee #${emp.id}`}
+                        </span>
+                        {emp.role_name && (
+                          <span
+                            className="custom-role-chip"
+                            style={{ backgroundColor: roleColorFor(emp.role_name) }}
+                          >
+                            {emp.role_name}
+                          </span>
+                        )}
+                      </div>
+                      <span className="custom-select-item-subtitle">
+                        {emp.department_name || emp.department || emp.email || ''}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
           <Input
             label="Source"
             name="source"

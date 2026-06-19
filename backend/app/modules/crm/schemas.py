@@ -111,6 +111,7 @@ class PhaseSchema(BaseModel):
     color: Optional[str] = "#6b7280"
     position: Optional[int] = 0
     is_terminal: Optional[bool] = False
+    creates_client: Optional[bool] = False
 
     class Config:
         from_attributes = True
@@ -138,23 +139,12 @@ class PipelineUpdateSchema(BaseModel):
     owner: Optional[str] = None
 
 
-class PhaseSchema(BaseModel):
-    id: str
-    pipeline_id: str
-    name: str
-    color: Optional[str] = "#6b7280"
-    position: Optional[int] = 0
-    is_terminal: Optional[bool] = False
-
-    class Config:
-        from_attributes = True
-
-
 class PhaseCreateSchema(BaseModel):
     name: str
     color: Optional[str] = "#6b7280"
     position: Optional[int] = 0
     is_terminal: Optional[bool] = False
+    creates_client: Optional[bool] = False
 
 
 class PhaseUpdateSchema(BaseModel):
@@ -162,6 +152,7 @@ class PhaseUpdateSchema(BaseModel):
     color: Optional[str] = None
     position: Optional[int] = None
     is_terminal: Optional[bool] = None
+    creates_client: Optional[bool] = None
 
 
 class LeadBaseSchema(BaseModel):
@@ -216,3 +207,50 @@ class BulkActionSchema(BaseModel):
     contact_ids: List[str]
     action: str  # tag, assign, export, archive
     action_data: Optional[dict] = {}
+
+
+# Client Schemas (Phase 4) ✅ 4.1
+class ClientBaseSchema(BaseModel):
+    contact_id: str
+    lead_id: Optional[str] = None
+    account_manager: Optional[str] = None
+    tier: str = "Standard"  # Standard, Premium, VIP
+    status: str = "Active"  # Active, Inactive, Churned
+    renewal_date: Optional[datetime] = None
+    subscription_value: Optional[int] = None
+    pinned_notes: Optional[str] = None
+    internal_tags: Optional[List[str]] = []
+
+
+class ClientCreateSchema(BaseModel):
+    contact_id: str
+    lead_id: Optional[str] = None
+    account_manager: Optional[str] = None
+    tier: Optional[str] = "Standard"
+
+
+class ClientUpdateSchema(BaseModel):
+    account_manager: Optional[str] = None
+    tier: Optional[str] = None
+    status: Optional[str] = None
+    renewal_date: Optional[datetime] = None
+    subscription_value: Optional[int] = None
+    pinned_notes: Optional[str] = None
+    internal_tags: Optional[List[str]] = None
+
+
+class ClientSchema(ClientBaseSchema):
+    id: str
+    client_since: datetime
+    activity_notes: List[Any] = []
+    linked_projects: List[Any] = []
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ClientDetailSchema(ClientSchema):
+    """Client with full contact information"""
+    contact: Optional[ContactSchema] = None

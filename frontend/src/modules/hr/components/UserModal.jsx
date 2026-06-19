@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { X } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import '../styles/HRPage.css'
 
@@ -74,8 +75,8 @@ const UserModal = ({ isOpen, onClose, onSave }) => {
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Create User</h3>
-          <button className="modal-close" onClick={onClose} type="button">
-            ✕
+          <button className="modal-close" onClick={onClose} type="button" title="Close">
+            <X size={18} />
           </button>
         </div>
 

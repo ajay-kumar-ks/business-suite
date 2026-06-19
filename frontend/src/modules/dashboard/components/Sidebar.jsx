@@ -2,6 +2,7 @@ import React from 'react'
 import {
   Home,
   Users,
+  UserCircle,
   DollarSign,
   CheckSquare,
   PhoneCall,
@@ -26,7 +27,11 @@ const Sidebar = ({ activeModule, setActiveModule, collapsed, setCollapsed, mobil
     { id: 'accounts', label: 'Accounts', icon: DollarSign },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare },
     { id: 'crm', label: 'CRM', icon: PhoneCall },
-    { id: 'hr', label: 'HR', icon: Users },
+    {
+      id: 'hr',
+      label: user?.is_admin ? 'HR' : 'My Space',
+      icon: user?.is_admin ? Users : UserCircle,
+    },
   ]
 
   

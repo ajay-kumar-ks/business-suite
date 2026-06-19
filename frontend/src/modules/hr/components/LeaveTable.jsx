@@ -1,4 +1,5 @@
 import React from 'react'
+import { CheckCircle, XCircle } from 'lucide-react'
 import { hrAPI } from '../services/hrApi'
 import '../styles/HRPage.css'
 
@@ -75,14 +76,14 @@ const LeaveTable = ({ leaves = [], loading, onRefresh }) => {
                             onClick={() => handleApproveReject(lv.id, 'Approved')}
                             title="Approve"
                           >
-                            ✅
+                            <CheckCircle size={16} />
                           </button>
                           <button
                             className="action-btn reject"
                             onClick={() => handleApproveReject(lv.id, 'Rejected')}
                             title="Reject"
                           >
-                            ❌
+                            <XCircle size={16} />
                           </button>
                         </>
                       ) : (

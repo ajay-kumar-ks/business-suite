@@ -1,4 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import {
+  Users,
+  Building2,
+  UserCheck,
+  UserX,
+  Clock,
+  Plus,
+} from 'lucide-react'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+} from 'chart.js'
+import { Line, Doughnut } from 'react-chartjs-2'
 import '../../../styles/ModulePage.css'
 import '../styles/HRPage.css'
 import EmployeeTable from '../components/EmployeeTable'
@@ -12,14 +33,41 @@ import UserModal from '../components/UserModal'
 import { hrAPI } from '../services/hrApi'
 import Button from '../../../components/ui/Button'
 
+// ── Register Chart.js components ──
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+)
+
 const TABS = [
-  { id: 'users', label: 'Users' },
-  { id: 'roles', label: 'Roles' },
-  { id: 'departments', label: 'Departments' },
-  { id: 'employees', label: 'Employees' },
-  { id: 'attendance', label: 'Attendance' },
-  { id: 'leaves', label: 'Leaves' },
+  { id: 'users', label: 'Users', icon: Users },
+  { id: 'roles', label: 'Roles', icon: Users },
+  { id: 'departments', label: 'Departments', icon: Building2 },
+  { id: 'employees', label: 'Employees', icon: Users },
+  { id: 'attendance', label: 'Attendance', icon: UserCheck },
+  { id: 'leaves', label: 'Leaves', icon: Clock },
 ]
+
+const CARD_CONFIG = [
+  { key: 'total_employees', label: 'Total Employees', icon: Users, color: '#3b82f6', bg: '#eff6ff' },
+  { key: 'total_departments', label: 'Departments', icon: Building2, color: '#8b5cf6', bg: '#f5f3ff' },
+  { key: 'present_today', label: 'Present Today', icon: UserCheck, color: '#22c55e', bg: '#f0fdf4' },
+  { key: 'absent_today', label: 'Absent Today', icon: UserX, color: '#ef4444', bg: '#fef2f2' },
+  { key: 'pending_leaves', label: 'Pending Leaves', icon: Clock, color: '#f59e0b', bg: '#fffbeb' },
+]
+
+// ── Dark mode chart defaults ──
+const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark'
+
+const chartTextColor = () => (isDark() ? '#94a3b8' : '#64748b')
+const chartGridColor = () => (isDark() ? '#1e293b' : '#f1f5f9')
 
 const HRPage = () => {
   const [activeTab, setActiveTab] = useState('users')
@@ -41,6 +89,14 @@ const HRPage = () => {
   const [authUsers, setAuthUsers] = useState([])
   const [usersLoading, setUsersLoading] = useState(true)
   const [userModalOpen, setUserModalOpen] = useState(false)
+
+  // ── Chart theme re-render key ──
+  const [themeTick, setThemeTick] = useState(0)
+  useEffect(() => {
+    const observer = new MutationObserver(() => setThemeTick((t) => t + 1))
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [])
 
   // ── Fetch dashboard ──
   const fetchDashboard = useCallback(async () => {
@@ -191,53 +247,233 @@ const HRPage = () => {
     fetchUsers()
   }
 
-  const DASHBOARD_CARDS = [
-    { key: 'total_employees', label: 'Total Employees', color: '#2563eb', icon: '👥' },
-    { key: 'total_departments', label: 'Departments', color: '#7c3aed', icon: '🏢' },
-    { key: 'present_today', label: 'Present Today', color: '#22c55e', icon: '✅' },
-    { key: 'absent_today', label: 'Absent Today', color: '#ef4444', icon: '❌' },
-    { key: 'pending_leaves', label: 'Pending Leaves', color: '#f59e0b', icon: '⏳' },
-  ]
+  // ════════════════════════════════════════════════
+  //  CHART DATA
+  // ════════════════════════════════════════════════
+
+  const tc = chartTextColor()
+  const gc = chartGridColor()
+
+  // ── Attendance Trend (grouped by actual day of week) ──
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const presentByDay = Array(7).fill(0)
+  const absentByDay = Array(7).fill(0)
+
+  attendanceRecords.forEach((rec) => {
+    if (!rec.date) return
+    const dayIndex = new Date(rec.date).getDay() // 0=Sun, 1=Mon ... 6=Sat
+    if (rec.status === 'Present') presentByDay[dayIndex]++
+    else if (rec.status === 'Absent') absentByDay[dayIndex]++
+  })
+
+  const attendanceTrendData = {
+    labels: dayNames,
+    datasets: [
+      {
+        label: 'Present',
+        data: presentByDay,
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      },
+      {
+        label: 'Absent',
+        data: absentByDay,
+        borderColor: '#ef4444',
+        backgroundColor: 'rgba(239, 68, 68, 0.05)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      },
+    ],
+  }
+
+  // ── Department Distribution ──
+  const deptLabels = departments.length ? departments.map((d) => d.name) : ['Engineering', 'Marketing', 'Sales', 'Operations']
+  const deptData = departments.length
+    ? departments.map((d) => employees.filter((e) => e.department_name === d.name).length)
+    : [8, 5, 6, 4]
+
+  const departmentChartData = {
+    labels: deptLabels,
+    datasets: [
+      {
+        data: deptData,
+        backgroundColor: ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6'],
+        borderWidth: 0,
+        hoverOffset: 8,
+      },
+    ],
+  }
+
+  // ── Leave Status ──
+  const leavePending = leaves.filter((l) => l.status === 'Pending').length
+  const leaveApproved = leaves.filter((l) => l.status === 'Approved').length
+  const leaveRejected = leaves.filter((l) => l.status === 'Rejected').length
+
+  const leaveChartData = {
+    labels: ['Pending', 'Approved', 'Rejected'],
+    datasets: [
+      {
+        data: [leavePending, leaveApproved, leaveRejected],
+        backgroundColor: ['#f59e0b', '#22c55e', '#ef4444'],
+        borderWidth: 0,
+        hoverOffset: 8,
+      },
+    ],
+  }
+
+  const chartOptions = (showLegend = false) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: showLegend,
+        position: 'bottom',
+        labels: {
+          color: tc,
+          padding: 12,
+          usePointStyle: true,
+          font: { size: 11 },
+        },
+      },
+      tooltip: {
+        backgroundColor: isDark() ? '#1e293b' : '#ffffff',
+        titleColor: isDark() ? '#e2e8f0' : '#1e293b',
+        bodyColor: isDark() ? '#cbd5e1' : '#475569',
+        borderColor: isDark() ? '#334155' : '#e2e8f0',
+        borderWidth: 1,
+        cornerRadius: 8,
+        padding: 10,
+      },
+    },
+    scales: {
+      x: {
+        grid: { color: gc, drawBorder: false },
+        ticks: { color: tc, font: { size: 11 } },
+      },
+      y: {
+        grid: { color: gc, drawBorder: false },
+        ticks: { color: tc, font: { size: 11 }, stepSize: 1 },
+        beginAtZero: true,
+      },
+    },
+  })
+
+  const doughnutOptions = (showLegend = true) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '65%',
+    plugins: {
+      legend: {
+        display: showLegend,
+        position: 'bottom',
+        labels: {
+          color: tc,
+          padding: 12,
+          usePointStyle: true,
+          font: { size: 11 },
+        },
+      },
+      tooltip: {
+        backgroundColor: isDark() ? '#1e293b' : '#ffffff',
+        titleColor: isDark() ? '#e2e8f0' : '#1e293b',
+        bodyColor: isDark() ? '#cbd5e1' : '#475569',
+        borderColor: isDark() ? '#334155' : '#e2e8f0',
+        borderWidth: 1,
+        cornerRadius: 8,
+        padding: 10,
+      },
+    },
+  })
+
+  // ════════════════════════════════════════════════
+  //  RENDER
+  // ════════════════════════════════════════════════
 
   return (
     <div className="module-page">
-      <div className="page-header">
-        <div>
-          <h2>HR Module</h2>
-          <p className="page-subtitle">Manage employee records, attendance, leave, and HR workflows.</p>
+      {/* ── Welcome Section ── */}
+      <div className="welcome-section">
+        <div className="welcome-text">
+          <h2>HR Dashboard</h2>
+          <p>Manage employee records, attendance, leave, and HR workflows.</p>
+        </div>
+        <div className="welcome-date">
+          <span className="date-large">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+          </span>
+          <span>
+            {dashboard
+              ? `${dashboard.total_employees ?? 0} employees · ${dashboard.total_departments ?? 0} departments`
+              : 'Loading...'}
+          </span>
         </div>
       </div>
 
-      {/* ── Dashboard Cards ── */}
+      {/* ── KPI Cards ── */}
       {dashboard && (
         <div className="dashboard-cards">
-          {DASHBOARD_CARDS.map((card) => (
-            <div
-              key={card.key}
-              className="dashboard-card"
-              style={{ borderTopColor: card.color }}
-            >
-              <span className="card-icon">{card.icon}</span>
-              <div className="card-info">
-                <span className="card-value">{dashboard[card.key] ?? 0}</span>
-                <span className="card-label">{card.label}</span>
+          {CARD_CONFIG.map((card) => {
+            const IconComp = card.icon
+            return (
+              <div key={card.key} className="dashboard-card">
+                <div className="card-icon-wrapper" style={{ background: card.bg, color: card.color }}>
+                  <IconComp size={22} />
+                </div>
+                <div className="card-info">
+                  <span className="card-value">{dashboard[card.key] ?? 0}</span>
+                  <span className="card-label">{card.label}</span>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
-      {/* ── Tabs ── */}
+      {/* ── Charts Section ── */}
+      {dashboard && (attendanceRecords.length > 0 || departments.length > 0 || leaves.length > 0) && (
+        <div className="charts-section">
+          <div className="chart-card">
+            <h4>Attendance Trend</h4>
+            <div className="chart-container">
+              <Line key={`line-${themeTick}`} data={attendanceTrendData} options={chartOptions(true)} />
+            </div>
+          </div>
+          <div className="chart-card">
+            <h4>Department Distribution</h4>
+            <div className="chart-container">
+              <Doughnut key={`dept-${themeTick}`} data={departmentChartData} options={doughnutOptions(true)} />
+            </div>
+          </div>
+          <div className="chart-card">
+            <h4>Leave Requests</h4>
+            <div className="chart-container">
+              <Doughnut key={`leave-${themeTick}`} data={leaveChartData} options={doughnutOptions(true)} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Pill Tabs ── */}
       <div className="hr-tabs">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            className={`hr-tab ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map((tab) => {
+          const IconComp = tab.icon
+          return (
+            <button
+              key={tab.id}
+              className={`hr-tab ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <IconComp size={16} />
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* ── Users Tab ── */}
@@ -248,21 +484,13 @@ const HRPage = () => {
             <div className="section-actions">
               <span className="count-badge">{authUsers.length} users</span>
               <Button variant="primary" size="sm" onClick={() => setUserModalOpen(true)}>
-                + Create User
+                <Plus size={16} style={{ marginRight: 4 }} />
+                Create User
               </Button>
             </div>
           </div>
-          <UserTable
-            users={authUsers}
-            loading={usersLoading}
-            onRefresh={fetchUsers}
-          />
-
-          <UserModal
-            isOpen={userModalOpen}
-            onClose={() => setUserModalOpen(false)}
-            onSave={handleCreateUser}
-          />
+          <UserTable users={authUsers} loading={usersLoading} onRefresh={fetchUsers} />
+          <UserModal isOpen={userModalOpen} onClose={() => setUserModalOpen(false)} onSave={handleCreateUser} />
         </div>
       )}
 
@@ -272,11 +500,7 @@ const HRPage = () => {
           <div className="section-header">
             <h3>Role Tags</h3>
           </div>
-          <RoleTable
-            roles={roles}
-            loading={rolesLoading}
-            onRefresh={fetchRoles}
-          />
+          <RoleTable roles={roles} loading={rolesLoading} onRefresh={fetchRoles} />
         </div>
       )}
 
@@ -289,7 +513,7 @@ const HRPage = () => {
           <DepartmentTable
             departments={departments}
             loading={departmentsLoading}
-            onRefresh={() => { fetchDepartments(); fetchDashboard(); }}
+            onRefresh={() => { fetchDepartments(); fetchDashboard() }}
           />
         </div>
       )}
@@ -302,7 +526,8 @@ const HRPage = () => {
             <div className="section-actions">
               <span className="count-badge">{employees.length} total</span>
               <Button variant="primary" size="sm" onClick={handleAddEmployee}>
-                + Add Employee
+                <Plus size={16} style={{ marginRight: 4 }} />
+                Add Employee
               </Button>
             </div>
           </div>
@@ -313,7 +538,6 @@ const HRPage = () => {
             onEdit={handleEditEmployee}
             onDelete={handleDeleteEmployee}
           />
-
           <EmployeeModal
             isOpen={modalOpen}
             onClose={() => setModalOpen(false)}
@@ -332,10 +556,7 @@ const HRPage = () => {
           <div className="section-header">
             <h3>Attendance Records</h3>
           </div>
-          <AttendanceTable
-            attendanceRecords={attendanceRecords}
-            loading={attendanceLoading}
-          />
+          <AttendanceTable attendanceRecords={attendanceRecords} loading={attendanceLoading} />
         </div>
       )}
 
@@ -348,7 +569,7 @@ const HRPage = () => {
           <LeaveTable
             leaves={leaves}
             loading={leavesLoading}
-            onRefresh={() => { fetchLeaves(); fetchDashboard(); }}
+            onRefresh={() => { fetchLeaves(); fetchDashboard() }}
           />
         </div>
       )}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { X } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import '../styles/HRPage.css'
@@ -92,8 +93,8 @@ const EmployeeModal = ({
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{isEditing ? 'Edit Employee' : 'Add Employee'}</h3>
-          <button className="modal-close" onClick={onClose} type="button">
-            ✕
+          <button className="modal-close" onClick={onClose} type="button" title="Close">
+            <X size={18} />
           </button>
         </div>
 

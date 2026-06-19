@@ -1,0 +1,23 @@
+.reports-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.report-card {
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+  padding: 18px;
+  background: #fff;
+}
+
+.report-card h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: #111827;
+}
+
+.report-card p {
+  margin: 6px 0;
+  color: #374151;
+}

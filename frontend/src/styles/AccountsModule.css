@@ -1,0 +1,91 @@
+.accounts-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.accounts-navigation button {
+  border: 1px solid var(--border);
+  background: var(--sidebar);
+  color: var(--text);
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.accounts-navigation button.active,
+.accounts-navigation button:hover {
+  background: var(--primary);
+  color: white;
+  border-color: transparent;
+}
+
+.accounts-page-wrapper {
+  min-height: 400px;
+}
+
+.accounts-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.accounts-table th,
+.accounts-table td {
+  padding: 12px 14px;
+  border: 1px solid #e4e7ec;
+  text-align: left;
+}
+
+.error-message {
+  background: #fee2e2;
+  color: #9b1c1c;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.success-message {
+  background: #e6ffed;
+  color: #166534;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.journal-line-row,
+.accounts-form {
+  display: grid;
+  gap: 14px;
+}
+
+.journal-line-row {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.ui-input-field,
+select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+}
+
+.ui-input-label {
+  display: block;
+  margin-bottom: 6px;
+  color: #374151;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .journal-line-row,
+  .accounts-form {
+    display: block;
+  }
+}

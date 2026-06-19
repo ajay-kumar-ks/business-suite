@@ -1,9 +1,12 @@
 import React from 'react'
 import { Menu, Search, Bell } from 'lucide-react'
 import ThemeToggle from '../../../components/ui/ThemeToggle'
+import { useTaskNotifications } from '../../../context/TaskNotificationContext'
 import '../../dashboard/styles/Navbar.css'
 
 const Navbar = ({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) => {
+  const { overdueCount } = useTaskNotifications()
+
   const handleHamburger = () => {
     if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
       setMobileOpen(!mobileOpen)
@@ -26,7 +29,14 @@ const Navbar = ({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) => {
 
       <div className="nav-right">
         <ThemeToggle />
-        <button className="icon-btn" title="Notifications"><Bell size={18} /></button>
+        <button className="icon-btn" title="Notifications" style={{ position: 'relative' }}>
+          <Bell size={18} />
+          {overdueCount > 0 && (
+            <span className="notification-badge">
+              {overdueCount > 99 ? '99+' : overdueCount}
+            </span>
+          )}
+        </button>
       </div>
     </header>
   )

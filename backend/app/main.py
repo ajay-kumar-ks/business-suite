@@ -21,6 +21,16 @@ from app.modules.tasks.event_handlers import register_handlers
 app = FastAPI(title="Business Suite Backend", version="0.1.0")
 app.add_middleware(TenantMiddleware)
 
+app.include_router(auth_router, prefix="/auth", tags=["auth"])
+app.include_router(tasks_router, prefix="/tasks", tags=["tasks"])
+app.include_router(hr_router, prefix="/hr", tags=["hr"])
+app.include_router(accounts_router, prefix="/accounts", tags=["accounts"])
+app.include_router(crm_router, prefix="/crm", tags=["crm"])
+app.include_router(crm_leads_router, prefix="/crm", tags=["crm"])
+app.include_router(crm_pipelines_router, prefix="/crm", tags=["crm"])
+app.include_router(upload_router, prefix="/tasks", tags=["tasks"])
+
+# Also expose same API under /api/* so frontend can use /api prefixes
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(tasks_router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(hr_router, prefix="/api/hr", tags=["hr"])

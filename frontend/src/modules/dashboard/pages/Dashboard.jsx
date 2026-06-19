@@ -60,7 +60,7 @@ const Dashboard = () => {
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
         onLogout={handleLogout}
-        useLinks={false}
+        useLinks={true}
       />
 
       <div className={`main-content ${collapsed ? 'collapsed' : ''}`}>

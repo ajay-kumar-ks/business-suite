@@ -54,9 +54,8 @@ const setTenantId = (tenantId) => {
 const shouldAttachTenantHeader = (url) => {
   if (!url) return false
   return (
-    (url.startsWith('/accounts/') || url.startsWith('/api/accounts/')) &&
-    !url.startsWith('/accounts/tenants') &&
-    !url.startsWith('/api/accounts/tenants')
+    url.startsWith('/accounts/') &&
+    !url.startsWith('/accounts/tenants')
   )
 }
 

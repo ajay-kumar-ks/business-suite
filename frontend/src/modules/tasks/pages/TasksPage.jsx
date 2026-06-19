@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, RotateCcw, RotateCw } from 'lucide-react'
+import { Plus, RotateCcw } from 'lucide-react'
 import Loader from '../../../components/ui/Loader'
 import Button from '../../../components/ui/Button'
 import TaskBoard from '../components/TaskBoard'
@@ -19,9 +19,12 @@ const DEFAULT_FILTERS = {
   search: '',
 }
 
+const MAX_UNDO_STACK = 50
+
 const TasksPage = () => {
   const { user } = useAuth()
   const { updateOverdueCount } = useTaskNotifications()
+  const isAdmin = user?.is_admin
 
   const [tasks, setTasks] = useState([])
   const [employees, setEmployees] = useState([])
@@ -31,17 +34,12 @@ const TasksPage = () => {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [proofPending, setProofPending] = useState(null) // { task, newStatus }
-  // Undo/redo state: { taskId, prevStatus, prevProof, taskTitle, newStatus }
-  const [lastChange, setLastChange] = useState(null)
-  const [lastUndo, setLastUndo] = useState(null)
+  const [proofPending, setProofPending] = useState(null)
+  // Undo stack — each entry: { taskId, prevStatus, prevProof, taskTitle }
+  const [undoStack, setUndoStack] = useState([])
   const [undoAnimating, setUndoAnimating] = useState(false)
-  const [redoAnimating, setRedoAnimating] = useState(false)
   const debounceRef = useRef(null)
-  // Stable refs for keyboard shortcut handlers (avoids re-registering listeners on every render)
-  // Refs are set to null initially, then populated after handlers are defined
   const handleUndoRef = useRef(null)
-  const handleRedoRef = useRef(null)
 
   const fetchTasks = useCallback(async (appliedFilters = {}) => {
     try {
@@ -56,7 +54,6 @@ const TasksPage = () => {
       const res = await taskApi.getTasks(params)
       const fetchedTasks = res.data
 
-      // Update overdue notification count
       const overdueCount = fetchedTasks.filter(
         (t) => t.status === 'OVERDUE'
       ).length
@@ -76,33 +73,28 @@ const TasksPage = () => {
       const res = await taskApi.getEmployees()
       setEmployees(res.data || [])
     } catch {
-      // Employees endpoint may not have data yet
       setEmployees([])
     }
   }, [])
+
   useEffect(() => {
     fetchTasks(filters)
     fetchEmployees()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Y (redo)
+  // Keyboard shortcut: Ctrl+Z (undo)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Don't trigger when typing in an input/select
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault()
         handleUndoRef.current()
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-        e.preventDefault()
-        handleRedoRef.current()
-      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, []) // Stable — uses refs to always call the latest handlers
+  }, [])
 
   // Debounced search
   useEffect(() => {
@@ -113,7 +105,7 @@ const TasksPage = () => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [filters]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filters, fetchTasks])
 
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters)
@@ -129,12 +121,11 @@ const TasksPage = () => {
   }
 
   const doStatusChange = useCallback(async (taskId, newStatus, proofUrl) => {
-    // Capture previous state before optimistically updating
     let prevStatus = null
     let prevProof = null
     let taskTitle = ''
 
-    // Optimistically update the UI
+    // Optimistically update the UI and capture the previous state
     setTasks((prev) => {
       const task = prev.find((t) => t.id === taskId)
       if (task) {
@@ -149,20 +140,22 @@ const TasksPage = () => {
       return updated
     })
 
-    // Don't record undo if we couldn't capture the previous state
     if (prevStatus === null) return
-
-    // Clear redo — a new change invalidates the redo stack
-    setLastUndo(null)
 
     try {
       await taskApi.updateTask(taskId, { status: newStatus, proof_attachment: proofUrl })
 
-      // Record as the latest change for undo (include proofUrl so redo can replay it)
-      setLastChange({ taskId, prevStatus, prevProof, proofUrl, taskTitle, newStatus })
+      // Push to undo stack (only push if the status actually changed)
+      if (prevStatus !== newStatus) {
+        setUndoStack((prev) => {
+          const entry = { taskId, prevStatus, prevProof, taskTitle }
+          // Cap the stack
+          const next = [entry, ...prev]
+          return next.length > MAX_UNDO_STACK ? next.slice(0, MAX_UNDO_STACK) : next
+        })
+      }
     } catch (err) {
       console.error('Failed to update task status:', err)
-      setLastChange(null)
       fetchTasks(filters)
     }
   }, [filters, fetchTasks, updateOverdueCount])
@@ -171,7 +164,6 @@ const TasksPage = () => {
     const task = tasks.find((t) => t.id === taskId)
     if (!task) return
 
-    // Only require proof when moving to COMPLETED
     if (newStatus === 'COMPLETED') {
       setProofPending({ task, newStatus })
     } else {
@@ -191,71 +183,36 @@ const TasksPage = () => {
   }, [])
 
   const handleUndo = useCallback(async () => {
-    if (!lastChange) return
+    setUndoStack((prev) => {
+      if (prev.length === 0) return prev
 
-    const { taskId, prevStatus, prevProof, proofUrl, taskTitle, newStatus } = lastChange
-    setLastChange(null)
+      const [entry, ...rest] = prev
+      const { taskId, prevStatus, prevProof, taskTitle } = entry
 
-    // Store redo info so user can reapply (carry over proofUrl if it existed)
-    setLastUndo({ taskId, prevStatus: newStatus, proofUrl, taskTitle, newStatus: prevStatus })
+      setUndoAnimating(true)
+      setTimeout(() => setUndoAnimating(false), 600)
 
-    // Show animation feedback
-    setUndoAnimating(true)
-    setTimeout(() => setUndoAnimating(false), 600)
-
-    // Optimistically revert the UI
-    setTasks((prev) => {
-      const updated = prev.map((t) =>
-        t.id === taskId ? { ...t, status: prevStatus, proof_attachment: prevProof } : t
-      )
-      updateOverdueCount(updated.filter((t) => t.status === 'OVERDUE').length)
-      return updated
-    })
-
-    // Fire-and-forget the API call (no blocking)
-    taskApi.updateTask(taskId, { status: prevStatus, proof_attachment: prevProof })
-      .catch((err) => {
-        console.error('Failed to undo status change:', err)
-        fetchTasks(filters)
+      // Optimistically revert the UI
+      setTasks((current) => {
+        const updated = current.map((t) =>
+          t.id === taskId ? { ...t, status: prevStatus, proof_attachment: prevProof } : t
+        )
+        updateOverdueCount(updated.filter((t) => t.status === 'OVERDUE').length)
+        return updated
       })
-  }, [lastChange, fetchTasks, updateOverdueCount])
 
-  const handleRedo = useCallback(async () => {
-    if (!lastUndo) return
+      // Fire-and-forget API call
+      taskApi.updateTask(taskId, { status: prevStatus, proof_attachment: prevProof })
+        .catch((err) => {
+          console.error('Failed to undo status change:', err)
+          fetchTasks(filters)
+        })
 
-    const { taskId, prevStatus: redoStatus, proofUrl, taskTitle } = lastUndo
-    setLastUndo(null)
-
-    // Store as a new change for undo
-    const task = tasks.find((t) => t.id === taskId)
-    if (task) {
-      setLastChange({ taskId, prevStatus: task.status, prevProof: task.proof_attachment, proofUrl, taskTitle, newStatus: redoStatus })
-    }
-
-    // Show animation feedback
-    setRedoAnimating(true)
-    setTimeout(() => setRedoAnimating(false), 600)
-
-    // Optimistically re-apply the status
-    setTasks((prev) => {
-      const updated = prev.map((t) =>
-        t.id === taskId ? { ...t, status: redoStatus, proof_attachment: proofUrl || null } : t
-      )
-      updateOverdueCount(updated.filter((t) => t.status === 'OVERDUE').length)
-      return updated
+      return rest
     })
+  }, [fetchTasks, updateOverdueCount])
 
-    // Fire-and-forget the API call
-    taskApi.updateTask(taskId, { status: redoStatus, proof_attachment: proofUrl || null })
-      .catch((err) => {
-        console.error('Failed to redo status change:', err)
-        fetchTasks(filters)
-      })
-  }, [lastUndo, tasks, fetchTasks, updateOverdueCount])
-
-  // Keep refs in sync with latest handler closures
   handleUndoRef.current = handleUndo
-  handleRedoRef.current = handleRedo
 
   const handleOpenEdit = (task) => {
     setEditingTask(task)
@@ -282,28 +239,49 @@ const TasksPage = () => {
     }
   }
 
+  const adminStats = isAdmin ? {
+    total: tasks.length,
+    todo: tasks.filter((t) => t.status === 'TODO').length,
+    inProgress: tasks.filter((t) => t.status === 'ON_PROGRESS').length,
+    completed: tasks.filter((t) => t.status === 'COMPLETED').length,
+    overdue: tasks.filter((t) => t.status === 'OVERDUE').length,
+  } : null
+
+  const employeeStats = !isAdmin ? {
+    total: tasks.length,
+    todo: tasks.filter((t) => t.status === 'TODO').length,
+    inProgress: tasks.filter((t) => t.status === 'ON_PROGRESS').length,
+    completed: tasks.filter((t) => t.status === 'COMPLETED').length,
+    overdue: tasks.filter((t) => t.status === 'OVERDUE').length,
+  } : null
+
+  const latestUndoEntry = undoStack[0]
+  const canUndo = undoStack.length > 0
+
   return (
     <div className="tasks-page">
       <div className="tasks-header">
         <div>
           <h1>Tasks</h1>
-          <p>Manage, assign, and track team tasks</p>
+          <p>{isAdmin ? 'Manage, assign, and track team tasks' : 'View and update your assigned tasks'}</p>
         </div>
         <div className="header-actions">
           <div className={`undo-wrapper ${undoAnimating ? 'animating' : ''}`}>
             <button
               className="action-btn undo-btn"
               onClick={handleUndo}
-              title={lastChange
-                ? `Undo: Move "${lastChange.taskTitle}" back to ${STATUS_LABELS[lastChange.prevStatus] || lastChange.prevStatus} (Ctrl+Z)`
-                : 'Undo last status change (Ctrl+Z)'
+              title={
+                canUndo
+                  ? `Undo: Move "${latestUndoEntry.taskTitle}" back to ${STATUS_LABELS[latestUndoEntry.prevStatus] || latestUndoEntry.prevStatus} (Ctrl+Z)`
+                  : 'Undo last status change (Ctrl+Z)'
               }
             >
               <RotateCcw size={15} />
               <span className="action-btn-text">
-                {lastChange ? (
+                {canUndo ? (
                   <>
-                    Undo <strong>"{lastChange.taskTitle}"</strong>
+                    Undo <strong>"{latestUndoEntry.taskTitle}"</strong>
+                    <span className="undo-count">{undoStack.length}</span>
                   </>
                 ) : (
                   'Undo'
@@ -311,34 +289,65 @@ const TasksPage = () => {
               </span>
             </button>
           </div>
-          <div className={`redo-wrapper ${redoAnimating ? 'animating' : ''}`}>
-            <button
-              className="action-btn redo-btn"
-              onClick={handleRedo}
-              title={lastUndo
-                ? `Redo: Move "${lastUndo.taskTitle}" to ${STATUS_LABELS[lastUndo.newStatus] || lastUndo.newStatus} (Ctrl+Y)`
-                : 'Redo undone status change (Ctrl+Y)'
-              }
-            >
-              <RotateCw size={15} />
-              <span className="action-btn-text">
-                {lastUndo ? (
-                  <>
-                    Redo <strong>"{lastUndo.taskTitle}"</strong>
-                  </>
-                ) : (
-                  'Redo'
-                )}
-              </span>
-            </button>
-          </div>
-          {user?.is_admin && (
+          {isAdmin && (
             <Button onClick={handleOpenCreate}>
               <Plus size={18} />
               New Task
             </Button>
           )}
         </div>
+      </div>
+
+      {/* Role-based quick stats */}
+      <div className="tasks-dashboard-stats">
+        {isAdmin && adminStats && (
+          <>
+            <div className="stat-card">
+              <span className="stat-value">{adminStats.total}</span>
+              <span className="stat-label">Total Tasks</span>
+            </div>
+            <div className="stat-card stat-todo">
+              <span className="stat-value">{adminStats.todo}</span>
+              <span className="stat-label">Pending</span>
+            </div>
+            <div className="stat-card stat-progress">
+              <span className="stat-value">{adminStats.inProgress}</span>
+              <span className="stat-label">In Progress</span>
+            </div>
+            <div className="stat-card stat-completed">
+              <span className="stat-value">{adminStats.completed}</span>
+              <span className="stat-label">Completed</span>
+            </div>
+            <div className="stat-card stat-overdue">
+              <span className="stat-value">{adminStats.overdue}</span>
+              <span className="stat-label">Overdue</span>
+            </div>
+          </>
+        )}
+        {!isAdmin && employeeStats && (
+          <>
+            <div className="stat-card">
+              <span className="stat-value">{employeeStats.total}</span>
+              <span className="stat-label">My Tasks</span>
+            </div>
+            <div className="stat-card stat-todo">
+              <span className="stat-value">{employeeStats.todo}</span>
+              <span className="stat-label">Pending</span>
+            </div>
+            <div className="stat-card stat-progress">
+              <span className="stat-value">{employeeStats.inProgress}</span>
+              <span className="stat-label">In Progress</span>
+            </div>
+            <div className="stat-card stat-completed">
+              <span className="stat-value">{employeeStats.completed}</span>
+              <span className="stat-label">Completed</span>
+            </div>
+            <div className="stat-card stat-overdue">
+              <span className="stat-value">{employeeStats.overdue}</span>
+              <span className="stat-label">Overdue</span>
+            </div>
+          </>
+        )}
       </div>
 
       <TaskFilters
@@ -366,7 +375,7 @@ const TasksPage = () => {
           <div className="tasks-summary">
             <span className="summary-item">
               <span className="summary-dot" style={{ background: 'var(--primary)' }} />
-              {tasks.length} total tasks
+              {tasks.length} {isAdmin ? 'total' : 'assigned'} tasks
             </span>
             <span className="summary-item">
               <span className="summary-dot" style={{ background: '#ef4444' }} />

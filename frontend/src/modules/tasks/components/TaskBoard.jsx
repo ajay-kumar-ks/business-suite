@@ -36,7 +36,6 @@ const TaskBoard = ({ tasks, employees, onTaskClick, onStatusChange }) => {
   }, [])
 
   const handleDragLeave = useCallback((e, colKey) => {
-    // Only clear if actually leaving this column (not entering a child)
     if (!e.currentTarget.contains(e.relatedTarget)) {
       setDragOverColumn((prev) => prev === colKey ? null : prev)
     }
@@ -48,7 +47,6 @@ const TaskBoard = ({ tasks, employees, onTaskClick, onStatusChange }) => {
     const taskId = e.dataTransfer.getData('text/plain')
     if (!taskId || !onStatusChange) return
 
-    // Prevent dropping onto the same column
     const task = (tasks || []).find((t) => t.id === taskId)
     if (!task || task.status === colKey) return
 

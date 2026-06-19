@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { X, Paperclip, Upload, FileText, Check } from 'lucide-react'
+import { X, Paperclip, Upload, FileText, Check, Search, Building2, Briefcase, User } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import { taskApi } from '../services/taskApi'
+import { useAuth } from '../../../context/AuthContext'
 
 // Status progression order (higher = later in workflow)
 const STATUS_ORDER = {
@@ -40,6 +41,8 @@ const REASON_LABELS = {
 }
 
 const TaskModal = ({ task, employees, onSave, onClose }) => {
+  const { user } = useAuth()
+  const isAdmin = user?.is_admin
   const isEditing = !!task
   const [title, setTitle] = useState(task?.title || '')
   const [description, setDescription] = useState(task?.description || '')
@@ -53,6 +56,12 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
   )
   const [saving, setSaving] = useState(false)
 
+  // Employee search
+  const [employeeSearch, setEmployeeSearch] = useState('')
+  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false)
+  const employeeDropdownRef = useRef(null)
+  const employeeInputRef = useRef(null)
+
   // File upload state
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploading, setUploading] = useState(false)
@@ -62,22 +71,16 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
   // Compute available status options based on current status
   const statusOptions = useMemo(() => {
     if (!isEditing) {
-      // Creating new task - filter out OVERDUE (auto-assigned only)
       return ALL_STATUS_OPTIONS.filter((opt) => opt.value !== 'OVERDUE')
     }
-    // Editing - only show allowed forward/backward transitions
     const currentOrder = STATUS_ORDER[task.status] ?? -1
     return ALL_STATUS_OPTIONS.filter((opt) => {
-      if (opt.value === 'OVERDUE') return false  // cannot manually set to overdue
+      if (opt.value === 'OVERDUE') return false
 
       const optOrder = STATUS_ORDER[opt.value] ?? -1
 
-      // Forward transitions are always allowed
       if (optOrder > currentOrder) return true
 
-      // Special backward transitions:
-      //   OVERDUE → ON_REVIEW    (overdue task completed, send for review)
-      //   ON_HOLD → ON_PROGRESS  (resume a held task)
       if (
         (task.status === 'OVERDUE' && opt.value === 'ON_REVIEW') ||
         (task.status === 'ON_HOLD' && opt.value === 'ON_PROGRESS')
@@ -89,8 +92,38 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
     })
   }, [isEditing, task?.status])
 
+  // Filter employees by search
+  const filteredEmployees = useMemo(() => {
+    if (!employeeSearch.trim()) return employees
+    const search = employeeSearch.toLowerCase()
+    return employees.filter(
+      (emp) =>
+        (emp.name || '').toLowerCase().includes(search) ||
+        (emp.email || '').toLowerCase().includes(search) ||
+        (emp.department || '').toLowerCase().includes(search) ||
+        (emp.designation || '').toLowerCase().includes(search)
+    )
+  }, [employees, employeeSearch])
+
+  // Selected employee display name
+  const selectedEmployee = useMemo(() => {
+    if (!assigneeId) return null
+    return employees.find((e) => e.id === Number(assigneeId)) || null
+  }, [employees, assigneeId])
+
   const reasonLabel = REASON_LABELS[status] || 'Reason note'
   const isReasonReadOnly = status === 'OVERDUE'
+
+  // Close employee dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (employeeDropdownRef.current && !employeeDropdownRef.current.contains(e.target)) {
+        setShowEmployeeDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0]
@@ -160,6 +193,17 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
+  const handleSelectEmployee = (emp) => {
+    setAssigneeId(String(emp.id))
+    setEmployeeSearch('')
+    setShowEmployeeDropdown(false)
+  }
+
+  const handleClearAssignee = () => {
+    setAssigneeId('')
+    setEmployeeSearch('')
+  }
+
   return (
     <div className="task-modal-overlay" onClick={handleOverlayClick} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
       <div className="task-modal">
@@ -219,16 +263,98 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
           </div>
 
           <div className="form-row">
-            <div className="filter-group">
-              <label htmlFor="task-assignee">Assignee</label>
-              <select id="task-assignee" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-                <option value="">Unassigned</option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name || emp.username || emp.email}
-                  </option>
-                ))}
-              </select>
+            {/* Employee Selector with Search */}
+            <div className="filter-group employee-select-group" ref={employeeDropdownRef}>
+              <label htmlFor="task-assignee">Assign To</label>
+              <div className="employee-select-trigger">
+                <div
+                  className={`employee-select-input ${showEmployeeDropdown ? 'focused' : ''}`}
+                  onClick={() => {
+                    setShowEmployeeDropdown(!showEmployeeDropdown)
+                    if (!showEmployeeDropdown) {
+                      setTimeout(() => employeeInputRef.current?.focus(), 50)
+                    }
+                  }}
+                >
+                  {selectedEmployee ? (
+                    <div className="employee-chip">
+                      <User size={14} />
+                      <span className="employee-chip-name">{selectedEmployee.name || selectedEmployee.email}</span>
+                      {selectedEmployee.department && (
+                        <span className="employee-chip-dept">{selectedEmployee.department}</span>
+                      )}
+                      <button
+                        type="button"
+                        className="employee-chip-remove"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleClearAssignee()
+                        }}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="employee-input-placeholder">
+                      <Search size={14} />
+                      Search employee...
+                    </span>
+                  )}
+                </div>
+
+                {showEmployeeDropdown && (
+                  <div className="employee-select-dropdown">
+                    <div className="employee-search-input-wrapper">
+                      <Search size={14} className="employee-search-icon" />
+                      <input
+                        ref={employeeInputRef}
+                        type="text"
+                        className="employee-search-input"
+                        placeholder="Type to search..."
+                        value={employeeSearch}
+                        onChange={(e) => setEmployeeSearch(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="employee-options-list">
+                      {filteredEmployees.length === 0 ? (
+                        <div className="employee-no-results">No employees found</div>
+                      ) : (
+                        filteredEmployees.map((emp) => (
+                          <div
+                            key={emp.id}
+                            className={`employee-option ${Number(assigneeId) === emp.id ? 'selected' : ''}`}
+                            onClick={() => handleSelectEmployee(emp)}
+                          >
+                            <div className="employee-option-info">
+                              <span className="employee-option-name">
+                                {emp.name || emp.email || 'Unknown'}
+                              </span>
+                              <span className="employee-option-details">
+                                {emp.department && (
+                                  <span className="employee-option-dept">
+                                    <Building2 size={11} />
+                                    {emp.department}
+                                  </span>
+                                )}
+                                {emp.designation && (
+                                  <span className="employee-option-dept">
+                                    <Briefcase size={11} />
+                                    {emp.designation}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                            {emp.email && (
+                              <span className="employee-option-email">{emp.email}</span>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <Input

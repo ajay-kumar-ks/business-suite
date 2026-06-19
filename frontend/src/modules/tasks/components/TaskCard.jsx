@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import { Calendar, Paperclip } from 'lucide-react'
 import Avatar from '../../../components/ui/Avatar'
 
@@ -18,7 +18,17 @@ const STATUS_LABELS = {
   OVERDUE: 'Overdue',
 }
 
-const STATUS_OPTIONS = [
+// Status progression order (higher = later in workflow)
+const STATUS_ORDER = {
+  TODO: 0,
+  ON_PROGRESS: 1,
+  ON_HOLD: 2,
+  ON_REVIEW: 3,
+  COMPLETED: 4,
+  OVERDUE: 5,
+}
+
+const ALL_STATUS_OPTIONS = [
   { value: 'TODO', label: 'Todo' },
   { value: 'ON_PROGRESS', label: 'On Progress' },
   { value: 'ON_HOLD', label: 'On Hold' },
@@ -37,6 +47,29 @@ const TaskCard = ({ task, employees = [], onClick, onStatusChange }) => {
     new Date(task.due_date) < new Date()
 
   const assignee = employees.find((e) => e.id === task.assignee_id)
+
+  // Determine which statuses are available in the dropdown
+  const forwardStatusOptions = useMemo(() => {
+    const currentOrder = STATUS_ORDER[task.status] ?? -1
+    return ALL_STATUS_OPTIONS.filter((opt) => {
+      const optOrder = STATUS_ORDER[opt.value] ?? -1
+
+      // Forward transitions are always allowed
+      if (optOrder > currentOrder) return true
+
+      // Special backward transitions:
+      //   OVERDUE → ON_REVIEW    (overdue task completed, send for review)
+      //   ON_HOLD → ON_PROGRESS  (resume a held task)
+      if (
+        (task.status === 'OVERDUE' && opt.value === 'ON_REVIEW') ||
+        (task.status === 'ON_HOLD' && opt.value === 'ON_PROGRESS')
+      ) {
+        return true
+      }
+
+      return false
+    })
+  }, [task.status])
 
   const formatDate = (dateStr) => {
     const d = new Date(dateStr)
@@ -77,6 +110,8 @@ const TaskCard = ({ task, employees = [], onClick, onStatusChange }) => {
       role="button"
       tabIndex={0}
     >
+      {task.status === 'ON_PROGRESS' && <div className="task-card-progress-bar" />}
+
       <div className="task-card-title">{task.title}</div>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -88,10 +123,11 @@ const TaskCard = ({ task, employees = [], onClick, onStatusChange }) => {
           <select
             value={task.status}
             onChange={handleStatusChange}
-            disabled={changingStatus}
+            disabled={changingStatus || task.status === 'COMPLETED'}
             className={`status-badge ${statusClass}`}
           >
-            {STATUS_OPTIONS.map((opt) => (
+            <option value={task.status}>{STATUS_LABELS[task.status]}</option>
+            {forwardStatusOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
@@ -112,7 +148,7 @@ const TaskCard = ({ task, employees = [], onClick, onStatusChange }) => {
         </div>
       </div>
 
-      {task.proof_attachment && (
+      {task.proof_attachment && task.status === 'COMPLETED' && (
         <div className="task-card-reason" style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--primary)' }}>
           <Paperclip size={12} />
           <span style={{ fontSize: 11 }}>Proof attached</span>
@@ -122,6 +158,7 @@ const TaskCard = ({ task, employees = [], onClick, onStatusChange }) => {
       {task.reason_note && (
         <div className="task-card-reason">{task.reason_note}</div>
       )}
+
     </div>
   )
 }

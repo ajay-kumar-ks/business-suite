@@ -2,6 +2,16 @@ import React, { useState, useCallback } from 'react'
 import { Inbox, AlertCircle } from 'lucide-react'
 import TaskCard from './TaskCard'
 
+// Status progression order (higher = later in workflow)
+const STATUS_ORDER = {
+  TODO: 0,
+  ON_PROGRESS: 1,
+  ON_HOLD: 2,
+  ON_REVIEW: 3,
+  COMPLETED: 4,
+  OVERDUE: 5,
+}
+
 const COLUMNS = [
   { key: 'TODO', label: 'Todo', icon: Inbox },
   { key: 'ON_PROGRESS', label: 'On Progress', icon: null },
@@ -36,10 +46,29 @@ const TaskBoard = ({ tasks, employees, onTaskClick, onStatusChange }) => {
     e.preventDefault()
     setDragOverColumn(null)
     const taskId = e.dataTransfer.getData('text/plain')
-    if (taskId && onStatusChange) {
-      onStatusChange(taskId, colKey)
-    }
-  }, [onStatusChange])
+    if (!taskId || !onStatusChange) return
+
+    // Prevent dropping onto the same column
+    const task = (tasks || []).find((t) => t.id === taskId)
+    if (!task || task.status === colKey) return
+
+    // Special backward transitions:
+    //   OVERDUE  → ON_REVIEW    (overdue task completed, send for review)
+    //   ON_HOLD  → ON_PROGRESS  (resume a held task)
+    const isAllowedBackward =
+      (task.status === 'OVERDUE' && colKey === 'ON_REVIEW') ||
+      (task.status === 'ON_HOLD' && colKey === 'ON_PROGRESS')
+
+    // Prevent backward movement (unless it's a special allowed case)
+    const currentOrder = STATUS_ORDER[task.status] ?? -1
+    const targetOrder = STATUS_ORDER[colKey] ?? -1
+    if (targetOrder <= currentOrder && !isAllowedBackward) return
+
+    // Prevent dropping onto OVERDUE (auto-assigned only)
+    if (colKey === 'OVERDUE') return
+
+    onStatusChange(taskId, colKey)
+  }, [onStatusChange, tasks])
 
   const grouped = {}
   COLUMNS.forEach((col) => {

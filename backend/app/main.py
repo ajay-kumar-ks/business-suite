@@ -1,7 +1,7 @@
 import os
 import asyncio
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+from sqlalchemy import inspect, text
 from app.core.config import settings
 from app.core.event_bus import event_bus
 from app.core.event_handlers import register_event_handlers
@@ -11,7 +11,7 @@ from app.core.tenant import TenantMiddleware
 from app.modules.auth.routers import router as auth_router
 from app.modules.hr.routers import router as hr_router
 from app.modules.accounts.routers import router as accounts_router
-from app.modules.crm.routers import router as crm_router
+from app.modules.crm.routers import router as crm_router, leads_router as crm_leads_router, pipelines_router as crm_pipelines_router
 from app.modules.tasks.routers import router as tasks_router
 from app.modules.tasks.upload import router as upload_router
 from app.modules.tasks.scheduler import run_overdue_scheduler
@@ -25,6 +25,8 @@ app.include_router(tasks_router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(hr_router, prefix="/api/hr", tags=["hr"])
 app.include_router(accounts_router, prefix="/api/accounts", tags=["accounts"])
 app.include_router(crm_router, prefix="/api/crm", tags=["crm"])
+app.include_router(crm_leads_router, prefix="/api/crm", tags=["crm"])
+app.include_router(crm_pipelines_router, prefix="/api/crm", tags=["crm"])
 app.include_router(upload_router, prefix="/api/tasks", tags=["tasks"])
 
 # Serve uploaded files
@@ -41,6 +43,13 @@ async def health_check():
 @app.on_event("startup")
 async def startup_event():
     try:
+        inspector = inspect(engine)
+        if 'contacts' in inspector.get_table_names():
+            columns = [col['name'] for col in inspector.get_columns('contacts')]
+            if 'deleted_at' not in columns:
+                with engine.begin() as conn:
+                    conn.execute(text('ALTER TABLE contacts ADD COLUMN deleted_at TIMESTAMP NULL'))
+                    print('✓ Added missing contacts.deleted_at column')
         Base.metadata.create_all(bind=engine)
         print("✓ Database tables created")
     except Exception as e:

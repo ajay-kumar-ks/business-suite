@@ -91,9 +91,9 @@ const Dashboard = () => {
           )}
 
           {activeModule === 'hr' && (
-            <div className="module-section">
+            <>
               {user?.is_admin ? <HRPage /> : <EmployeeDashboard />}
-            </div>
+            </>
           )}
 
           {activeModule === 'accounts' ? (

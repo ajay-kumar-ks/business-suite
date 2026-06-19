@@ -1,11 +1,15 @@
 import uuid
+import logging
 from typing import Optional
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from app.core.database import SessionLocal, current_tenant
 from app.modules.accounts.models import Tenant
+
+logger = logging.getLogger(__name__)
 
 
 class TenantMiddleware(BaseHTTPMiddleware):
@@ -43,8 +47,19 @@ class TenantMiddleware(BaseHTTPMiddleware):
                 try:
                     if request.state.tenant is None:
                         request.state.tenant = db.query(Tenant).filter(Tenant.id == tenant_uuid).first()
+                except SQLAlchemyError as e:
+                    logger.warning("Tenant lookup failed for UUID %s: %s", tenant_uuid, e)
+                    request.state.tenant = None
+                    # Reset the context var so subsequent DB sessions in this request
+                    # don't try to SET nile.tenant_id to an invalid UUID
+                    if token is not None:
+                        current_tenant.reset(token)
+                        token = None
                 finally:
-                    db.close()
+                    try:
+                        db.close()
+                    except SQLAlchemyError:
+                        pass
             except (ValueError, AttributeError):
                 pass
 

@@ -26,6 +26,14 @@ api.interceptors.response.use(
       localStorage.removeItem('access_token')
       window.location.href = '/login'
     }
+    // If an accounts endpoint fails with a server error, the cached tenant_id
+    // may be stale (e.g. tenant was deleted from the database). Clear it so
+    // the next request re-fetches a valid tenant.
+    if (error.response?.status === 500 &&
+        error.config?.url?.startsWith('/accounts/') &&
+        !error.config?.url?.startsWith('/accounts/tenants')) {
+      localStorage.removeItem('tenant_id')
+    }
     return Promise.reject(error)
   }
 )

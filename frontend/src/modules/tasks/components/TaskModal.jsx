@@ -1,10 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { X, Paperclip, Upload, FileText, Check } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import { taskApi } from '../services/taskApi'
 
-const STATUS_OPTIONS = [
+// Status progression order (higher = later in workflow)
+const STATUS_ORDER = {
+  TODO: 0,
+  ON_PROGRESS: 1,
+  ON_HOLD: 2,
+  ON_REVIEW: 3,
+  COMPLETED: 4,
+  OVERDUE: 5,
+}
+
+const ALL_STATUS_OPTIONS = [
   { value: 'TODO', label: 'Todo' },
   { value: 'ON_PROGRESS', label: 'On Progress' },
   { value: 'ON_HOLD', label: 'On Hold' },
@@ -48,6 +58,36 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const fileInputRef = useRef(null)
+
+  // Compute available status options based on current status
+  const statusOptions = useMemo(() => {
+    if (!isEditing) {
+      // Creating new task - filter out OVERDUE (auto-assigned only)
+      return ALL_STATUS_OPTIONS.filter((opt) => opt.value !== 'OVERDUE')
+    }
+    // Editing - only show allowed forward/backward transitions
+    const currentOrder = STATUS_ORDER[task.status] ?? -1
+    return ALL_STATUS_OPTIONS.filter((opt) => {
+      if (opt.value === 'OVERDUE') return false  // cannot manually set to overdue
+
+      const optOrder = STATUS_ORDER[opt.value] ?? -1
+
+      // Forward transitions are always allowed
+      if (optOrder > currentOrder) return true
+
+      // Special backward transitions:
+      //   OVERDUE → ON_REVIEW    (overdue task completed, send for review)
+      //   ON_HOLD → ON_PROGRESS  (resume a held task)
+      if (
+        (task.status === 'OVERDUE' && opt.value === 'ON_REVIEW') ||
+        (task.status === 'ON_HOLD' && opt.value === 'ON_PROGRESS')
+      ) {
+        return true
+      }
+
+      return false
+    })
+  }, [isEditing, task?.status])
 
   const reasonLabel = REASON_LABELS[status] || 'Reason note'
   const isReasonReadOnly = status === 'OVERDUE'
@@ -95,10 +135,14 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
         description: description.trim() || null,
         assignee_id: assigneeId ? Number(assigneeId) : null,
         priority,
-        status,
-        reason_note: reasonNote.trim() || null,
-        proof_attachment: proofAttachment.trim() || null,
         due_date: new Date(dueDate).toISOString(),
+      }
+      if (isEditing) {
+        payload.status = status
+      }
+      if (isEditing) {
+        payload.reason_note = reasonNote.trim() || null
+        payload.proof_attachment = proofAttachment.trim() || null
       }
       await onSave(payload, task?.id)
     } finally {
@@ -157,14 +201,21 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
               </select>
             </div>
 
-            <div className="filter-group">
-              <label htmlFor="task-status">Status</label>
-              <select id="task-status" value={status} onChange={(e) => setStatus(e.target.value)}>
-                {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
+            {isEditing && (
+              <div className="filter-group">
+                <label htmlFor="task-status">Status</label>
+                <select id="task-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+                  {statusOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                {statusOptions.length === 0 && (
+                  <small style={{ opacity: 0.6, fontSize: 12, marginTop: 4 }}>
+                    No forward status changes available
+                  </small>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="form-row">
@@ -190,138 +241,144 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
             />
           </div>
 
-          <div className="filter-group reason-text">
-            <label htmlFor="task-reason">{reasonLabel}</label>
-            <textarea
-              id="task-reason"
-              value={reasonNote}
-              onChange={(e) => setReasonNote(e.target.value)}
-              placeholder={isReasonReadOnly ? 'Auto-set by system' : `Enter ${reasonLabel.toLowerCase()}...`}
-              readOnly={isReasonReadOnly}
-              rows={2}
-            />
-            {isReasonReadOnly && (
-              <small style={{ opacity: 0.6, fontSize: 12, marginTop: 4 }}>
-                Reason is auto-set when status is Overdue
-              </small>
-            )}
-          </div>
+          {isEditing && (
+            <div className="filter-group reason-text">
+              <label htmlFor="task-reason">{reasonLabel}</label>
+              <textarea
+                id="task-reason"
+                value={reasonNote}
+                onChange={(e) => setReasonNote(e.target.value)}
+                placeholder={isReasonReadOnly ? 'Auto-set by system' : `Enter ${reasonLabel.toLowerCase()}...`}
+                readOnly={isReasonReadOnly}
+                rows={2}
+              />
+              {isReasonReadOnly && (
+                <small style={{ opacity: 0.6, fontSize: 12, marginTop: 4 }}>
+                  Reason is auto-set when status is Overdue
+                </small>
+              )}
+            </div>
+          )}
 
-          {/* Proof Attachment - File Upload */}
-          <div className="filter-group reason-text">
-            <label htmlFor="task-proof" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Paperclip size={14} />
-              Proof Attachment
-            </label>
+          {isEditing && status === 'COMPLETED' && (
+            <>
+              {/* Proof Attachment - File Upload (required for completed tasks) */}
+              <div className="filter-group reason-text">
+                <label htmlFor="task-proof" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Paperclip size={14} />
+                  Proof Attachment
+                </label>
 
-            <input
-              ref={fileInputRef}
-              id="task-proof"
-              type="file"
-              onChange={handleFileSelect}
-              accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-              style={{ display: 'none' }}
-            />
+                <input
+                  ref={fileInputRef}
+                  id="task-proof"
+                  type="file"
+                  onChange={handleFileSelect}
+                  accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                  style={{ display: 'none' }}
+                />
 
-            {proofAttachment && (
-              <div style={{
-                border: '1px solid #22c55e',
-                borderRadius: 12,
-                padding: '12px 16px',
-                background: 'rgba(34, 197, 94, 0.05)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                marginBottom: 8,
-              }}>
-                <Check size={18} style={{ color: '#22c55e', flexShrink: 0 }} />
-                <span style={{ fontSize: 13, color: 'var(--text)', wordBreak: 'break-all', flex: 1 }}>
-                  {proofAttachment}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setProofAttachment('')}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#ef4444',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    flexShrink: 0,
-                  }}
-                >
-                  Remove
-                </button>
-              </div>
-            )}
-
-            {!proofAttachment && (
-              <>
-                {selectedFile ? (
+                {proofAttachment && (
                   <div style={{
-                    border: '1px solid var(--border)',
+                    border: '1px solid #22c55e',
                     borderRadius: 12,
                     padding: '12px 16px',
-                    background: 'var(--bg)',
+                    background: 'rgba(34, 197, 94, 0.05)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
                     marginBottom: 8,
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <FileText size={20} style={{ opacity: 0.5, flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontWeight: 600, color: 'var(--text)', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {selectedFile.name}
-                        </p>
-                        <p style={{ fontSize: 11, opacity: 0.5, color: 'var(--text)' }}>
-                          {formatFileSize(selectedFile.size)}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        onClick={handleUpload}
-                        disabled={uploading}
-                        style={{ flexShrink: 0, fontSize: 12, padding: '6px 12px' }}
-                      >
-                        {uploading ? 'Uploading...' : 'Upload'}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    style={{
-                      border: '2px dashed var(--border)',
-                      borderRadius: 12,
-                      padding: '24px 16px',
-                      textAlign: 'center',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                      background: 'var(--bg)',
-                      marginBottom: 8,
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--primary)'}
-                    onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
-                  >
-                    <Upload size={24} style={{ opacity: 0.3, marginBottom: 4 }} />
-                    <p style={{ fontWeight: 600, color: 'var(--text)', fontSize: 13, marginBottom: 2 }}>
-                      Click to upload proof
-                    </p>
-                    <p style={{ fontSize: 11, opacity: 0.4, color: 'var(--text)' }}>
-                      PNG, JPG, PDF — up to 10 MB
-                    </p>
+                    <Check size={18} style={{ color: '#22c55e', flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, color: 'var(--text)', wordBreak: 'break-all', flex: 1 }}>
+                      {proofAttachment}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setProofAttachment('')}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        flexShrink: 0,
+                      }}
+                    >
+                      Remove
+                    </button>
                   </div>
                 )}
-              </>
-            )}
 
-            {uploadError && (
-              <p style={{ color: '#ef4444', fontSize: 13, marginTop: 4 }}>{uploadError}</p>
-            )}
+                {!proofAttachment && (
+                  <>
+                    {selectedFile ? (
+                      <div style={{
+                        border: '1px solid var(--border)',
+                        borderRadius: 12,
+                        padding: '12px 16px',
+                        background: 'var(--bg)',
+                        marginBottom: 8,
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <FileText size={20} style={{ opacity: 0.5, flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontWeight: 600, color: 'var(--text)', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {selectedFile.name}
+                            </p>
+                            <p style={{ fontSize: 11, opacity: 0.5, color: 'var(--text)' }}>
+                              {formatFileSize(selectedFile.size)}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={handleUpload}
+                            disabled={uploading}
+                            style={{ flexShrink: 0, fontSize: 12, padding: '6px 12px' }}
+                          >
+                            {uploading ? 'Uploading...' : 'Upload'}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{
+                          border: '2px dashed var(--border)',
+                          borderRadius: 12,
+                          padding: '24px 16px',
+                          textAlign: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          background: 'var(--bg)',
+                          marginBottom: 8,
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--primary)'}
+                        onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+                      >
+                        <Upload size={24} style={{ opacity: 0.3, marginBottom: 4 }} />
+                        <p style={{ fontWeight: 600, color: 'var(--text)', fontSize: 13, marginBottom: 2 }}>
+                          Click to upload proof
+                        </p>
+                        <p style={{ fontSize: 11, opacity: 0.4, color: 'var(--text)' }}>
+                          PNG, JPG, PDF — up to 10 MB
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
 
-            <small style={{ opacity: 0.5, fontSize: 12, marginTop: 4, display: 'block' }}>
-              Required when changing task status. Upload a screenshot or document as evidence.
-            </small>
-          </div>
+                {uploadError && (
+                  <p style={{ color: '#ef4444', fontSize: 13, marginTop: 4 }}>{uploadError}</p>
+                )}
+
+                <small style={{ opacity: 0.5, fontSize: 12, marginTop: 4, display: 'block' }}>
+                  Required when marking a task as completed. Upload a screenshot or document as evidence.
+                </small>
+              </div>
+            </>
+          )}
 
           <div className="form-actions">
             <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>

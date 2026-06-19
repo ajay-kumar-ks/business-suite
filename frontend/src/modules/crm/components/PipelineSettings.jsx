@@ -16,6 +16,8 @@ const PipelineSettings = ({ onPipelineCreated }) => {
   const [editingPhaseId, setEditingPhaseId] = useState(null)
   const [editingPhaseData, setEditingPhaseData] = useState({})
   const [visibleSection, setVisibleSection] = useState('edit')
+  const [isSaving, setIsSaving] = useState(false)
+  const [phaseStatus, setPhaseStatus] = useState({ type: '', message: '' })
 
   const fetchPipelines = async () => {
     try {
@@ -58,29 +60,90 @@ const PipelineSettings = ({ onPipelineCreated }) => {
     if (selectedPipeline) fetchPipelinePhases(selectedPipeline.id)
   }, [selectedPipeline])
 
-  const handlePhaseSubmit = async (e) => {
+  const handleSavePhaseChanges = async (e) => {
     e.preventDefault()
     if (!selectedPipeline) return
+    setIsSaving(true)
+    setPhaseStatus({ type: '', message: '' })
+
     try {
-      const payload = { ...phaseForm }
-      // position: append at end
-      payload.position = phases.length
-      const response = await fetch(`/api/crm/pipelines/${selectedPipeline.id}/phases`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!response.ok) throw new Error('Failed to add phase')
-      const newPhase = await response.json()
-      setPhases((prev) => [...prev, newPhase])
+      const orderedPhases = phases.map((phase, idx) => ({ ...phase, position: idx }))
+      const existingPhases = orderedPhases.filter((phase) => !phase.isNew)
+      const newPhases = orderedPhases.filter((phase) => phase.isNew)
+
+      const updateResponses = await Promise.all(existingPhases.map((phase) =>
+        fetch(`/api/crm/pipelines/${selectedPipeline.id}/phases/${phase.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ position: phase.position }),
+        })
+      ))
+
+      const createResponses = await Promise.all(newPhases.map((phase) =>
+        fetch(`/api/crm/pipelines/${selectedPipeline.id}/phases`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: phase.name,
+            color: phase.color,
+            is_terminal: phase.is_terminal,
+            position: phase.position,
+          }),
+        })
+      ))
+
+      if (updateResponses.some((response) => !response.ok) || createResponses.some((response) => !response.ok)) {
+        throw new Error('Failed to save phase updates')
+      }
+
+      const response = await fetch(`/api/crm/pipelines/${selectedPipeline.id}/phases`)
+      if (!response.ok) throw new Error('Failed to refresh phases')
+      const refreshed = await response.json()
+      setPhases(refreshed)
       setPhaseForm({ name: '', color: '#6b7280', position: 0, is_terminal: false })
+      setError('')
+      setPhaseStatus({ type: 'success', message: 'Phase changes saved successfully.' })
+      if (onPipelineCreated) await onPipelineCreated()
     } catch (err) {
       console.error(err)
-      setError('Failed to add phase.')
+      setError('Failed to save phase changes.')
+      setPhaseStatus({ type: 'error', message: 'Failed to save phase changes.' })
+    } finally {
+      setIsSaving(false)
     }
   }
 
+  const handleAddPendingPhase = () => {
+    if (!phaseForm.name.trim()) {
+      setError('Please enter a phase name before adding.')
+      return
+    }
+    setError('')
+    setPhaseStatus({ type: 'info', message: 'New phase staged. Click Save Changes to persist.' })
+    setPhases((prev) => [
+      ...prev,
+      {
+        id: `temp-${Date.now()}`,
+        pipeline_id: selectedPipeline?.id || '',
+        name: phaseForm.name.trim(),
+        color: phaseForm.color,
+        position: prev.length,
+        is_terminal: phaseForm.is_terminal,
+        isNew: true,
+      },
+    ])
+    setPhaseForm({ name: '', color: '#6b7280', position: 0, is_terminal: false })
+  }
+
   const handleDeletePhase = async (phaseId) => {
+    const phase = phases.find((p) => p.id === phaseId)
+    if (!phase) return
+
+    if (phase.isNew) {
+      setPhases((prev) => prev.filter((p) => p.id !== phaseId))
+      return
+    }
+
     if (!selectedPipeline) return
     try {
       const response = await fetch(`/api/crm/pipelines/${selectedPipeline.id}/phases/${phaseId}`, {
@@ -88,9 +151,13 @@ const PipelineSettings = ({ onPipelineCreated }) => {
       })
       if (!response.ok) throw new Error('Failed to delete phase')
       setPhases((prev) => prev.filter((p) => p.id !== phaseId))
+      setError('')
+      setPhaseStatus({ type: 'success', message: 'Phase deleted successfully.' })
+      if (onPipelineCreated) await onPipelineCreated()
     } catch (err) {
       console.error(err)
       setError('Failed to delete phase.')
+      setPhaseStatus({ type: 'error', message: 'Could not delete phase. Please refresh and try again.' })
     }
   }
 
@@ -118,37 +185,17 @@ const PipelineSettings = ({ onPipelineCreated }) => {
     }
   }
 
-  const handleMovePhase = async (phaseId, direction) => {
+  const handleMovePhase = (phaseId, direction) => {
     const idx = phases.findIndex((p) => p.id === phaseId)
     if (idx === -1) return
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1
     if (swapIdx < 0 || swapIdx >= phases.length) return
-    // swap positions locally and persist both
     const newPhases = [...phases]
-    const a = newPhases[idx]
-    const b = newPhases[swapIdx]
-    // swap position values
-    const aPos = a.position ?? idx
-    const bPos = b.position ?? swapIdx
-    a.position = bPos
-    b.position = aPos
-    // optimistic update
+    const a = { ...newPhases[idx], position: swapIdx }
+    const b = { ...newPhases[swapIdx], position: idx }
     newPhases[idx] = b
     newPhases[swapIdx] = a
     setPhases(newPhases)
-    try {
-      // persist both updates
-      await Promise.all([
-        fetch(`/api/crm/pipelines/${selectedPipeline.id}/phases/${a.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(a) }),
-        fetch(`/api/crm/pipelines/${selectedPipeline.id}/phases/${b.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }),
-      ])
-    } catch (err) {
-      console.error(err)
-      setError('Failed to reorder phases.')
-      // reload phases to recover
-      const resp = await fetch(`/api/crm/pipelines/${selectedPipeline.id}/phases`)
-      if (resp.ok) setPhases(await resp.json())
-    }
   }
 
     // keep selected pipeline syncing to edit form
@@ -211,6 +258,7 @@ const PipelineSettings = ({ onPipelineCreated }) => {
           <label>
             Select Pipeline
             <select
+              className="pipeline-select"
               value={selectedPipeline?.id || ''}
               onChange={(e) => {
                 const pid = e.target.value
@@ -232,13 +280,14 @@ const PipelineSettings = ({ onPipelineCreated }) => {
         </div>
 
         {selectedPipeline && (
-          <div className="pipeline-details single-column">
-            <div className="pipeline-card">
-              <h3>Manage Pipeline</h3>
-                <div className="manage-controls">
-                  <button type="button" className="toggle-btn" onClick={() => setVisibleSection('edit')}>Edit Pipeline</button>
-                  <button type="button" className="toggle-btn" onClick={() => setVisibleSection('phases')}>Phase Adjust</button>
-                </div>
+          <div className="selected-pipeline-panel">
+            <div className="manage-controls top-controls">
+              <button type="button" className={"toggle-btn " + (visibleSection === 'edit' ? 'active' : '')} onClick={() => setVisibleSection('edit')}>Edit Pipeline</button>
+              <button type="button" className={"toggle-btn " + (visibleSection === 'phases' ? 'active' : '')} onClick={() => setVisibleSection('phases')}>Phase Adjust</button>
+            </div>
+            <h4 className="manage-section-heading">{visibleSection === 'edit' ? 'Edit Pipeline' : 'Phase Adjust'}</h4>
+            <div className="pipeline-details single-column">
+              <div className="pipeline-card">
                 <div className="manage-sections">
                   {visibleSection === 'edit' && (
                     <div className="manage-edit">
@@ -293,7 +342,7 @@ const PipelineSettings = ({ onPipelineCreated }) => {
                       ) : (
                         <div className="phase-list">
                           {phases.map((phase, idx) => (
-                            <div key={phase.id} className="phase-item">
+                            <div key={phase.id} className={`phase-item${phase.isNew ? ' pending' : ''}`}>
                               {editingPhaseId === phase.id ? (
                                 <div className="edit-phase-form">
                                   <input
@@ -323,6 +372,7 @@ const PipelineSettings = ({ onPipelineCreated }) => {
                                 <div className="phase-row">
                                   <div>
                                     <span className="phase-chip" style={{ background: phase.color }}>{phase.name}</span>
+                                    {phase.isNew && <span className="pending-badge">Pending</span>}
                                     {phase.is_terminal && <span className="phase-terminal">Terminal</span>}
                                   </div>
                                   <div className="phase-controls">
@@ -376,26 +426,47 @@ const PipelineSettings = ({ onPipelineCreated }) => {
                         </div>
                       )}
 
-                      <form onSubmit={handlePhaseSubmit} className="pipeline-form">
+                      {phaseStatus.message && (
+                        <div className="phase-status-container">
+                          <div className={`phase-status-box ${phaseStatus.type}`}>
+                            {phaseStatus.message}
+                          </div>
+                        </div>
+                      )}
+                      <form onSubmit={handleSavePhaseChanges} className="pipeline-form">
                         <label>
                           New Phase Name
-                          <input type="text" value={phaseForm.name} onChange={(e) => setPhaseForm((prev) => ({ ...prev, name: e.target.value }))} required />
-                        </label>
-                        <label>
-                          Color
-                          <input type="color" value={phaseForm.color} onChange={(e) => setPhaseForm((prev) => ({ ...prev, color: e.target.value }))} />
+                          <div className="phase-name-color-row">
+                            <input type="text" value={phaseForm.name} onChange={(e) => setPhaseForm((prev) => ({ ...prev, name: e.target.value }))} />
+                            <label className="color-box-label" data-tooltip="Select phase color">
+                              <input
+                                type="color"
+                                className="phase-color-input"
+                                value={phaseForm.color}
+                                onChange={(e) => setPhaseForm((prev) => ({ ...prev, color: e.target.value }))}
+                                aria-label="Select phase color"
+                              />
+                              <span className="color-box" style={{ background: phaseForm.color }} />
+                            </label>
+                            <button type="button" className="add-phase-button" onClick={handleAddPendingPhase} aria-label="Add new phase">
+                              +
+                            </button>
+                          </div>
                         </label>
                         <label className="checkbox-label">
                           <input type="checkbox" checked={phaseForm.is_terminal} onChange={(e) => setPhaseForm((prev) => ({ ...prev, is_terminal: e.target.checked }))} /> Terminal Stage
                         </label>
-                        <Button type="submit">Add Phase</Button>
+                        <Button type="submit" disabled={isSaving}>
+                          {isSaving ? 'Saving...' : 'Save Changes'}
+                        </Button>
                       </form>
                     </div>
                   )}
                 </div>
+              </div>
             </div>
           </div>
-        )}
+          )}
       </section>
     </div>
   )

@@ -47,10 +47,18 @@ const LeadsPage = ({ prefillContact = null }) => {
         const pipeline = await pipelineRes.json()
         const phasesData = await phasesRes.json()
         setPipelines((prev) => ({ ...prev, [pipelineId]: pipeline }))
-        setPhases((prev) => ({
-          ...prev,
-          ...Object.fromEntries(phasesData.map((p) => [p.id, p])),
-        }))
+        setPhases((prev) => {
+          const next = { ...prev }
+          Object.keys(next).forEach((phaseId) => {
+            if (next[phaseId]?.pipeline_id === pipelineId) {
+              delete next[phaseId]
+            }
+          })
+          return {
+            ...next,
+            ...Object.fromEntries(phasesData.map((p) => [p.id, p])),
+          }
+        })
       }
     } catch (error) {
       console.error(`Failed to fetch pipeline ${pipelineId}:`, error)
@@ -87,6 +95,10 @@ const LeadsPage = ({ prefillContact = null }) => {
     await fetchPipelines()
     await fetchLeads()
     setLoading(false)
+  }
+
+  const refreshBoardData = async () => {
+    await Promise.all([fetchPipelines(), fetchLeads()])
   }
 
   useEffect(() => {
@@ -194,9 +206,9 @@ const LeadsPage = ({ prefillContact = null }) => {
   })
 
   const pipelinePhaseGroups = pipelineList.reduce((acc, pipeline) => {
-    acc[pipeline.id] = (acc[pipeline.id] || []).concat(
-      Object.values(phases).filter((phase) => phase.pipeline_id === pipeline.id)
-    )
+    acc[pipeline.id] = (acc[pipeline.id] || [])
+      .concat(Object.values(phases).filter((phase) => phase.pipeline_id === pipeline.id))
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
     return acc
   }, {})
 
@@ -368,7 +380,7 @@ const LeadsPage = ({ prefillContact = null }) => {
       </div>
 
       {showSettings && (
-        <SettingsModal onClose={() => setShowSettings(false)} onPipelineCreated={fetchPipelines} />
+        <SettingsModal onClose={() => setShowSettings(false)} onPipelineCreated={refreshBoardData} />
       )}
 
       {selectedLead && (

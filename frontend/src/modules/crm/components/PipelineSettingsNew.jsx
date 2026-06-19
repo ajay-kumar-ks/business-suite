@@ -211,6 +211,7 @@ const PipelineSettings = ({ onPipelineCreated }) => {
           <label>
             Select Pipeline
             <select
+              className="pipeline-select"
               value={selectedPipeline?.id || ''}
               onChange={(e) => {
                 const pid = e.target.value
@@ -232,13 +233,14 @@ const PipelineSettings = ({ onPipelineCreated }) => {
         </div>
 
         {selectedPipeline && (
-          <div className="pipeline-details single-column">
-            <div className="pipeline-card">
-              <h3>Manage Pipeline</h3>
-                <div className="manage-controls">
-                  <button type="button" className="toggle-btn" onClick={() => setVisibleSection('edit')}>Edit Pipeline</button>
-                  <button type="button" className="toggle-btn" onClick={() => setVisibleSection('phases')}>Phase Adjust</button>
-                </div>
+          <>
+            <div className="manage-controls top-controls">
+              <button type="button" className={"toggle-btn " + (visibleSection === 'edit' ? 'active' : '')} onClick={() => setVisibleSection('edit')}>Edit Pipeline</button>
+              <button type="button" className={"toggle-btn " + (visibleSection === 'phases' ? 'active' : '')} onClick={() => setVisibleSection('phases')}>Phase Adjust</button>
+            </div>
+            <h4 className="manage-section-heading">{visibleSection === 'edit' ? 'Edit Pipeline' : 'Phase Adjust'}</h4>
+            <div className="pipeline-details single-column">
+              <div className="pipeline-card">
                 <div className="manage-sections">
                   {visibleSection === 'edit' && (
                     <div className="manage-edit">

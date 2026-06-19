@@ -152,6 +152,8 @@ async def delete_pipeline_phase(pipeline_id: str, phase_id: str, db: Session = D
     if not phase:
         raise HTTPException(status_code=404, detail="Phase not found")
 
+    # Remove phase references from leads before deleting the phase
+    db.query(Lead).filter(Lead.phase_id == phase_id).update({Lead.phase_id: None}, synchronize_session=False)
     db.delete(phase)
     db.commit()
 

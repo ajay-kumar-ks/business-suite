@@ -928,6 +928,61 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# ══════════════════════════════════════════════
+# AI-Powered Task Suggestion Endpoint
+# ══════════════════════════════════════════════
+
+
+@router.get("/ai/suggestions")
+async def ai_task_suggestions(
+    title: str = Query(..., min_length=1, max_length=500),
+    description: Optional[str] = Query(None, max_length=2000),
+    current_user: User = Depends(get_current_user),
+):
+    """Get AI-powered suggestions for a task draft.
+
+    Given a title and optional description, returns:
+      - Suggested subtasks (checklist items)
+      - Suggested dependencies
+      - Suggested assignee (role/department)
+      - Suggested priority
+      - Estimated effort in hours
+      - An explanation of the reasoning
+    """
+    from app.modules.tasks.ai_service import get_task_suggestions
+
+    suggestions = get_task_suggestions(title=title, description=description)
+    return suggestions
+
+
+@router.get("/{task_id}/ai/suggestions")
+async def ai_task_suggestions_for_existing(
+    task_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get AI-powered suggestions for an existing task (by ID)."""
+    from app.modules.tasks.ai_service import get_task_suggestions
+
+    task = get_task(db, task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
+
+    suggestions = get_task_suggestions(
+        title=task.title,
+        description=task.description,
+    )
+    return suggestions
+
+
+# ──────────────────────────────────────────────
+# Analytics Endpoints
+# ──────────────────────────────────────────────
+
+
 def _analytics_base_query(db: Session, current_user: User) -> tuple[list | None, object]:
     """Build the base Task query with user filtering for analytics.
 

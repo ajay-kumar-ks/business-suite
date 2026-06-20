@@ -1,7 +1,8 @@
 import React from 'react'
-import { Menu, Search, Bell } from 'lucide-react'
+import { Menu, Search } from 'lucide-react'
 import ThemeToggle from '../../../components/ui/ThemeToggle'
 import { useTaskNotifications } from '../../../context/TaskNotificationContext'
+import NotificationDropdown from '../../tasks/components/NotificationDropdown'
 import '../../dashboard/styles/Navbar.css'
 
 const Navbar = ({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) => {
@@ -29,14 +30,7 @@ const Navbar = ({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) => {
 
       <div className="nav-right">
         <ThemeToggle />
-        <button className="icon-btn" title="Notifications" style={{ position: 'relative' }}>
-          <Bell size={18} />
-          {overdueCount > 0 && (
-            <span className="notification-badge">
-              {overdueCount > 99 ? '99+' : overdueCount}
-            </span>
-          )}
-        </button>
+        <NotificationDropdown />
       </div>
     </header>
   )

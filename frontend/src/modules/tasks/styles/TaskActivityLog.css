@@ -1,0 +1,196 @@
+/* ── Activity Log Section ── */
+.activity-log-section {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  margin-top: 8px;
+}
+
+.activity-log-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.activity-log-count {
+  background: var(--hover);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  opacity: 0.6;
+}
+
+/* ── Activity List ── */
+.activity-log-list {
+  max-height: 350px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 4px;
+}
+
+.activity-log-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.activity-log-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+/* ── Date Group ── */
+.activity-date-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.activity-date-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  opacity: 0.4;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 4px 0;
+  position: sticky;
+  top: 0;
+  background: var(--sidebar);
+  z-index: 1;
+}
+
+/* ── Individual Activity Item ── */
+.activity-item {
+  display: flex;
+  gap: 10px;
+  position: relative;
+  padding-left: 4px;
+}
+
+/* Connector line */
+.activity-item::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 22px;
+  bottom: -8px;
+  width: 2px;
+  background: var(--border);
+  opacity: 0.4;
+}
+
+.activity-date-group .activity-item:last-child::before {
+  display: none;
+}
+
+.activity-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #fff;
+  position: relative;
+  z-index: 1;
+}
+
+.activity-content {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 8px;
+}
+
+.activity-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.activity-user {
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* ── Inline badges in activity text ── */
+.activity-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.activity-value-old {
+  text-decoration: line-through;
+  opacity: 0.5;
+  font-size: 12px;
+}
+
+.activity-value-new {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+/* ── Activity Time ── */
+.activity-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.4;
+  margin-top: 2px;
+}
+
+/* ── Empty / Loading / Error ── */
+.activity-log-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  color: var(--text);
+  opacity: 0.35;
+  gap: 8px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.activity-log-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.activity-skeleton {
+  height: 48px;
+  border-radius: 10px;
+  background: var(--sidebar);
+  border: 1px solid var(--border);
+  animation: activity-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes activity-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.85; }
+}
+
+.activity-log-error {
+  padding: 16px;
+  text-align: center;
+  color: #ef4444;
+  font-size: 13px;
+}

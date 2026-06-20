@@ -23,8 +23,7 @@ class CustomerRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 
 class InvoiceCreate(BaseModel):
@@ -51,8 +50,7 @@ class InvoiceRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 
 class CustomerPaymentCreate(BaseModel):
@@ -73,5 +71,4 @@ class CustomerPaymentRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}

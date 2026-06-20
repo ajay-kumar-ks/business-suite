@@ -1,9 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { X, Paperclip, Upload, FileText, Check, Search, Building2, Briefcase, User } from 'lucide-react'
+import { X, Paperclip, Upload, FileText, Check, Search, Building2, Briefcase, User, MessageSquare, History, Link2, ListChecks } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
+import TaskComments from './TaskComments'
+import TaskActivityLog from './TaskActivityLog'
+import TaskDependencies from './TaskDependencies'
+import TaskChecklist from './TaskChecklist'
 import { taskApi } from '../services/taskApi'
 import { useAuth } from '../../../context/AuthContext'
+import '../styles/TaskComments.css'
+import '../styles/TaskActivityLog.css'
+import '../styles/TaskDependencies.css'
+import '../styles/TaskChecklist.css'
 
 // Status progression order (higher = later in workflow)
 const STATUS_ORDER = {
@@ -55,6 +63,7 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
     task?.due_date ? task.due_date.slice(0, 10) : ''
   )
   const [saving, setSaving] = useState(false)
+  const [detailsTab, setDetailsTab] = useState('comments')
 
   // Employee search
   const [employeeSearch, setEmployeeSearch] = useState('')
@@ -68,6 +77,9 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
   const [uploadError, setUploadError] = useState('')
   const fileInputRef = useRef(null)
 
+  // Can this user edit all fields, or only status/reason/proof?
+  const isNonAdminEditing = isEditing && !isAdmin
+
   // Compute available status options based on current status
   const statusOptions = useMemo(() => {
     if (!isEditing) {
@@ -79,18 +91,23 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
 
       const optOrder = STATUS_ORDER[opt.value] ?? -1
 
+      // COMPLETED can only be reached from ON_REVIEW
+      if (opt.value === 'COMPLETED' && task.status !== 'ON_REVIEW') return false
+
       if (optOrder > currentOrder) return true
 
       if (
         (task.status === 'OVERDUE' && opt.value === 'ON_REVIEW') ||
-        (task.status === 'ON_HOLD' && opt.value === 'ON_PROGRESS')
+        (task.status === 'ON_HOLD' && opt.value === 'ON_PROGRESS') ||
+        (task.status === 'ON_REVIEW' && opt.value === 'TODO' && isAdmin) ||
+        (task.status === 'COMPLETED' && opt.value === 'ON_REVIEW' && isAdmin)
       ) {
         return true
       }
 
       return false
     })
-  }, [isEditing, task?.status])
+  }, [isEditing, task?.status, isAdmin])
 
   // Filter employees by search
   const filteredEmployees = useMemo(() => {
@@ -163,19 +180,34 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
 
     setSaving(true)
     try {
-      const payload = {
-        title: title.trim(),
-        description: description.trim() || null,
-        assignee_id: assigneeId ? Number(assigneeId) : null,
-        priority,
-        due_date: new Date(dueDate).toISOString(),
-      }
-      if (isEditing) {
-        payload.status = status
-      }
-      if (isEditing) {
-        payload.reason_note = reasonNote.trim() || null
-        payload.proof_attachment = proofAttachment.trim() || null
+      let payload
+
+      if (isNonAdminEditing) {
+        // Non-admin employees can only update status, reason_note, proof_attachment
+        payload = {
+          status,
+          reason_note: reasonNote.trim() || null,
+          proof_attachment: proofAttachment.trim() || null,
+        }
+      } else if (isEditing) {
+        payload = {
+          title: title.trim(),
+          description: description.trim() || null,
+          assignee_id: assigneeId ? Number(assigneeId) : null,
+          priority,
+          due_date: new Date(dueDate).toISOString(),
+          status,
+          reason_note: reasonNote.trim() || null,
+          proof_attachment: proofAttachment.trim() || null,
+        }
+      } else {
+        payload = {
+          title: title.trim(),
+          description: description.trim() || null,
+          assignee_id: assigneeId ? Number(assigneeId) : null,
+          priority,
+          due_date: new Date(dueDate).toISOString(),
+        }
       }
       await onSave(payload, task?.id)
     } finally {
@@ -214,36 +246,37 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
           </button>
         </div>
 
-        <form className="task-modal-form" onSubmit={handleSubmit}>
-          <Input
-            label="Title"
-            id="task-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            placeholder="Enter task title"
-          />
-
-          <div className="filter-group reason-text">
-            <label htmlFor="task-desc">Description</label>
-            <textarea
-              id="task-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional description"
-              rows={3}
+        <form className="task-modal-form" onSubmit={handleSubmit}>            <Input
+              label="Title"
+              id="task-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              placeholder="Enter task title"
+              disabled={isNonAdminEditing}
             />
-          </div>
 
-          <div className="form-row">
-            <div className="filter-group">
-              <label htmlFor="task-priority">Priority</label>
-              <select id="task-priority" value={priority} onChange={(e) => setPriority(e.target.value)}>
-                {PRIORITY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+            <div className="filter-group reason-text">
+              <label htmlFor="task-desc">Description</label>
+              <textarea
+                id="task-desc"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Optional description"
+                rows={3}
+                readOnly={isNonAdminEditing}
+                style={isNonAdminEditing ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
+              />
             </div>
+
+          <div className="form-row">              <div className="filter-group">
+                <label htmlFor="task-priority">Priority</label>
+                <select id="task-priority" value={priority} onChange={(e) => setPriority(e.target.value)} disabled={isNonAdminEditing}>
+                  {PRIORITY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
 
             {isEditing && (
               <div className="filter-group">
@@ -265,11 +298,11 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
           <div className="form-row">
             {/* Employee Selector with Search */}
             <div className="filter-group employee-select-group" ref={employeeDropdownRef}>
-              <label htmlFor="task-assignee">Assign To</label>
-              <div className="employee-select-trigger">
+              <label htmlFor="task-assignee">Assign To</label>                <div className="employee-select-trigger">
                 <div
-                  className={`employee-select-input ${showEmployeeDropdown ? 'focused' : ''}`}
+                  className={`employee-select-input ${showEmployeeDropdown ? 'focused' : ''} ${isNonAdminEditing ? 'disabled' : ''}`}
                   onClick={() => {
+                    if (isNonAdminEditing) return
                     setShowEmployeeDropdown(!showEmployeeDropdown)
                     if (!showEmployeeDropdown) {
                       setTimeout(() => employeeInputRef.current?.focus(), 50)
@@ -282,17 +315,18 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
                       <span className="employee-chip-name">{selectedEmployee.name || selectedEmployee.email}</span>
                       {selectedEmployee.department && (
                         <span className="employee-chip-dept">{selectedEmployee.department}</span>
-                      )}
-                      <button
-                        type="button"
-                        className="employee-chip-remove"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleClearAssignee()
-                        }}
-                      >
-                        <X size={12} />
-                      </button>
+                      )}                        {!isNonAdminEditing && (
+                          <button
+                            type="button"
+                            className="employee-chip-remove"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleClearAssignee()
+                            }}
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
                     </div>
                   ) : (
                     <span className="employee-input-placeholder">
@@ -364,6 +398,7 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
               required
+              disabled={isNonAdminEditing}
             />
           </div>
 
@@ -503,6 +538,51 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
                   Required when marking a task as completed. Upload a screenshot or document as evidence.
                 </small>
               </div>
+            </>
+          )}
+
+          {isEditing && task?.id && (
+            <>
+              {/* Details Tabs: Comments, Dependencies, Activity */}
+              <div className="task-details-tabs">
+                <button
+                  type="button"
+                  className={`task-details-tab ${detailsTab === 'comments' ? 'active' : ''}`}
+                  onClick={() => setDetailsTab('comments')}
+                >
+                  <MessageSquare size={14} />
+                  Comments
+                </button>
+                <button
+                  type="button"
+                  className={`task-details-tab ${detailsTab === 'checklist' ? 'active' : ''}`}
+                  onClick={() => setDetailsTab('checklist')}
+                >
+                  <ListChecks size={14} />
+                  Checklist
+                </button>
+                <button
+                  type="button"
+                  className={`task-details-tab ${detailsTab === 'dependencies' ? 'active' : ''}`}
+                  onClick={() => setDetailsTab('dependencies')}
+                >
+                  <Link2 size={14} />
+                  Dependencies
+                </button>
+                <button
+                  type="button"
+                  className={`task-details-tab ${detailsTab === 'activity' ? 'active' : ''}`}
+                  onClick={() => setDetailsTab('activity')}
+                >
+                  <History size={14} />
+                  Activity
+                </button>
+              </div>
+
+              {detailsTab === 'comments' && <TaskComments taskId={task.id} />}
+              {detailsTab === 'checklist' && <TaskChecklist taskId={task.id} />}
+              {detailsTab === 'dependencies' && <TaskDependencies taskId={task.id} />}
+              {detailsTab === 'activity' && <TaskActivityLog taskId={task.id} />}
             </>
           )}
 

@@ -1,10 +1,21 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import '../../../styles/ModulePage.css'
 import { accountsAPI } from '../../../services/api'
+import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
 import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
 
 const APPage = () => {
+  const { department, canPerformAction, loading } = useAccountsPermissions()
+  if (loading) return <div className="module-page"><p>Loading...</p></div>
+  if (!isPageAllowed(department, 'ap')) {
+    return (
+      <div className="module-page">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to view Accounts Payable.</p>
+      </div>
+    )
+  }
   const [vendors, setVendors] = useState([])
   const [bills, setBills] = useState([])
   const [vendorForm, setVendorForm] = useState({ name: '', email: '', phone: '', address: '' })
@@ -87,23 +98,29 @@ const APPage = () => {
       <p>Manage vendors, bills, and vendor payments.</p>
       {message && <div className={messageType === 'error' ? 'error-message' : 'success-message'}>{message}</div>}
 
-      {/* Vendors Section */}
       <div className="accounts-summary">
         <h3>Vendors</h3>
-        <details>
-          <summary style={{ cursor: 'pointer', marginBottom: '10px', fontWeight: 600, color: 'var(--primary)' }}>+ Add New Vendor</summary>
-          <form onSubmit={createVendor} className="accounts-form">
-            <div className="form-row">
-              <Input id="vendor-name" label="Name" value={vendorForm.name} onChange={(e) => setVendorForm({ ...vendorForm, name: e.target.value })} />
-              <Input id="vendor-email" label="Email" value={vendorForm.email} onChange={(e) => setVendorForm({ ...vendorForm, email: e.target.value })} />
-            </div>
-            <div className="form-row">
-              <Input id="vendor-phone" label="Phone" value={vendorForm.phone} onChange={(e) => setVendorForm({ ...vendorForm, phone: e.target.value })} />
-              <Input id="vendor-address" label="Address" value={vendorForm.address} onChange={(e) => setVendorForm({ ...vendorForm, address: e.target.value })} />
-            </div>
-            <Button type="submit">Create Vendor</Button>
-          </form>
-        </details>
+        {canPerformAction('createVendor') ? (
+          <details>
+            <summary style={{ cursor: 'pointer', marginBottom: '10px', fontWeight: 600, color: 'var(--primary)' }}>+ Add New Vendor</summary>
+            <form onSubmit={createVendor} className="accounts-form">
+              <div className="form-row">
+                <Input id="vendor-name" label="Name" value={vendorForm.name} onChange={(e) => setVendorForm({ ...vendorForm, name: e.target.value })} />
+                <Input id="vendor-email" label="Email" value={vendorForm.email} onChange={(e) => setVendorForm({ ...vendorForm, email: e.target.value })} />
+              </div>
+              <div className="form-row">
+                <Input id="vendor-phone" label="Phone" value={vendorForm.phone} onChange={(e) => setVendorForm({ ...vendorForm, phone: e.target.value })} />
+                <Input id="vendor-address" label="Address" value={vendorForm.address} onChange={(e) => setVendorForm({ ...vendorForm, address: e.target.value })} />
+              </div>
+              <Button type="submit">Create Vendor</Button>
+            </form>
+          </details>
+        ) : (
+          <div className="permission-warning" style={{ padding: '14px', border: '1px solid #f59e0b', borderRadius: '8px', background: '#fffbeb' }}>
+            You do not have permission to create vendors.
+          </div>
+        )}
+
         <table className="accounts-table">
           <thead>
             <tr>
@@ -130,31 +147,37 @@ const APPage = () => {
         </table>
       </div>
 
-      {/* Bills Section */}
       <div className="accounts-summary" style={{ marginTop: '20px' }}>
         <h3>Bills</h3>
-        <details>
-          <summary style={{ cursor: 'pointer', marginBottom: '10px', fontWeight: 600, color: 'var(--primary)' }}>+ Create New Bill</summary>
-          <form onSubmit={createBill} className="accounts-form">
-            <div className="form-row">
-              <div>
-                <label className="ui-input-label">Vendor</label>
-                <select className="ui-input-field" value={billForm.vendor_id} onChange={(e) => setBillForm({ ...billForm, vendor_id: Number(e.target.value) })}>
-                  <option value="">Select vendor</option>
-                  {vendors.map((vendor) => (
-                    <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
-                  ))}
-                </select>
+        {canPerformAction('createBill') ? (
+          <details>
+            <summary style={{ cursor: 'pointer', marginBottom: '10px', fontWeight: 600, color: 'var(--primary)' }}>+ Create New Bill</summary>
+            <form onSubmit={createBill} className="accounts-form">
+              <div className="form-row">
+                <div>
+                  <label className="ui-input-label">Vendor</label>
+                  <select className="ui-input-field" value={billForm.vendor_id} onChange={(e) => setBillForm({ ...billForm, vendor_id: Number(e.target.value) })}>
+                    <option value="">Select vendor</option>
+                    {vendors.map((vendor) => (
+                      <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <Input id="bill-number" label="Bill Number" value={billForm.bill_number} onChange={(e) => setBillForm({ ...billForm, bill_number: e.target.value })} />
               </div>
-              <Input id="bill-number" label="Bill Number" value={billForm.bill_number} onChange={(e) => setBillForm({ ...billForm, bill_number: e.target.value })} />
-            </div>
-            <div className="form-row">
-              <Input id="bill-amount" label="Amount" type="number" value={billForm.amount} onChange={(e) => setBillForm({ ...billForm, amount: Number(e.target.value) })} />
-              <Input id="bill-description" label="Description" value={billForm.description} onChange={(e) => setBillForm({ ...billForm, description: e.target.value })} />
-            </div>
-            <Button type="submit">Create Bill</Button>
-          </form>
-        </details>
+              <div className="form-row">
+                <Input id="bill-amount" label="Amount" type="number" value={billForm.amount} onChange={(e) => setBillForm({ ...billForm, amount: Number(e.target.value) })} />
+                <Input id="bill-description" label="Description" value={billForm.description} onChange={(e) => setBillForm({ ...billForm, description: e.target.value })} />
+              </div>
+              <Button type="submit">Create Bill</Button>
+            </form>
+          </details>
+        ) : (
+          <div className="permission-warning" style={{ padding: '14px', border: '1px solid #f59e0b', borderRadius: '8px', background: '#fffbeb' }}>
+            You do not have permission to create bills.
+          </div>
+        )}
+
         <table className="accounts-table">
           <thead>
             <tr>
@@ -189,27 +212,32 @@ const APPage = () => {
         </table>
       </div>
 
-      {/* Payments Section */}
       <div className="accounts-summary" style={{ marginTop: '20px' }}>
         <h3>Record Payment</h3>
-        <form onSubmit={createPayment} className="accounts-form">
-          <div className="form-row">
-            <div>
-              <label className="ui-input-label">Bill</label>
-              <select className="ui-input-field" value={selectedBill} onChange={(e) => setSelectedBill(e.target.value)}>
-                <option value="">Select bill</option>
-                {bills.map((bill) => (
-                  <option key={bill.id} value={bill.id}>{bill.bill_number} - Balance: {formatCurrency(Number(bill.amount) - Number(bill.paid_amount))}</option>
-                ))}
-              </select>
+        {canPerformAction('createBillPayment') ? (
+          <form onSubmit={createPayment} className="accounts-form">
+            <div className="form-row">
+              <div>
+                <label className="ui-input-label">Bill</label>
+                <select className="ui-input-field" value={selectedBill} onChange={(e) => setSelectedBill(e.target.value)}>
+                  <option value="">Select bill</option>
+                  {bills.map((bill) => (
+                    <option key={bill.id} value={bill.id}>{bill.bill_number} - Balance: {formatCurrency(Number(bill.amount) - Number(bill.paid_amount))}</option>
+                  ))}
+                </select>
+              </div>
+              <Input id="payment-amount" label="Amount" type="number" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: Number(e.target.value) })} />
             </div>
-            <Input id="payment-amount" label="Amount" type="number" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: Number(e.target.value) })} />
+            <div className="form-row">
+              <Input id="payment-reference" label="Reference" value={paymentForm.reference} onChange={(e) => setPaymentForm({ ...paymentForm, reference: e.target.value })} />
+            </div>
+            <Button type="submit">Record Payment</Button>
+          </form>
+        ) : (
+          <div className="permission-warning" style={{ padding: '14px', border: '1px solid #f59e0b', borderRadius: '8px', background: '#fffbeb' }}>
+            You do not have permission to record bill payments.
           </div>
-          <div className="form-row">
-            <Input id="payment-reference" label="Reference" value={paymentForm.reference} onChange={(e) => setPaymentForm({ ...paymentForm, reference: e.target.value })} />
-          </div>
-          <Button type="submit">Record Payment</Button>
-        </form>
+        )}
       </div>
     </div>
   )

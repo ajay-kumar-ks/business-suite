@@ -10,3 +10,4 @@ SQLAlchemy>=2.0
 psycopg2-binary
 alembic
 python-multipart
+openai>=1.0.0

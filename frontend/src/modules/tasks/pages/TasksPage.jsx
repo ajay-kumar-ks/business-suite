@@ -230,13 +230,14 @@ const TasksPage = () => {
 
   const handleSave = async (payload, taskId) => {
     try {
+      let result = null
       if (taskId) {
-        await taskApi.updateTask(taskId, payload)
+        result = await taskApi.updateTask(taskId, payload)
       } else {
-        await taskApi.createTask(payload)
+        result = await taskApi.createTask(payload)
       }
-      handleCloseModal()
       await fetchTasks(filters)
+      return result?.data || null
     } catch (err) {
       console.error('Failed to save task:', err)
       throw err

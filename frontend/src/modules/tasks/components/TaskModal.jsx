@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { X, Paperclip, Upload, FileText, Check, Search, Building2, Briefcase, User, MessageSquare, History, Link2, ListChecks } from 'lucide-react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { X, Paperclip, Upload, FileText, Check, Search, Building2, Briefcase, User, MessageSquare, History, Link2, ListChecks, Sparkles, Lightbulb, Clock, Target, ChevronDown, ChevronUp, Loader } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import TaskComments from './TaskComments'
@@ -8,6 +8,7 @@ import TaskDependencies from './TaskDependencies'
 import TaskChecklist from './TaskChecklist'
 import { taskApi } from '../services/taskApi'
 import { useAuth } from '../../../context/AuthContext'
+import { taskAiApi } from '../services/taskAiApi'
 import '../styles/TaskComments.css'
 import '../styles/TaskActivityLog.css'
 import '../styles/TaskDependencies.css'
@@ -71,6 +72,16 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
   const employeeDropdownRef = useRef(null)
   const employeeInputRef = useRef(null)
 
+  // AI Suggestions state
+  const [aiSuggestions, setAiSuggestions] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState('')
+  const [aiPanelOpen, setAiPanelOpen] = useState(false)
+  const [pendingSubtasks, setPendingSubtasks] = useState([])
+  const [newSubtaskInput, setNewSubtaskInput] = useState('')
+  const aiDebounceRef = useRef(null)
+  const subtaskInputRef = useRef(null)
+
   // File upload state
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploading, setUploading] = useState(false)
@@ -79,6 +90,104 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
 
   // Can this user edit all fields, or only status/reason/proof?
   const isNonAdminEditing = isEditing && !isAdmin
+
+  // ── AI Suggestions ──
+  const fetchAiSuggestions = useCallback(async (taskTitle, taskDescription) => {
+    if (!taskTitle.trim() || (isEditing && !isAdmin)) {
+      setAiSuggestions(null)
+      return
+    }
+
+    setAiLoading(true)
+    setAiError('')
+
+    try {
+      const res = await taskAiApi.getSuggestions(taskTitle, taskDescription)
+      setAiSuggestions(res.data)
+    } catch (err) {
+      const msg = err.response?.data?.detail || err.message || 'Failed to get AI suggestions'
+      setAiError(msg)
+      setAiSuggestions(null)
+    } finally {
+      setAiLoading(false)
+    }
+  }, [isEditing, isAdmin])
+
+  // Debounced AI suggestions when title changes (longer debounce to avoid excessive API calls)
+  const handleTitleChange = (e) => {
+    const newTitle = e.target.value
+    setTitle(newTitle)
+
+    if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current)
+    aiDebounceRef.current = setTimeout(() => {
+      if (newTitle.trim().length >= 3) {
+        fetchAiSuggestions(newTitle, description)
+      }
+    }, 1500)
+  }
+
+  // Also refetch when description changes
+  const handleDescriptionChange = (e) => {
+    const newDesc = e.target.value
+    setDescription(newDesc)
+
+    if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current)
+    aiDebounceRef.current = setTimeout(() => {
+      if (title.trim().length >= 3 && newDesc.trim().length >= 3) {
+        fetchAiSuggestions(title, newDesc)
+      }
+    }, 1500)
+  }
+
+  const handleToggleAiPanel = () => {
+    const willOpen = !aiPanelOpen
+    setAiPanelOpen(willOpen)
+    if (willOpen && !aiSuggestions && !aiLoading && title.trim().length >= 3) {
+      fetchAiSuggestions(title, description)
+    }
+  }
+
+  const handleApplySubtask = (subtaskTitle) => {
+    // Toggle subtask in pendingSubtasks list
+    setPendingSubtasks((prev) => {
+      if (prev.includes(subtaskTitle)) {
+        return prev.filter((t) => t !== subtaskTitle)
+      }
+      return [...prev, subtaskTitle]
+    })
+  }
+
+  const handleApplyPriority = (priority) => {
+    setPriority(priority)
+  }
+
+  const handleApplyDescription = () => {
+    if (aiSuggestions?.suggested_description) {
+      setDescription(aiSuggestions.suggested_description)
+    }
+  }
+
+  const handleAddCustomSubtask = () => {
+    const title = newSubtaskInput.trim()
+    if (!title) return
+    setPendingSubtasks((prev) => {
+      if (prev.includes(title)) return prev
+      return [...prev, title]
+    })
+    setNewSubtaskInput('')
+    setTimeout(() => subtaskInputRef.current?.focus(), 50)
+  }
+
+  const handleRemoveSubtask = (subtaskTitle) => {
+    setPendingSubtasks((prev) => prev.filter((t) => t !== subtaskTitle))
+  }
+
+  const handleSubtaskInputKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleAddCustomSubtask()
+    }
+  }
 
   // Compute available status options based on current status
   const statusOptions = useMemo(() => {
@@ -142,6 +251,13 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Clean up AI debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current)
+    }
+  }, [])
+
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -172,6 +288,20 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
     } finally {
       setUploading(false)
     }
+  }
+
+  const createPendingSubtasks = async (taskId) => {
+    // Create all pending subtasks via API
+    const created = []
+    for (const st of pendingSubtasks) {
+      try {
+        const res = await taskApi.createSubtask(taskId, { title: st })
+        created.push(res.data)
+      } catch (err) {
+        console.error('Failed to create subtask:', st, err)
+      }
+    }
+    return created
   }
 
   const handleSubmit = async (e) => {
@@ -209,7 +339,18 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
           due_date: new Date(dueDate).toISOString(),
         }
       }
-      await onSave(payload, task?.id)
+
+      // Save the task and get the result (which includes the task ID)
+      const result = await onSave(payload, task?.id)
+
+      // Create pending subtasks if we have a task ID
+      const taskId = result?.id || task?.id
+      if (taskId && pendingSubtasks.length > 0) {
+        await createPendingSubtasks(taskId)
+      }
+
+      // Close the modal AFTER all operations complete
+      onClose()
     } finally {
       setSaving(false)
     }
@@ -250,7 +391,7 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
               label="Title"
               id="task-title"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={handleTitleChange}
               required
               placeholder="Enter task title"
               disabled={isNonAdminEditing}
@@ -261,13 +402,207 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
               <textarea
                 id="task-desc"
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={handleDescriptionChange}
                 placeholder="Optional description"
                 rows={3}
                 readOnly={isNonAdminEditing}
                 style={isNonAdminEditing ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
               />
             </div>
+
+            {/* AI Suggestions Button & Panel */}
+            {!isNonAdminEditing && (
+              <div className="ai-suggestions-section">
+                <button
+                  type="button"
+                  className="ai-suggestions-toggle"
+                  onClick={handleToggleAiPanel}
+                  disabled={aiLoading}
+                >
+                  {aiLoading ? (
+                    <Loader size={15} className="ai-spinner" />
+                  ) : (
+                    <Sparkles size={15} />
+                  )}
+                  <span>
+                    {aiLoading
+                      ? 'AI is thinking...'
+                      : aiPanelOpen
+                        ? 'Hide AI Suggestions'
+                        : 'Show AI Suggestions'}
+                  </span>
+                  {aiPanelOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+
+                {aiPanelOpen && (
+                  <div className="ai-suggestions-panel">
+                    {aiLoading && (
+                      <div className="ai-suggestions-loading">
+                        <Loader size={20} className="ai-spinner" />
+                        <span>Analysing task and generating suggestions...</span>
+                      </div>
+                    )}
+
+                    {aiError && !aiLoading && (
+                      <div className="ai-suggestions-error">
+                        <p>{aiError}</p>
+                        <button
+                          type="button"
+                          className="ai-retry-btn"
+                          onClick={() => fetchAiSuggestions(title, description)}
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    )}
+
+                    {!aiLoading && !aiError && !aiSuggestions && title.trim().length < 3 && (
+                      <div className="ai-suggestions-empty">
+                        <Lightbulb size={18} />
+                        <span>Type at least 3 characters in the title to get AI suggestions.</span>
+                      </div>
+                    )}
+
+                    {!aiLoading && !aiError && aiSuggestions && (
+                      <div className="ai-suggestions-content">
+                        {/* Explanation */}
+                        {aiSuggestions.explanation && (
+                          <p className="ai-explanation">{aiSuggestions.explanation}</p>
+                        )}
+
+                        <div className="ai-suggestions-grid">
+                          {/* Suggested Description */}
+                          {aiSuggestions.suggested_description && (
+                            <div className="ai-suggestion-block">
+                              <div className="ai-suggestion-block-header">
+                                <FileText size={14} />
+                                <span>Suggested Description</span>
+                              </div>
+                              <p className="ai-suggested-desc-text">{aiSuggestions.suggested_description}</p>
+                              {description !== aiSuggestions.suggested_description && (
+                                <button
+                                  type="button"
+                                  className="ai-apply-btn ai-apply-desc-btn"
+                                  onClick={handleApplyDescription}
+                                >
+                                  <Check size={12} />
+                                  Apply Description
+                                </button>
+                              )}
+                              {description === aiSuggestions.suggested_description && (
+                                <span className="ai-applied-label">
+                                  <Check size={12} />
+                                  Applied
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Subtasks */}
+                          {aiSuggestions.subtasks?.length > 0 && (
+                            <div className="ai-suggestion-block">
+                              <div className="ai-suggestion-block-header">
+                                <ListChecks size={14} />
+                                <span>Suggested Subtasks</span>
+                              </div>
+                              <ul className="ai-suggestion-list">
+                                {aiSuggestions.subtasks.map((st, i) => {
+                                  const isAdded = pendingSubtasks.includes(st)
+                                  return (
+                                    <li key={i} className={`ai-suggestion-item ${isAdded ? 'ai-suggestion-added' : ''}`}>
+                                      <span className="ai-suggestion-text">{st}</span>
+                                      <button
+                                        type="button"
+                                        className={`ai-apply-btn ${isAdded ? 'ai-remove-btn' : ''}`}
+                                        onClick={() => handleApplySubtask(st)}
+                                        title={isAdded ? 'Remove from checklist' : 'Add to checklist'}
+                                      >
+                                        {isAdded ? <X size={12} /> : <Check size={12} />}
+                                      </button>
+                                    </li>
+                                  )
+                                })}
+                              </ul>
+                              {pendingSubtasks.length > 0 && (
+                                <div className="ai-pending-count">
+                                  <ListChecks size={13} />
+                                  <span>{pendingSubtasks.length} subtask{pendingSubtasks.length !== 1 ? 's' : ''} will be added to checklist on save</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Dependencies */}
+                          {aiSuggestions.dependencies?.length > 0 && (
+                            <div className="ai-suggestion-block">
+                              <div className="ai-suggestion-block-header">
+                                <Link2 size={14} />
+                                <span>Suggested Dependencies</span>
+                              </div>
+                              <ul className="ai-suggestion-list">
+                                {aiSuggestions.dependencies.map((dep, i) => (
+                                  <li key={i} className="ai-suggestion-item">
+                                    <span className="ai-suggestion-text">{dep}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Priority */}
+                          {aiSuggestions.suggested_priority && (
+                            <div className="ai-suggestion-block">
+                              <div className="ai-suggestion-block-header">
+                                <Target size={14} />
+                                <span>Suggested Priority</span>
+                              </div>
+                              <div className="ai-priority-suggest">
+                                <span className={`ai-priority-badge ai-priority-${aiSuggestions.suggested_priority.toLowerCase()}`}>
+                                  {aiSuggestions.suggested_priority}
+                                </span>
+                                {priority !== aiSuggestions.suggested_priority && (
+                                  <button
+                                    type="button"
+                                    className="ai-apply-btn"
+                                    onClick={() => handleApplyPriority(aiSuggestions.suggested_priority)}
+                                  >
+                                    Apply
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Estimated Effort */}
+                          {aiSuggestions.estimated_effort_hours && (
+                            <div className="ai-suggestion-block">
+                              <div className="ai-suggestion-block-header">
+                                <Clock size={14} />
+                                <span>Estimated Effort</span>
+                              </div>
+                              <p className="ai-effort-value">
+                                ~{aiSuggestions.estimated_effort_hours} hour{aiSuggestions.estimated_effort_hours !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Assignee Suggestion */}
+                          {aiSuggestions.suggested_assignee && (
+                            <div className="ai-suggestion-block">
+                              <div className="ai-suggestion-block-header">
+                                <User size={14} />
+                                <span>Suggested Assignee Role</span>
+                              </div>
+                              <p className="ai-assignee-value">{aiSuggestions.suggested_assignee}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
           <div className="form-row">              <div className="filter-group">
                 <label htmlFor="task-priority">Priority</label>
@@ -541,7 +876,7 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
             </>
           )}
 
-          {isEditing && task?.id && (
+          {(isEditing && task?.id) && (
             <>
               {/* Details Tabs: Comments, Dependencies, Activity */}
               <div className="task-details-tabs">
@@ -584,7 +919,63 @@ const TaskModal = ({ task, employees, onSave, onClose }) => {
               {detailsTab === 'dependencies' && <TaskDependencies taskId={task.id} />}
               {detailsTab === 'activity' && <TaskActivityLog taskId={task.id} />}
             </>
-          )}
+          )}            {/* Interactive Checklist for new tasks */}
+            {!isEditing && !isNonAdminEditing && (
+              <div className="task-create-checklist">
+                <div className="task-create-checklist-header">
+                  <ListChecks size={16} />
+                  <span>Checklist {pendingSubtasks.length > 0 ? `(${pendingSubtasks.length})` : ''}</span>
+                </div>
+
+                {/* Subtask input */}
+                <div className="task-create-checklist-input-row">
+                  <input
+                    ref={subtaskInputRef}
+                    type="text"
+                    className="task-create-checklist-input"
+                    placeholder="Add a checklist item..."
+                    value={newSubtaskInput}
+                    onChange={(e) => setNewSubtaskInput(e.target.value)}
+                    onKeyDown={handleSubtaskInputKeyDown}
+                  />
+                  <button
+                    type="button"
+                    className="task-create-checklist-add-btn"
+                    onClick={handleAddCustomSubtask}
+                    disabled={!newSubtaskInput.trim()}
+                  >
+                    <Check size={14} />
+                    Add
+                  </button>
+                </div>
+
+                {/* List of pending subtasks */}
+                {pendingSubtasks.length > 0 && (
+                  <ul className="task-create-checklist-list">
+                    {pendingSubtasks.map((st, i) => (
+                      <li key={i} className="task-create-checklist-item">
+                        <span className="task-create-checklist-number">{i + 1}.</span>
+                        <span className="task-create-checklist-text">{st}</span>
+                        <button
+                          type="button"
+                          className="task-create-checklist-remove"
+                          onClick={() => handleRemoveSubtask(st)}
+                          title="Remove"
+                        >
+                          <X size={14} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {pendingSubtasks.length === 0 && (
+                  <p className="task-create-checklist-empty">
+                    No checklist items yet. Add items above or use AI suggestions.
+                  </p>
+                )}
+              </div>
+            )}
 
           <div className="form-actions">
             <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>

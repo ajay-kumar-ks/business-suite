@@ -155,6 +155,41 @@ class PhaseUpdateSchema(BaseModel):
     creates_client: Optional[bool] = None
 
 
+# ── Pipeline Assignment Schemas ──
+
+class DepartmentAssignmentConfig(BaseModel):
+    department_id: int
+    department_name: str
+    assignment_mode: str = "round_robin"  # round_robin, self_assign, individual
+    selected_members: list[int] = []  # employee IDs for round robin
+    individual_assignee_id: Optional[int] = None
+    round_robin_index: int = 0
+
+
+class PipelineAssignmentCreateSchema(BaseModel):
+    departments_config: list[DepartmentAssignmentConfig] = []
+
+
+class PipelineAssignmentUpdateSchema(BaseModel):
+    departments_config: list[DepartmentAssignmentConfig]
+
+
+class AssignToPipelineSchema(BaseModel):
+    department_id: int
+    assignment_mode: str  # round_robin, individual
+
+
+class PipelineAssignmentSchema(BaseModel):
+    id: str
+    pipeline_id: str
+    departments_config: list[DepartmentAssignmentConfig] = []
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class LeadBaseSchema(BaseModel):
     title: str
     contact_id: Optional[str] = None

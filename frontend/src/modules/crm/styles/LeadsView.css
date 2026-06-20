@@ -645,6 +645,74 @@
   flex-shrink: 0;
 }
 
+/* Orphaned Leads Column — appears when leads have no phase */
+.kanban-column.orphaned-column {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.04);
+  border-style: dashed;
+}
+
+.kanban-column-header.orphaned-header {
+  color: #d97706;
+}
+
+.kanban-column-header.orphaned-header svg {
+  color: #f59e0b;
+}
+
+.kanban-card.orphaned-card {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.04);
+}
+
+.kanban-card.orphaned-card:hover {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+/* Orphaned collapsed state — click-to-show */
+.kanban-column.orphaned-column.orphaned-collapsed {
+  cursor: pointer;
+  min-height: auto;
+  justify-content: center;
+}
+
+.kanban-column.orphaned-column.orphaned-collapsed:hover {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: #d97706;
+}
+
+.kanban-column.orphaned-column.orphaned-collapsed .kanban-cards {
+  display: none;
+}
+
+/* Orphaned toggle button in pipeline header */
+.kanban-pipeline-header .kanban-pipeline-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.orphaned-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.06);
+  color: #d97706;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.orphaned-toggle-btn:hover {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: #f59e0b;
+}
+
 .kanban-column-header {
   display: flex;
   justify-content: space-between;

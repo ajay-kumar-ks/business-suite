@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Plus, Trash2, Search, Settings, ChevronDown, Check, CheckCircle2, Check as CheckIcon, X as XIcon } from 'lucide-react'
+import { Plus, Trash2, Search, Settings, ChevronDown, Check, CheckCircle2, Check as CheckIcon, X as XIcon, AlertTriangle } from 'lucide-react'
 import LeadForm from '../components/LeadForm'
 import LeadDetailModal from '../components/LeadDetailModal'
 import SettingsModal from '../components/SettingsModal'
@@ -23,6 +23,8 @@ const LeadsPage = ({ prefillContact = null }) => {
   const [notifications, setNotifications] = useState([])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [orphanedLeads, setOrphanedLeads] = useState([])
+  const [showOrphaned, setShowOrphaned] = useState(true)
   const dropdownRef = useRef(null)
 
   const fetchLeads = async () => {
@@ -100,6 +102,28 @@ const LeadsPage = ({ prefillContact = null }) => {
     setLoading(false)
   }
 
+  // Fetch orphaned leads when pipeline filter changes
+  useEffect(() => {
+    if (pipelineFilter) {
+      fetchOrphanedLeads(pipelineFilter)
+    } else {
+      setOrphanedLeads([])
+    }
+  }, [pipelineFilter, leads])
+
+  const fetchOrphanedLeads = async (pipelineId) => {
+    try {
+      const res = await fetch(`/api/crm/leads/?pipeline_id=${pipelineId}&orphaned=true`)
+      if (res.ok) {
+        const data = await res.json()
+        setOrphanedLeads(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch orphaned leads:', err)
+      setOrphanedLeads([])
+    }
+  }
+
   const refreshBoardData = async () => {
     await Promise.all([fetchPipelines(), fetchLeads()])
   }
@@ -108,6 +132,9 @@ const LeadsPage = ({ prefillContact = null }) => {
     setIsRefreshing(true)
     try {
       await refreshBoardData()
+      if (pipelineFilter) {
+        await fetchOrphanedLeads(pipelineFilter)
+      }
     } finally {
       setIsRefreshing(false)
     }
@@ -371,10 +398,93 @@ const LeadsPage = ({ prefillContact = null }) => {
             <div className="kanban-pipeline">
               <div className="kanban-pipeline-header">
                 <h3>{selectedPipeline.name}</h3>
-                <span>{filteredLeads.filter((lead) => lead.pipeline_id === selectedPipeline.id).length} leads</span>
+                <div className="kanban-pipeline-actions">
+                  {orphanedLeads.length > 0 && (
+                    <button
+                      type="button"
+                      className="orphaned-toggle-btn"
+                      onClick={() => setShowOrphaned((prev) => !prev)}
+                      title={showOrphaned ? 'Hide orphaned leads' : 'Show orphaned leads'}
+                    >
+                      <AlertTriangle size={13} />
+                      {showOrphaned ? 'Hide' : `${orphanedLeads.length} orphaned`}
+                    </button>
+                  )}
+                  <span>{filteredLeads.filter((lead) => lead.pipeline_id === selectedPipeline.id).length} leads</span>
+                </div>
               </div>
               <div className="kanban-phases">
-                {phasesForPipeline.length === 0 ? (
+                {/* Orphaned Leads Column — only if visible and has data */}
+                {orphanedLeads.length > 0 && showOrphaned && (
+                  <div className="kanban-column orphaned-column" onDragOver={handleDragOver}>
+                    <div className="kanban-column-header orphaned-header">
+                      <div className="kanban-column-title">
+                        <AlertTriangle size={14} />
+                        <span>Orphaned Leads</span>
+                      </div>
+                      <span>{orphanedLeads.length}</span>
+                    </div>
+                    <div className="kanban-column-meta">
+                      <span>Phase was deleted — drag to a phase to recover</span>
+                    </div>
+                    <div className="kanban-cards">
+                      {orphanedLeads.map((lead) => {
+                        const contactName = contacts[lead.contact_id]?.name || lead.contact_id || '-'
+                        const company = contacts[lead.contact_id]?.company || '-'
+                        return (
+                          <button
+                            key={lead.id}
+                            className="kanban-card orphaned-card"
+                            type="button"
+                            draggable
+                            onDragStart={(event) => handleCardDragStart(event, lead.id)}
+                            onClick={() => setSelectedLead(lead)}
+                          >
+                            <div className="card-top">
+                              <div className="card-title-section">
+                                <span className="card-title">{lead.title}</span>
+                                {company && company !== '-' && <span className="card-company">{company}</span>}
+                              </div>
+                            </div>
+                            <div className="card-middle">
+                              <div className="card-contact-info">
+                                <span className="card-contact-label">Contact:</span>
+                                <span className="card-contact-value">{contactName}</span>
+                              </div>
+                            </div>
+                            <div className="card-meta">
+                              {lead.value && (
+                                <span className="card-value-badge">${lead.value.toLocaleString()}</span>
+                              )}
+                            </div>
+                            <div className="card-assignee">
+                              <span className="card-label-small">Assigned:</span>
+                              <span className="card-assignee-value">{lead.assignee || 'Unassigned'}</span>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Orphaned toggle when there are orphaned leads but column is hidden */}
+                {orphanedLeads.length > 0 && !showOrphaned && (
+                  <div className="kanban-column orphaned-column orphaned-collapsed" onClick={() => setShowOrphaned(true)}>
+                    <div className="kanban-column-header orphaned-header">
+                      <div className="kanban-column-title">
+                        <AlertTriangle size={14} />
+                        <span>Orphaned</span>
+                      </div>
+                      <span>{orphanedLeads.length}</span>
+                    </div>
+                    <div className="kanban-column-meta">
+                      <span>Click to show {orphanedLeads.length} orphaned lead(s)</span>
+                    </div>
+                  </div>
+                )}
+
+                {phasesForPipeline.length === 0 && orphanedLeads.length === 0 ? (
                   <div className="kanban-empty">No phases configured</div>
                 ) : (
                   phasesForPipeline.map((phase) => (

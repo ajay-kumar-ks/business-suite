@@ -650,6 +650,113 @@
 }
 
 /* ══════════════════════════════════════════════
+   DEPARTMENT EMPLOYEE MANAGEMENT
+   ══════════════════════════════════════════════ */
+
+.dept-employees-section {
+  border-top: 1px solid var(--border, #e2e8f0);
+  padding: 20px;
+}
+
+.dept-employees-header {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text, #1e293b);
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dept-add-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px dashed var(--border, #d1d5db);
+  border-radius: 8px;
+  cursor: pointer;
+  width: 100%;
+  background: var(--card-bg, #fff);
+  color: var(--text-secondary, #64748b);
+  font-size: 0.85rem;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dept-add-trigger:hover {
+  border-color: var(--primary, #2563eb);
+  background: var(--primary-light, #eff6ff);
+}
+
+.dept-add-trigger .chevron {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.dept-add-trigger .chevron.open {
+  transform: rotate(180deg);
+}
+
+.dept-add-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: 240px;
+  overflow: auto;
+  margin-top: 4px;
+}
+
+.dept-add-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text, #1e293b);
+  font-size: 0.85rem;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.dept-add-item:hover {
+  background: var(--row-hover, #f1f5f9);
+}
+
+.dept-add-item-icon {
+  color: var(--primary, #2563eb);
+  flex-shrink: 0;
+}
+
+.dept-add-item-code {
+  color: var(--text-secondary, #64748b);
+  font-size: 0.8rem;
+  margin-left: auto;
+}
+
+.dept-empty-members {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.85rem;
+  border: 1px dashed var(--border, #e2e8f0);
+  border-radius: 8px;
+}
+
+.dept-add-wrapper {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+/* ══════════════════════════════════════════════
    MISC / LEGACY
    ══════════════════════════════════════════════ */
 

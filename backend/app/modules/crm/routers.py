@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from app.core.database import get_db
-from .db_models import Contact, Tag, Activity, Lead, Pipeline, Phase, Client
+from .db_models import Contact, Tag, Activity, Lead, Pipeline, Phase, Client, PipelineAssignment
 from .schemas import (
     ContactCreateSchema,
     ContactUpdateSchema,
@@ -31,6 +31,11 @@ from .schemas import (
     ClientUpdateSchema,
     ClientSchema,
     ClientDetailSchema,
+    PipelineAssignmentSchema,
+    PipelineAssignmentCreateSchema,
+    PipelineAssignmentUpdateSchema,
+    DepartmentAssignmentConfig,
+    AssignToPipelineSchema,
 )
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
@@ -165,6 +170,149 @@ async def delete_pipeline_phase(pipeline_id: str, phase_id: str, db: Session = D
     db.commit()
 
 
+# ════════════════════════════════════════════════════════════
+# PIPELINE ASSIGNMENT ENDPOINTS
+# ════════════════════════════════════════════════════════════
+
+
+@pipelines_router.get("/{pipeline_id}/assignments", response_model=PipelineAssignmentSchema)
+async def get_pipeline_assignment(pipeline_id: str, db: Session = Depends(get_db)):
+    """Get pipeline assignment configuration."""
+    assignment = db.query(PipelineAssignment).filter(PipelineAssignment.pipeline_id == pipeline_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="No assignment config found for this pipeline")
+    return assignment
+
+
+@pipelines_router.put("/{pipeline_id}/assignments", response_model=PipelineAssignmentSchema)
+async def save_pipeline_assignment(
+    pipeline_id: str,
+    data: PipelineAssignmentUpdateSchema,
+    db: Session = Depends(get_db),
+):
+    """Create or update pipeline assignment configuration.
+    Stores department-level assignment rules for the pipeline.
+    """
+    # Verify pipeline exists
+    pipeline = db.query(Pipeline).filter(Pipeline.id == pipeline_id).first()
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    assignment = db.query(PipelineAssignment).filter(PipelineAssignment.pipeline_id == pipeline_id).first()
+
+    if assignment:
+        assignment.departments_config = [
+            dept.model_dump() for dept in data.departments_config
+        ]
+        assignment.updated_at = datetime.utcnow()
+    else:
+        assignment = PipelineAssignment(
+            id=str(uuid.uuid4()),
+            pipeline_id=pipeline_id,
+            departments_config=[
+                dept.model_dump() for dept in data.departments_config
+            ],
+        )
+        db.add(assignment)
+
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+@pipelines_router.post("/{pipeline_id}/assignments/apply")
+async def apply_pipeline_assignment(
+    pipeline_id: str,
+    data: AssignToPipelineSchema,
+    db: Session = Depends(get_db),
+):
+    """Apply assignment rules to existing leads in the pipeline.
+    - round_robin: Distribute unassigned leads among selected members
+    - individual: Assign all leads to the designated member
+    """
+    assignment = db.query(PipelineAssignment).filter(PipelineAssignment.pipeline_id == pipeline_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="No assignment config found for this pipeline")
+
+    # Find the department config
+    dept_config = None
+    for dc in assignment.departments_config:
+        if dc.get("department_id") == data.department_id:
+            dept_config = dc
+            break
+
+    if not dept_config:
+        raise HTTPException(status_code=404, detail=f"Department {data.department_id} not found in assignment config")
+
+    leads_to_update = db.query(Lead).filter(
+        Lead.pipeline_id == pipeline_id
+    ).all()
+
+    updated_count = 0
+
+    if data.assignment_mode == "self_assign":
+        # Self-assign mode doesn't bulk-assign leads — it's handled at lead creation time
+        raise HTTPException(status_code=400, detail="Self-assign mode does not support bulk assignment. Use Save to configure for new leads.")
+
+    if data.assignment_mode == "round_robin":
+        selected_members = dept_config.get("selected_members", [])
+        if not selected_members:
+            raise HTTPException(status_code=400, detail="No members selected for round robin")
+
+        # Fetch employee names for selected member IDs
+        from app.modules.hr.crud import get_employee
+        members = []
+        for emp_id in selected_members:
+            emp = get_employee(db, emp_id)
+            if emp:
+                members.append(emp.user.full_name or emp.user.username or str(emp.id))
+
+        if not members:
+            raise HTTPException(status_code=400, detail="No valid members found for round robin")
+
+        # Assign round-robin to all existing leads in the pipeline
+        idx = dept_config.get("round_robin_index", 0)
+        for lead in leads_to_update:
+            lead.assignee = members[idx % len(members)]
+            idx += 1
+            updated_count += 1
+
+        # Update the round_robin_index in the stored config
+        for dc in assignment.departments_config:
+            if dc.get("department_id") == data.department_id:
+                dc["round_robin_index"] = idx % len(members)
+                break
+        assignment.departments_config = assignment.departments_config
+
+    elif data.assignment_mode == "individual":
+        assignee_id = dept_config.get("individual_assignee_id")
+        if not assignee_id:
+            raise HTTPException(status_code=400, detail="No individual assignee selected")
+
+        from app.modules.hr.crud import get_employee
+        emp = get_employee(db, assignee_id)
+        if not emp:
+            raise HTTPException(status_code=404, detail="Assignee employee not found")
+        assignee_name = emp.user.full_name or emp.user.username or str(emp.id)
+
+        for lead in leads_to_update:
+            lead.assignee = assignee_name
+            updated_count += 1
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported assignment mode: {data.assignment_mode}")
+
+    db.commit()
+
+    return {
+        "success": True,
+        "pipeline_id": pipeline_id,
+        "department_id": data.department_id,
+        "assignment_mode": data.assignment_mode,
+        "updated_count": updated_count,
+    }
+
+
 @leads_router.post("/", response_model=LeadSchema, status_code=201)
 async def create_lead(lead_data: LeadCreateSchema, db: Session = Depends(get_db)):
     lead_id = str(uuid.uuid4())
@@ -204,6 +352,7 @@ async def list_leads(
     assignee: Optional[str] = Query(None),
     source: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    orphaned: Optional[bool] = Query(None, description="Filter leads with pipeline_id set but phase_id null"),
     db: Session = Depends(get_db)
 ):
     query = db.query(Lead)
@@ -219,6 +368,8 @@ async def list_leads(
     if search:
         search_term = f"%{search}%"
         query = query.filter(Lead.title.ilike(search_term))
+    if orphaned:
+        query = query.filter(Lead.pipeline_id.isnot(None), Lead.phase_id.is_(None))
 
     leads = query.offset(skip).limit(limit).all()
     return leads

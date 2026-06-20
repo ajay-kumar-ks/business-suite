@@ -278,11 +278,12 @@ async def api_get_employees(
     limit: int = Query(100, ge=1, le=500),
     status: Optional[EmployeeStatus] = None,
     search: Optional[str] = None,
+    department_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
     employees, total = get_employees(
-        db, skip=skip, limit=limit, status_filter=status, search=search
+        db, skip=skip, limit=limit, status_filter=status, search=search, department_id=department_id
     )
     return {
         "employees": [format_employee_response(e) for e in employees],

@@ -122,6 +122,22 @@ class Phase(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
 
 
+class PipelineAssignment(Base):
+    """
+    Stores assignment configuration for each pipeline.
+    Links departments to pipelines with assignment rules.
+    """
+    __tablename__ = "pipeline_assignments"
+
+    id = Column(String, primary_key=True, index=True)
+    pipeline_id = Column(String, ForeignKey('pipelines.id', ondelete='CASCADE'), nullable=False, unique=True)
+    # JSON array: [{ department_id, department_name, assignment_mode, selected_members, individual_assignee_id, round_robin_index }]
+    departments_config = Column(JSON, default=list, nullable=False)
+
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class Lead(Base):
     __tablename__ = "leads"
 

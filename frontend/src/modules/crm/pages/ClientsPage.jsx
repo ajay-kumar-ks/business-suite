@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { Plus, Trash2, Search, Edit2, Mail, Phone } from 'lucide-react'
+import { Plus, Trash2, Search, Edit2 } from 'lucide-react'
 import Button from '../../../components/ui/Button'
+import Input from '../../../components/ui/Input'
+import Select from '../../../components/ui/Select'
 import Loader from '../../../components/ui/Loader'
 import { crmAPI } from '../../../services/api'
 import '../styles/LeadsView.css'
+import '../styles/ContactForm.css'
 
 const ClientsPage = () => {
   const [clients, setClients] = useState([])
@@ -84,7 +87,7 @@ const ClientsPage = () => {
 
   const getTierColor = (tier) => {
     const colors = {
-      Standard: '#6b7280',
+      Standard: 'var(--text-secondary, #6b7280)',
       Premium: '#f59e0b',
       VIP: '#ec4899',
     }
@@ -110,8 +113,9 @@ const ClientsPage = () => {
 
   if (loading && clients.length === 0) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px' }}>
+      <div className="loading-state">
         <Loader size={32} />
+        <span>Loading clients...</span>
       </div>
     )
   }
@@ -123,9 +127,14 @@ const ClientsPage = () => {
           <h1>Clients</h1>
           <p>Manage your customer relationships and accounts</p>
         </div>
-        <button className="lead-add-btn" onClick={() => setShowForm(true)} data-tooltip="Add Client">
+        <Button
+          className="btn-icon"
+          onClick={() => setShowForm(true)}
+          data-tooltip="Add Client"
+          aria-label="Add Client"
+        >
           <Plus size={20} />
-        </button>
+        </Button>
       </div>
 
       {/* Filters */}
@@ -140,29 +149,27 @@ const ClientsPage = () => {
           />
         </div>
 
-        <select
-          className="filter-row"
+        <Select
           value={filterTier}
           onChange={(e) => setFilterTier(e.target.value)}
-          style={{ padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px' }}
-        >
-          <option value="">All Tiers</option>
-          <option value="Standard">Standard</option>
-          <option value="Premium">Premium</option>
-          <option value="VIP">VIP</option>
-        </select>
+          options={[
+            { value: '', label: 'All Tiers' },
+            { value: 'Standard', label: 'Standard' },
+            { value: 'Premium', label: 'Premium' },
+            { value: 'VIP', label: 'VIP' },
+          ]}
+        />
 
-        <select
-          className="filter-row"
+        <Select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          style={{ padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px' }}
-        >
-          <option value="">All Status</option>
-          <option value="Active">Active</option>
-          <option value="Inactive">Inactive</option>
-          <option value="Churned">Churned</option>
-        </select>
+          options={[
+            { value: '', label: 'All Status' },
+            { value: 'Active', label: 'Active' },
+            { value: 'Inactive', label: 'Inactive' },
+            { value: 'Churned', label: 'Churned' },
+          ]}
+        />
       </div>
 
       {/* Clients Table */}
@@ -177,21 +184,9 @@ const ClientsPage = () => {
         </div>
 
         {tableLoading && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: '120px',
-              background: 'rgba(255, 255, 255, 0.9)',
-              borderRadius: '12px',
-              marginTop: '12px',
-            }}
-          >
+          <div className="loading-state" style={{ marginTop: 12 }}>
             <Loader size={28} />
-            <span style={{ marginLeft: '10px', color: 'var(--text-secondary)' }}>
-              Loading client details...
-            </span>
+            <span>Loading client details...</span>
           </div>
         )}
 
@@ -211,12 +206,10 @@ const ClientsPage = () => {
                 <div style={{ flex: 2, fontWeight: 500 }}>{contact?.name || 'Unknown'}</div>
                 <div style={{ flex: 1 }}>
                   <span
+                    className="status-pill"
                     style={{
                       backgroundColor: getTierColor(client.tier),
                       color: 'white',
-                      padding: '4px 8px',
-                      borderRadius: '6px',
-                      fontSize: '0.85rem',
                     }}
                   >
                     {client.tier}
@@ -224,12 +217,10 @@ const ClientsPage = () => {
                 </div>
                 <div style={{ flex: 1 }}>
                   <span
+                    className="status-pill"
                     style={{
                       backgroundColor: getStatusColor(client.status),
                       color: 'white',
-                      padding: '4px 8px',
-                      borderRadius: '6px',
-                      fontSize: '0.85rem',
                     }}
                   >
                     {client.status}
@@ -237,17 +228,7 @@ const ClientsPage = () => {
                 </div>
                 <div style={{ flex: 1 }}>
                   {lead ? (
-                    <span
-                      style={{
-                        backgroundColor: '#e0e7ff',
-                        color: '#4f46e5',
-                        padding: '4px 8px',
-                        borderRadius: '6px',
-                        fontSize: '0.85rem',
-                        fontWeight: 500,
-                      }}
-                      title={`Converted from lead: ${lead.title}`}
-                    >
+                    <span className="status-pill" style={{ backgroundColor: '#e0e7ff', color: '#4f46e5' }} title={`Converted from lead: ${lead.title}`}>
                       {lead.title}
                     </span>
                   ) : (
@@ -300,6 +281,20 @@ const ClientsPage = () => {
 }
 
 // Client Detail Modal Component
+const modalTextareaStyle = {
+  width: '100%',
+  padding: '12px 14px',
+  border: '1px solid var(--border)',
+  borderRadius: '8px',
+  background: 'var(--sidebar)',
+  color: 'var(--text)',
+  minHeight: '80px',
+  fontFamily: 'inherit',
+  resize: 'vertical',
+  fontSize: '0.95rem',
+  transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+}
+
 const ClientDetailModal = ({ client, contact, onClose, onUpdate }) => {
   const [leads, setLeads] = useState({})
   const [formData, setFormData] = useState({
@@ -343,109 +338,90 @@ const ClientDetailModal = ({ client, contact, onClose, onUpdate }) => {
   const lead = leads[client.lead_id]
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-      <div style={{ backgroundColor: 'var(--sidebar)', borderRadius: '16px', padding: '24px', maxWidth: '600px', width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+    <div className="modal-overlay" role="dialog" aria-modal="true">
+      <div className="lead-detail-modal" style={{ maxWidth: 600 }}>
+        <div className="lead-detail-header">
           <div>
-            <h2 style={{ margin: '0 0 8px 0' }}>{contact?.name || 'Client'}</h2>
+            <h3>{contact?.name || 'Client'}</h3>
             {lead && (
-              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              <p className="lead-detail-status">
                 Converted from lead: <strong>{lead.title}</strong>
               </p>
             )}
           </div>
-          <button
-            onClick={onClose}
-            style={{ background: 'transparent', border: 'none', fontSize: '24px', cursor: 'pointer', color: 'var(--text)' }}
-          >
+          <button className="close-btn" type="button" onClick={onClose} aria-label="Close">
             ×
           </button>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600 }}>Tier</label>
-            <select
-              value={formData.tier}
-              onChange={(e) => setFormData({ ...formData, tier: e.target.value })}
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px' }}
-            >
-              <option value="Standard">Standard</option>
-              <option value="Premium">Premium</option>
-              <option value="VIP">VIP</option>
-            </select>
-          </div>
+          <div className="lead-detail-grid">
+            <div className="form-row">
+              <Select
+                label="Tier"
+                value={formData.tier}
+                onChange={(e) => setFormData({ ...formData, tier: e.target.value })}
+                options={[
+                  { value: 'Standard', label: 'Standard' },
+                  { value: 'Premium', label: 'Premium' },
+                  { value: 'VIP', label: 'VIP' },
+                ]}
+              />
+            </div>
 
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600 }}>Status</label>
-            <select
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px' }}
-            >
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-              <option value="Churned">Churned</option>
-            </select>
-          </div>
+            <div className="form-row">
+              <Select
+                label="Status"
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                options={[
+                  { value: 'Active', label: 'Active' },
+                  { value: 'Inactive', label: 'Inactive' },
+                  { value: 'Churned', label: 'Churned' },
+                ]}
+              />
+            </div>
 
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600 }}>Account Manager</label>
-            <input
-              type="text"
+            <Input
+              label="Account Manager"
               value={formData.account_manager}
               onChange={(e) => setFormData({ ...formData, account_manager: e.target.value })}
               placeholder="Enter account manager name"
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px' }}
             />
-          </div>
 
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600 }}>Renewal Date</label>
-            <input
+            <Input
+              label="Renewal Date"
               type="date"
               value={formData.renewal_date}
               onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px' }}
             />
-          </div>
 
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600 }}>Subscription Value</label>
-            <input
+            <Input
+              label="Subscription Value"
               type="number"
               value={formData.subscription_value}
               onChange={(e) => setFormData({ ...formData, subscription_value: Number(e.target.value) })}
               placeholder="Enter subscription value"
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px' }}
             />
           </div>
 
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600 }}>Pinned Notes</label>
+          <div className="form-row" style={{ marginBottom: 16 }}>
+            <label className="custom-select-label">Pinned Notes</label>
             <textarea
               value={formData.pinned_notes}
               onChange={(e) => setFormData({ ...formData, pinned_notes: e.target.value })}
               placeholder="Important notes about this client"
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px', minHeight: '80px', fontFamily: 'inherit' }}
+              style={modalTextareaStyle}
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{ padding: '8px 16px', border: '1px solid var(--border)', borderRadius: '8px', background: 'transparent', cursor: 'pointer' }}
-            >
+          <div className="form-actions">
+            <Button type="button" variant="ghost" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              style={{ padding: '8px 16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-            >
+            </Button>
+            <Button type="submit" disabled={loading}>
               {loading ? 'Saving...' : 'Save Changes'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

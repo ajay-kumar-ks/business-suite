@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js'
 import Loader from '../../../components/ui/Loader'
+import Select from '../../../components/ui/Select'
 import { crmAPI } from '../../../services/api'
 import { hrAPI } from '../../hr/services/hrApi'
 import '../styles/CRMAnalyticsDashboard.css'
@@ -294,11 +295,14 @@ const CRMAnalyticsDashboard = () => {
         <div className="dashboard-detail-panel">
           <div className="dashboard-detail-panel-header">
             <h4>Pipeline insights</h4>
-            <select value={selectedPipeline} onChange={(e) => setSelectedPipeline(e.target.value)}>
-              {pipelines.map((pipeline) => (
-                <option key={pipeline.id} value={pipeline.id}>{pipeline.name}</option>
-              ))}
-            </select>
+            <Select
+              value={selectedPipeline}
+              onChange={(e) => setSelectedPipeline(e.target.value)}
+              options={pipelines.map((pipeline) => ({
+                value: pipeline.id,
+                label: pipeline.name,
+              }))}
+            />
           </div>
 
           {selectedPipelineMetrics ? (
@@ -328,11 +332,14 @@ const CRMAnalyticsDashboard = () => {
         <div className="dashboard-detail-panel">
           <div className="dashboard-detail-panel-header">
             <h4>Employee performance</h4>
-            <select value={selectedEmployee} onChange={(e) => setSelectedEmployee(e.target.value)}>
-              {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>{employee.name || employee.email || employee.id}</option>
-              ))}
-            </select>
+            <Select
+              value={selectedEmployee}
+              onChange={(e) => setSelectedEmployee(e.target.value)}
+              options={employees.map((employee) => ({
+                value: employee.id,
+                label: employee.name || employee.email || employee.id,
+              }))}
+            />
           </div>
 
           {selectedEmployeeMetrics ? (

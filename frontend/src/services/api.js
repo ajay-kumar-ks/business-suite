@@ -170,6 +170,11 @@ export const crmAPI = {
   createPipeline: (data) => api.post('/crm/pipelines', data),
   updatePipeline: (id, data) => api.patch(`/crm/pipelines/${id}`, data),
   
+  // Pipeline Assignments
+  getPipelineAssignment: (pipelineId) => api.get(`/crm/pipelines/${pipelineId}/assignments`),
+  savePipelineAssignment: (pipelineId, data) => api.put(`/crm/pipelines/${pipelineId}/assignments`, data),
+  applyPipelineAssignment: (pipelineId, data) => api.post(`/crm/pipelines/${pipelineId}/assignments/apply`, data),
+  
   // Phases
   getPhases: (pipelineId) => api.get(`/crm/pipelines/${pipelineId}/phases`),
   createPhase: (pipelineId, data) => api.post(`/crm/pipelines/${pipelineId}/phases`, data),

@@ -14,6 +14,7 @@ def get_employees(
     limit: int = 100,
     status_filter: EmployeeStatus | None = None,
     search: str | None = None,
+    department_id: int | None = None,
 ) -> tuple[list[Employee], int]:
     query = db.query(Employee)
 
@@ -28,6 +29,9 @@ def get_employees(
                 User.username.ilike(f"%{search}%"),
             )
         )
+
+    if department_id is not None:
+        query = query.filter(Employee.department_id == department_id)
 
     total = query.count()
     employees = query.order_by(Employee.id.desc()).offset(skip).limit(limit).all()

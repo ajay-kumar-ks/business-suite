@@ -513,7 +513,8 @@ const HRPage = () => {
           <DepartmentTable
             departments={departments}
             loading={departmentsLoading}
-            onRefresh={() => { fetchDepartments(); fetchDashboard() }}
+            onRefresh={() => { fetchDepartments(); fetchEmployees(); fetchDashboard() }}
+            allEmployees={employees}
           />
         </div>
       )}

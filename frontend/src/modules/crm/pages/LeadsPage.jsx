@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Plus, Trash2, Search, Settings, ChevronDown, Check, CheckCircle2 } from 'lucide-react'
+import { Plus, Trash2, Search, Settings, ChevronDown, Check, CheckCircle2, Check as CheckIcon, X as XIcon, AlertTriangle } from 'lucide-react'
 import LeadForm from '../components/LeadForm'
 import LeadDetailModal from '../components/LeadDetailModal'
 import SettingsModal from '../components/SettingsModal'
 import Button from '../../../components/ui/Button'
 import Loader from '../../../components/ui/Loader'
+import Alert from '../../../components/ui/Alert'
 import '../styles/LeadsView.css'
 
 const LeadsPage = ({ prefillContact = null }) => {
@@ -19,7 +20,11 @@ const LeadsPage = ({ prefillContact = null }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [pipelineFilter, setPipelineFilter] = useState('')
   const [loading, setLoading] = useState(true)
+  const [notifications, setNotifications] = useState([])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [orphanedLeads, setOrphanedLeads] = useState([])
+  const [showOrphaned, setShowOrphaned] = useState(true)
   const dropdownRef = useRef(null)
 
   const fetchLeads = async () => {
@@ -97,8 +102,42 @@ const LeadsPage = ({ prefillContact = null }) => {
     setLoading(false)
   }
 
+  // Fetch orphaned leads when pipeline filter changes
+  useEffect(() => {
+    if (pipelineFilter) {
+      fetchOrphanedLeads(pipelineFilter)
+    } else {
+      setOrphanedLeads([])
+    }
+  }, [pipelineFilter, leads])
+
+  const fetchOrphanedLeads = async (pipelineId) => {
+    try {
+      const res = await fetch(`/api/crm/leads/?pipeline_id=${pipelineId}&orphaned=true`)
+      if (res.ok) {
+        const data = await res.json()
+        setOrphanedLeads(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch orphaned leads:', err)
+      setOrphanedLeads([])
+    }
+  }
+
   const refreshBoardData = async () => {
     await Promise.all([fetchPipelines(), fetchLeads()])
+  }
+
+  const handlePhaseModificationComplete = async () => {
+    setIsRefreshing(true)
+    try {
+      await refreshBoardData()
+      if (pipelineFilter) {
+        await fetchOrphanedLeads(pipelineFilter)
+      }
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
   useEffect(() => {
@@ -132,6 +171,28 @@ const LeadsPage = ({ prefillContact = null }) => {
     }
   }, [prefillContact])
 
+  const addNotification = (text, type = 'success') => {
+    setNotifications((prev) => [...prev, { id: Date.now().toString(), text, type }])
+  }
+
+  const removeNotification = (id) => {
+    setNotifications((prev) => prev.filter((notification) => notification.id !== id))
+  }
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '-'
+    const date = new Date(dateString)
+    const day = date.getDate()
+    const month = date.toLocaleDateString('en-US', { month: 'short' })
+    const year = date.getFullYear()
+    const time = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    return `${day} ${month} ${year} ${time}`
+  }
+
+  const showMessage = (text, type = 'success') => {
+    addNotification(text, type)
+  }
+
   const handleSaveLead = (savedLead) => {
     setLeads((prev) => [savedLead, ...prev])
     setShowForm(false)
@@ -146,24 +207,37 @@ const LeadsPage = ({ prefillContact = null }) => {
       await fetch(`/api/crm/leads/${leadId}`, { method: 'DELETE' })
       setLeads((prev) => prev.filter((l) => l.id !== leadId))
       setSelectedLead((prev) => (prev?.id === leadId ? null : prev))
+      showMessage('Lead deleted successfully.', 'success')
     } catch (error) {
       console.error('Failed to delete lead:', error)
+      showMessage('Failed to delete lead.', 'error')
     }
   }
 
   const handleMoveLead = async (leadId, phaseId) => {
+    const previousLeads = leads
+    const updatedLeads = leads.map((lead) => lead.id === leadId ? { ...lead, phase_id: phaseId } : lead)
+    setLeads(updatedLeads)
+    if (selectedLead?.id === leadId) {
+      setSelectedLead((prev) => prev ? { ...prev, phase_id: phaseId } : prev)
+    }
+
     try {
       const response = await fetch(`/api/crm/leads/${leadId}/move?phase_id=${phaseId}`, {
         method: 'PUT',
       })
-      if (!response.ok) throw new Error('Failed to move lead')
-      const updated = await response.json()
-      setLeads((prev) => prev.map((lead) => lead.id === leadId ? { ...lead, phase_id: phaseId } : lead))
-      if (selectedLead?.id === leadId) {
-        setSelectedLead((prev) => prev ? { ...prev, phase_id: phaseId } : prev)
+      if (!response.ok) {
+        throw new Error('Failed to move lead')
       }
+      await response.json()
+      showMessage('Lead moved successfully.', 'success')
     } catch (error) {
       console.error('Failed to move lead:', error)
+      setLeads(previousLeads)
+      if (selectedLead?.id === leadId) {
+        setSelectedLead(previousLeads.find((lead) => lead.id === leadId) || null)
+      }
+      showMessage('Could not move lead. Reverting change.', 'error')
     }
   }
 
@@ -306,6 +380,11 @@ const LeadsPage = ({ prefillContact = null }) => {
         </div>
 
       <div className="kanban-board">
+        {isRefreshing && (
+          <div className="kanban-loader-overlay">
+            <Loader />
+          </div>
+        )}
         {pipelineList.length === 0 ? (
           <div className="empty-state">No pipelines found — create a lead with a pipeline to begin.</div>
         ) : (() => {
@@ -319,10 +398,93 @@ const LeadsPage = ({ prefillContact = null }) => {
             <div className="kanban-pipeline">
               <div className="kanban-pipeline-header">
                 <h3>{selectedPipeline.name}</h3>
-                <span>{filteredLeads.filter((lead) => lead.pipeline_id === selectedPipeline.id).length} leads</span>
+                <div className="kanban-pipeline-actions">
+                  {orphanedLeads.length > 0 && (
+                    <button
+                      type="button"
+                      className="orphaned-toggle-btn"
+                      onClick={() => setShowOrphaned((prev) => !prev)}
+                      title={showOrphaned ? 'Hide orphaned leads' : 'Show orphaned leads'}
+                    >
+                      <AlertTriangle size={13} />
+                      {showOrphaned ? 'Hide' : `${orphanedLeads.length} orphaned`}
+                    </button>
+                  )}
+                  <span>{filteredLeads.filter((lead) => lead.pipeline_id === selectedPipeline.id).length} leads</span>
+                </div>
               </div>
               <div className="kanban-phases">
-                {phasesForPipeline.length === 0 ? (
+                {/* Orphaned Leads Column — only if visible and has data */}
+                {orphanedLeads.length > 0 && showOrphaned && (
+                  <div className="kanban-column orphaned-column" onDragOver={handleDragOver}>
+                    <div className="kanban-column-header orphaned-header">
+                      <div className="kanban-column-title">
+                        <AlertTriangle size={14} />
+                        <span>Orphaned Leads</span>
+                      </div>
+                      <span>{orphanedLeads.length}</span>
+                    </div>
+                    <div className="kanban-column-meta">
+                      <span>Phase was deleted — drag to a phase to recover</span>
+                    </div>
+                    <div className="kanban-cards">
+                      {orphanedLeads.map((lead) => {
+                        const contactName = contacts[lead.contact_id]?.name || lead.contact_id || '-'
+                        const company = contacts[lead.contact_id]?.company || '-'
+                        return (
+                          <button
+                            key={lead.id}
+                            className="kanban-card orphaned-card"
+                            type="button"
+                            draggable
+                            onDragStart={(event) => handleCardDragStart(event, lead.id)}
+                            onClick={() => setSelectedLead(lead)}
+                          >
+                            <div className="card-top">
+                              <div className="card-title-section">
+                                <span className="card-title">{lead.title}</span>
+                                {company && company !== '-' && <span className="card-company">{company}</span>}
+                              </div>
+                            </div>
+                            <div className="card-middle">
+                              <div className="card-contact-info">
+                                <span className="card-contact-label">Contact:</span>
+                                <span className="card-contact-value">{contactName}</span>
+                              </div>
+                            </div>
+                            <div className="card-meta">
+                              {lead.value && (
+                                <span className="card-value-badge">${lead.value.toLocaleString()}</span>
+                              )}
+                            </div>
+                            <div className="card-assignee">
+                              <span className="card-label-small">Assigned:</span>
+                              <span className="card-assignee-value">{lead.assignee || 'Unassigned'}</span>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Orphaned toggle when there are orphaned leads but column is hidden */}
+                {orphanedLeads.length > 0 && !showOrphaned && (
+                  <div className="kanban-column orphaned-column orphaned-collapsed" onClick={() => setShowOrphaned(true)}>
+                    <div className="kanban-column-header orphaned-header">
+                      <div className="kanban-column-title">
+                        <AlertTriangle size={14} />
+                        <span>Orphaned</span>
+                      </div>
+                      <span>{orphanedLeads.length}</span>
+                    </div>
+                    <div className="kanban-column-meta">
+                      <span>Click to show {orphanedLeads.length} orphaned lead(s)</span>
+                    </div>
+                  </div>
+                )}
+
+                {phasesForPipeline.length === 0 && orphanedLeads.length === 0 ? (
                   <div className="kanban-empty">No phases configured</div>
                 ) : (
                   phasesForPipeline.map((phase) => (
@@ -333,7 +495,10 @@ const LeadsPage = ({ prefillContact = null }) => {
                       onDrop={(event) => handlePhaseDrop(event, phase.id)}
                     >
                       <div className="kanban-column-header">
-                        <span>{phase.name}</span>
+                        <div className="kanban-column-title">
+                          <span>{phase.name}</span>
+                          {phase.is_terminal && <span className="phase-terminal-label">Terminal</span>}
+                        </div>
                         <span>{filteredLeads.filter((lead) => lead.phase_id === phase.id).length}</span>
                       </div>
                       <div className="kanban-column-meta">
@@ -344,11 +509,13 @@ const LeadsPage = ({ prefillContact = null }) => {
                         </span>
                       </div>
                       <div className="kanban-cards">
-                        {filteredLeads
+                          {filteredLeads
                           .filter((lead) => lead.pipeline_id === selectedPipeline.id && lead.phase_id === phase.id)
                           .map((lead) => {
                             const contactName = contacts[lead.contact_id]?.name || lead.contact_id || '-'
+                            const company = contacts[lead.contact_id]?.company || '-'
                             const isConverted = lead.extra_data?.converted
+                            const convertedTime = lead.extra_data?.converted_at
                             return (
                               <button
                                 key={lead.id}
@@ -359,12 +526,41 @@ const LeadsPage = ({ prefillContact = null }) => {
                                 onClick={() => setSelectedLead(lead)}
                               >
                                 <div className="card-top">
-                                  <span>{lead.title}</span>
+                                  <div className="card-title-section">
+                                    <span className="card-title">{lead.title}</span>
+                                    {company && company !== '-' && <span className="card-company">{company}</span>}
+                                  </div>
                                   {isConverted && <CheckCircle2 size={16} className="card-converted" />}
                                 </div>
-                                <div className="card-body">
-                                  <span>{contactName}</span>
-                                  <span>{lead.assignee || 'Unassigned'}</span>
+                                <div className="card-middle">
+                                  <div className="card-contact-info">
+                                    <span className="card-contact-label">Contact:</span>
+                                    <span className="card-contact-value">{contactName}</span>
+                                  </div>
+                                  {isConverted && convertedTime && (
+                                    <div className="card-converted-time">
+                                      <span className="card-label-small">Converted:</span>
+                                      <span className="card-value-small">{formatDate(convertedTime)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="card-meta">
+                                  {lead.value && (
+                                    <span className="card-value-badge">${lead.value.toLocaleString()}</span>
+                                  )}
+                                  {lead.expected_close_date && (
+                                    <span className="card-close-date-small">
+                                      {new Date(lead.expected_close_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="card-update-time">
+                                  <span className="card-label-small">Updated:</span>
+                                  <span className="card-value-small">{formatDate(lead.updated_at)}</span>
+                                </div>
+                                <div className="card-assignee">
+                                  <span className="card-label-small">Assigned:</span>
+                                  <span className="card-assignee-value">{lead.assignee || 'Unassigned'}</span>
                                 </div>
                               </button>
                             )
@@ -380,8 +576,22 @@ const LeadsPage = ({ prefillContact = null }) => {
       </div>
 
       {showSettings && (
-        <SettingsModal onClose={() => setShowSettings(false)} onPipelineCreated={refreshBoardData} />
+        <SettingsModal onClose={() => setShowSettings(false)} onPipelineCreated={handlePhaseModificationComplete} />
       )}
+
+      {notifications.map((notification) => (
+        <Alert
+          key={notification.id}
+          message={notification.text}
+          type={notification.type}
+          position="top-right"
+          variant="toast"
+          timeout={5000}
+          onDismiss={() => removeNotification(notification.id)}
+          dismissible={true}
+          icon={notification.type === 'success' ? <CheckIcon size={16} /> : <XIcon size={16} />}
+        />
+      ))}
 
       {selectedLead && (
         <LeadDetailModal

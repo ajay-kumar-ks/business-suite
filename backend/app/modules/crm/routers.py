@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from app.core.database import get_db
-from .db_models import Contact, Tag, Activity, Lead, Pipeline, Phase
+from .db_models import Contact, Tag, Activity, Lead, Pipeline, Phase, Client, PipelineAssignment
 from .schemas import (
     ContactCreateSchema,
     ContactUpdateSchema,
@@ -27,9 +27,21 @@ from .schemas import (
     PhaseSchema,
     PhaseCreateSchema,
     PhaseUpdateSchema,
+    ClientCreateSchema,
+    ClientUpdateSchema,
+    ClientSchema,
+    ClientDetailSchema,
+    PipelineAssignmentSchema,
+    PipelineAssignmentCreateSchema,
+    PipelineAssignmentUpdateSchema,
+    DepartmentAssignmentConfig,
+    AssignToPipelineSchema,
 )
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
+
+# ============= CLIENTS ENDPOINTS (Phase 4) =============
+clients_router = APIRouter(prefix="/clients", tags=["clients"])
 
 # ============= LEADS ENDPOINTS (Phase 2) =============
 leads_router = APIRouter(prefix="/leads", tags=["leads"])
@@ -158,6 +170,149 @@ async def delete_pipeline_phase(pipeline_id: str, phase_id: str, db: Session = D
     db.commit()
 
 
+# ════════════════════════════════════════════════════════════
+# PIPELINE ASSIGNMENT ENDPOINTS
+# ════════════════════════════════════════════════════════════
+
+
+@pipelines_router.get("/{pipeline_id}/assignments", response_model=PipelineAssignmentSchema)
+async def get_pipeline_assignment(pipeline_id: str, db: Session = Depends(get_db)):
+    """Get pipeline assignment configuration."""
+    assignment = db.query(PipelineAssignment).filter(PipelineAssignment.pipeline_id == pipeline_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="No assignment config found for this pipeline")
+    return assignment
+
+
+@pipelines_router.put("/{pipeline_id}/assignments", response_model=PipelineAssignmentSchema)
+async def save_pipeline_assignment(
+    pipeline_id: str,
+    data: PipelineAssignmentUpdateSchema,
+    db: Session = Depends(get_db),
+):
+    """Create or update pipeline assignment configuration.
+    Stores department-level assignment rules for the pipeline.
+    """
+    # Verify pipeline exists
+    pipeline = db.query(Pipeline).filter(Pipeline.id == pipeline_id).first()
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    assignment = db.query(PipelineAssignment).filter(PipelineAssignment.pipeline_id == pipeline_id).first()
+
+    if assignment:
+        assignment.departments_config = [
+            dept.model_dump() for dept in data.departments_config
+        ]
+        assignment.updated_at = datetime.utcnow()
+    else:
+        assignment = PipelineAssignment(
+            id=str(uuid.uuid4()),
+            pipeline_id=pipeline_id,
+            departments_config=[
+                dept.model_dump() for dept in data.departments_config
+            ],
+        )
+        db.add(assignment)
+
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+@pipelines_router.post("/{pipeline_id}/assignments/apply")
+async def apply_pipeline_assignment(
+    pipeline_id: str,
+    data: AssignToPipelineSchema,
+    db: Session = Depends(get_db),
+):
+    """Apply assignment rules to existing leads in the pipeline.
+    - round_robin: Distribute unassigned leads among selected members
+    - individual: Assign all leads to the designated member
+    """
+    assignment = db.query(PipelineAssignment).filter(PipelineAssignment.pipeline_id == pipeline_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="No assignment config found for this pipeline")
+
+    # Find the department config
+    dept_config = None
+    for dc in assignment.departments_config:
+        if dc.get("department_id") == data.department_id:
+            dept_config = dc
+            break
+
+    if not dept_config:
+        raise HTTPException(status_code=404, detail=f"Department {data.department_id} not found in assignment config")
+
+    leads_to_update = db.query(Lead).filter(
+        Lead.pipeline_id == pipeline_id
+    ).all()
+
+    updated_count = 0
+
+    if data.assignment_mode == "self_assign":
+        # Self-assign mode doesn't bulk-assign leads — it's handled at lead creation time
+        raise HTTPException(status_code=400, detail="Self-assign mode does not support bulk assignment. Use Save to configure for new leads.")
+
+    if data.assignment_mode == "round_robin":
+        selected_members = dept_config.get("selected_members", [])
+        if not selected_members:
+            raise HTTPException(status_code=400, detail="No members selected for round robin")
+
+        # Fetch employee names for selected member IDs
+        from app.modules.hr.crud import get_employee
+        members = []
+        for emp_id in selected_members:
+            emp = get_employee(db, emp_id)
+            if emp:
+                members.append(emp.user.full_name or emp.user.username or str(emp.id))
+
+        if not members:
+            raise HTTPException(status_code=400, detail="No valid members found for round robin")
+
+        # Assign round-robin to all existing leads in the pipeline
+        idx = dept_config.get("round_robin_index", 0)
+        for lead in leads_to_update:
+            lead.assignee = members[idx % len(members)]
+            idx += 1
+            updated_count += 1
+
+        # Update the round_robin_index in the stored config
+        for dc in assignment.departments_config:
+            if dc.get("department_id") == data.department_id:
+                dc["round_robin_index"] = idx % len(members)
+                break
+        assignment.departments_config = assignment.departments_config
+
+    elif data.assignment_mode == "individual":
+        assignee_id = dept_config.get("individual_assignee_id")
+        if not assignee_id:
+            raise HTTPException(status_code=400, detail="No individual assignee selected")
+
+        from app.modules.hr.crud import get_employee
+        emp = get_employee(db, assignee_id)
+        if not emp:
+            raise HTTPException(status_code=404, detail="Assignee employee not found")
+        assignee_name = emp.user.full_name or emp.user.username or str(emp.id)
+
+        for lead in leads_to_update:
+            lead.assignee = assignee_name
+            updated_count += 1
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported assignment mode: {data.assignment_mode}")
+
+    db.commit()
+
+    return {
+        "success": True,
+        "pipeline_id": pipeline_id,
+        "department_id": data.department_id,
+        "assignment_mode": data.assignment_mode,
+        "updated_count": updated_count,
+    }
+
+
 @leads_router.post("/", response_model=LeadSchema, status_code=201)
 async def create_lead(lead_data: LeadCreateSchema, db: Session = Depends(get_db)):
     lead_id = str(uuid.uuid4())
@@ -197,6 +352,7 @@ async def list_leads(
     assignee: Optional[str] = Query(None),
     source: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    orphaned: Optional[bool] = Query(None, description="Filter leads with pipeline_id set but phase_id null"),
     db: Session = Depends(get_db)
 ):
     query = db.query(Lead)
@@ -212,6 +368,8 @@ async def list_leads(
     if search:
         search_term = f"%{search}%"
         query = query.filter(Lead.title.ilike(search_term))
+    if orphaned:
+        query = query.filter(Lead.pipeline_id.isnot(None), Lead.phase_id.is_(None))
 
     leads = query.offset(skip).limit(limit).all()
     return leads
@@ -254,6 +412,11 @@ async def move_lead(lead_id: str, phase_id: str = Query(...), db: Session = Depe
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    # Check if destination phase creates clients
+    destination_phase = db.query(Phase).filter(Phase.id == phase_id).first()
+    if not destination_phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+
     old_phase_id = lead.phase_id
     lead.phase_id = phase_id
     extra_data = lead.extra_data or {}
@@ -266,13 +429,39 @@ async def move_lead(lead_id: str, phase_id: str = Query(...), db: Session = Depe
         'timestamp': datetime.utcnow().isoformat(),
     })
     extra_data['history'] = history
+    extra_data['converted'] = destination_phase.creates_client
     lead.extra_data = extra_data
 
     db.add(lead)
+    db.flush()
+
+    # Auto-create client if destination phase is a client-conversion phase
+    created_client_id = None
+    if destination_phase.creates_client and lead.contact_id:
+        # Check if client already exists
+        existing_client = db.query(Client).filter(Client.lead_id == lead.id).first()
+        if not existing_client:
+            client = Client(
+                id=str(uuid.uuid4()),
+                contact_id=lead.contact_id,
+                lead_id=lead.id,
+                tier="Standard",
+                status="Active",
+                account_manager=lead.assignee,
+            )
+            db.add(client)
+            db.flush()
+            created_client_id = client.id
+
     db.commit()
     db.refresh(lead)
-    # In a full implementation, publish event bus message here
-    return {"success": True, "lead_id": lead.id, "phase_id": phase_id}
+    
+    response = {"success": True, "lead_id": lead.id, "phase_id": phase_id}
+    if created_client_id:
+        response["client_created"] = True
+        response["client_id"] = created_client_id
+    
+    return response
 
 
 @leads_router.post("/{lead_id}/convert")
@@ -280,23 +469,151 @@ async def convert_lead(lead_id: str, db: Session = Depends(get_db)):
     lead = db.query(Lead).filter(Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Update lead history
     extra_data = lead.extra_data or {}
     history = extra_data.get('history', [])
     history.append({
         'type': 'converted',
-        'message': 'Lead converted',
+        'message': 'Lead converted to Client',
         'timestamp': datetime.utcnow().isoformat(),
     })
     extra_data['history'] = history
     extra_data['converted'] = True
     lead.extra_data = extra_data
 
+    # Create Client record from Lead
+    client = Client(
+        id=str(uuid.uuid4()),
+        contact_id=lead.contact_id,
+        lead_id=lead.id,
+        tier="Standard",
+        status="Active",
+    )
+    
     db.add(lead)
+    db.add(client)
     db.commit()
     db.refresh(lead)
-    # TODO: create Client record and publish event bus message
-    return {"success": True, "lead_id": lead.id}
+    db.refresh(client)
+    
+    # TODO: publish event_bus message for crm.lead.converted
+    return {"success": True, "lead_id": lead.id, "client_id": client.id}
 
+
+# ============= CLIENTS ENDPOINTS (Phase 4) ✅ 4.1 ✅ 4.2 =============
+
+@clients_router.post("/", response_model=ClientSchema, status_code=201)
+async def create_client(client_data: ClientCreateSchema, db: Session = Depends(get_db)):
+    """Create a new client (from lead or directly)"""
+    # Validate contact exists
+    contact = db.query(Contact).filter(Contact.id == client_data.contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    # Check if client already exists for this contact
+    existing_client = db.query(Client).filter(Client.contact_id == client_data.contact_id).first()
+    if existing_client:
+        raise HTTPException(status_code=400, detail="Client already exists for this contact")
+    
+    client = Client(
+        id=str(uuid.uuid4()),
+        contact_id=client_data.contact_id,
+        lead_id=client_data.lead_id,
+        account_manager=client_data.account_manager,
+        tier=client_data.tier or "Standard",
+    )
+    
+    db.add(client)
+    db.commit()
+    db.refresh(client)
+    return client
+
+
+@clients_router.get("/", response_model=List[ClientSchema])
+async def list_clients(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=500),
+    tier: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    account_manager: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """List clients with filtering"""
+    query = db.query(Client)
+    
+    if tier:
+        query = query.filter(Client.tier == tier)
+    if status:
+        query = query.filter(Client.status == status)
+    if account_manager:
+        query = query.filter(Client.account_manager.ilike(f"%{account_manager}%"))
+    if search:
+        # Search in linked contact name
+        search_term = f"%{search}%"
+        query = query.join(Contact).filter(Contact.name.ilike(search_term))
+    
+    clients = query.offset(skip).limit(limit).all()
+    return clients
+
+
+@clients_router.get("/{client_id}", response_model=ClientDetailSchema)
+async def get_client(client_id: str, db: Session = Depends(get_db)):
+    """Get client details with contact info"""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return client
+
+
+@clients_router.put("/{client_id}", response_model=ClientSchema)
+async def update_client(client_id: str, client_data: ClientUpdateSchema, db: Session = Depends(get_db)):
+    """Update client information"""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    update_data = client_data.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(client, key, value)
+    
+    db.add(client)
+    db.commit()
+    db.refresh(client)
+    return client
+
+
+@clients_router.delete("/{client_id}", status_code=204)
+async def delete_client(client_id: str, db: Session = Depends(get_db)):
+    """Delete a client"""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    db.delete(client)
+    db.commit()
+
+
+@clients_router.post("/{client_id}/add-project")
+async def add_project_to_client(client_id: str, project_data: dict, db: Session = Depends(get_db)):
+    """Link a project/deal to client"""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    linked_projects = client.linked_projects or []
+    linked_projects.append({
+        "project_id": project_data.get("project_id"),
+        "project_name": project_data.get("project_name"),
+        "module": project_data.get("module"),  # tasks, accounts, etc
+        "added_at": datetime.utcnow().isoformat()
+    })
+    client.linked_projects = linked_projects
+    
+    db.add(client)
+    db.commit()
+    db.refresh(client)
+    return {"success": True, "client_id": client.id}
 
 
 # ============= CONTACTS ENDPOINTS =============
@@ -587,6 +904,39 @@ async def get_activities(contact_id: str, db: Session = Depends(get_db)):
     
     activities = db.query(Activity).filter(Activity.contact_id == contact_id).order_by(Activity.created_at.desc()).all()
     return activities
+
+
+@router.get("/activities", response_model=List[ActivitySchema])
+async def list_activities(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=500),
+    db: Session = Depends(get_db)
+):
+    """List recent activities across contacts"""
+    query = db.query(Activity).order_by(Activity.created_at.desc())
+    activities = query.offset(skip).limit(limit).all()
+    return activities
+
+
+@router.get("/notifications/followups")
+async def get_due_followups(limit: int = 10, db: Session = Depends(get_db)):
+    """Return due follow-up activities (follow_up_date <= now)."""
+    now = datetime.utcnow()
+    base_q = db.query(Activity).filter(Activity.follow_up_date != None, Activity.follow_up_date <= now)
+    total = base_q.count()
+    items = base_q.order_by(Activity.follow_up_date.asc()).limit(limit).all()
+
+    results = []
+    for a in items:
+        results.append({
+            "id": a.id,
+            "contact_id": a.contact_id,
+            "title": a.title,
+            "follow_up_date": a.follow_up_date.isoformat() if a.follow_up_date else None,
+            "activity_type": a.activity_type,
+        })
+
+    return {"count": total, "items": results}
 
 
 # ============= TAGS ENDPOINTS =============

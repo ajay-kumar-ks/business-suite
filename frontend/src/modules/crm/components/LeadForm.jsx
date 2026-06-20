@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { X, ChevronDown } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
-import Select from '../../../components/ui/Select'
+import Loader from '../../../components/ui/Loader'
+import { hrAPI } from '../../hr/services/hrApi'
 import '../styles/LeadsView.css'
 
 const LeadForm = ({ contact = null, onSave, onCancel }) => {
@@ -13,14 +14,22 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
     phase_id: '',
     value: '',
     expected_close_date: '',
-    assignee: '',
+    assignee_id: '',
     source: '',
     notes: '',
   })
   const [pipelines, setPipelines] = useState([])
   const [phases, setPhases] = useState([])
+  const [employees, setEmployees] = useState([])
+  const [employeeLoading, setEmployeeLoading] = useState(true)
+  const [employeeDropdownOpen, setEmployeeDropdownOpen] = useState(false)
+  const [pipelineDropdownOpen, setPipelineDropdownOpen] = useState(false)
+  const [phaseDropdownOpen, setPhaseDropdownOpen] = useState(false)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
+  const employeeDropdownRef = useRef(null)
+  const pipelineDropdownRef = useRef(null)
+  const phaseDropdownRef = useRef(null)
 
   useEffect(() => {
     if (contact) {
@@ -31,6 +40,7 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
       }))
     }
     fetchPipelines()
+    fetchEmployees()
   }, [contact])
 
   useEffect(() => {
@@ -41,6 +51,24 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
       setFormData((prev) => ({ ...prev, phase_id: '' }))
     }
   }, [formData.pipeline_id])
+
+  // Click outside handlers for all three dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (employeeDropdownRef.current && !employeeDropdownRef.current.contains(event.target)) {
+        setEmployeeDropdownOpen(false)
+      }
+      if (pipelineDropdownRef.current && !pipelineDropdownRef.current.contains(event.target)) {
+        setPipelineDropdownOpen(false)
+      }
+      if (phaseDropdownRef.current && !phaseDropdownRef.current.contains(event.target)) {
+        setPhaseDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const fetchPipelines = async () => {
     try {
@@ -64,12 +92,65 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
     }
   }
 
+  const fetchEmployees = async () => {
+    try {
+      setEmployeeLoading(true)
+      const response = await hrAPI.getEmployees({ status: 'Active', limit: 100 })
+      setEmployees(response.data.employees || [])
+    } catch (error) {
+      console.error('Failed to fetch employees:', error)
+      setEmployees([])
+    } finally {
+      setEmployeeLoading(false)
+    }
+  }
+
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }))
     }
+  }
+
+  const selectedEmployee = useMemo(
+    () => employees.find((emp) => String(emp.id) === String(formData.assignee_id)),
+    [employees, formData.assignee_id]
+  )
+
+  const selectedPipeline = useMemo(
+    () => pipelines.find((p) => String(p.id) === String(formData.pipeline_id)),
+    [pipelines, formData.pipeline_id]
+  )
+
+  const selectedPhase = useMemo(
+    () => phases.find((ph) => String(ph.id) === String(formData.phase_id)),
+    [phases, formData.phase_id]
+  )
+
+  const roleColorFor = (role) => {
+    const roleColors = ['#60a5fa', '#f472b6', '#34d399', '#f59e0b', '#a78bfa', '#f97316', '#22c55e']
+    if (!role) return '#94a3b8'
+    const index = Array.from(role).reduce((acc, char) => acc + char.charCodeAt(0), 0) % roleColors.length
+    return roleColors[index]
+  }
+
+  const handleAssigneeSelect = (employee) => {
+    setFormData((prev) => ({ ...prev, assignee_id: employee.id }))
+    setErrors((prev) => ({ ...prev, assignee_id: '' }))
+    setEmployeeDropdownOpen(false)
+  }
+
+  const handlePipelineSelect = (pipeline) => {
+    setFormData((prev) => ({ ...prev, pipeline_id: pipeline.id, phase_id: '' }))
+    setErrors((prev) => ({ ...prev, pipeline_id: '' }))
+    setPipelineDropdownOpen(false)
+  }
+
+  const handlePhaseSelect = (phase) => {
+    setFormData((prev) => ({ ...prev, phase_id: phase.id }))
+    setErrors((prev) => ({ ...prev, phase_id: '' }))
+    setPhaseDropdownOpen(false)
   }
 
   const validateForm = () => {
@@ -84,6 +165,9 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
     if (!validateForm()) return
     setLoading(true)
     try {
+      const selectedEmp = employees.find(
+        (emp) => String(emp.id) === String(formData.assignee_id)
+      )
       const response = await fetch('/api/crm/leads/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -94,7 +178,9 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
           phase_id: formData.phase_id || null,
           value: formData.value ? Number(formData.value) : undefined,
           expected_close_date: formData.expected_close_date || null,
-          assignee: formData.assignee || null,
+          assignee: selectedEmp
+            ? selectedEmp.user_name || selectedEmp.full_name || String(selectedEmp.id)
+            : null,
           source: formData.source || null,
           notes: formData.notes || null,
         }),
@@ -131,27 +217,101 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
         </div>
 
         <div className="form-row two-col">
-          <Select
-            label="Pipeline"
-            name="pipeline_id"
-            value={formData.pipeline_id}
-            onChange={handleChange}
-            options={[
-              { value: '', label: 'Select Pipeline...' },
-              ...pipelines.map((p) => ({ value: p.id, label: p.name })),
-            ]}
-          />
-          <Select
-            label="Phase"
-            name="phase_id"
-            value={formData.phase_id}
-            onChange={handleChange}
-            disabled={!formData.pipeline_id}
-            options={[
-              { value: '', label: 'Select Phase...' },
-              ...phases.map((ph) => ({ value: ph.id, label: ph.name })),
-            ]}
-          />
+          {/* Pipeline custom dropdown */}
+          <div className="custom-select-wrapper" ref={pipelineDropdownRef}>
+            <label className="custom-select-label">Pipeline</label>
+            <button
+              type="button"
+              className={`custom-select-trigger ${pipelineDropdownOpen ? 'open' : ''}`}
+              onClick={() => setPipelineDropdownOpen((prev) => !prev)}
+            >
+              <span className={`custom-select-value ${selectedPipeline ? '' : 'placeholder'}`}>
+                {selectedPipeline ? selectedPipeline.name : 'Select Pipeline...'}
+              </span>
+              <ChevronDown size={16} className={`dropdown-chevron ${pipelineDropdownOpen ? 'open' : ''}`} />
+            </button>
+            {pipelineDropdownOpen && (
+              <div className="custom-select-menu">
+                {pipelines.length === 0 ? (
+                  <div className="custom-select-empty">No pipelines available</div>
+                ) : (
+                  pipelines.map((pipeline) => (
+                    <button
+                      key={pipeline.id}
+                      type="button"
+                      className={`custom-select-item ${String(pipeline.id) === String(formData.pipeline_id) ? 'selected' : ''}`}
+                      onClick={() => handlePipelineSelect(pipeline)}
+                    >
+                      <div className="custom-select-item-main">
+                        <span className="custom-select-item-name">{pipeline.name}</span>
+                      </div>
+                      {pipeline.description && (
+                        <span className="custom-select-item-subtitle">{pipeline.description}</span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Phase custom dropdown */}
+          <div className="custom-select-wrapper" ref={phaseDropdownRef}>
+            <label className="custom-select-label" style={{ opacity: formData.pipeline_id ? 1 : 0.5 }}>
+              Phase
+            </label>
+            <button
+              type="button"
+              className={`custom-select-trigger ${phaseDropdownOpen ? 'open' : ''}`}
+              onClick={() => formData.pipeline_id && setPhaseDropdownOpen((prev) => !prev)}
+              disabled={!formData.pipeline_id}
+              style={{ opacity: formData.pipeline_id ? 1 : 0.5, cursor: formData.pipeline_id ? 'pointer' : 'not-allowed' }}
+            >
+              <span className={`custom-select-value ${selectedPhase ? '' : 'placeholder'}`}>
+                {selectedPhase ? selectedPhase.name : 'Select Phase...'}
+              </span>
+              <ChevronDown size={16} className={`dropdown-chevron ${phaseDropdownOpen ? 'open' : ''}`} />
+            </button>
+            {phaseDropdownOpen && (
+              <div className="custom-select-menu">
+                {phases.length === 0 ? (
+                  <div className="custom-select-empty">No phases available</div>
+                ) : (
+                  phases.map((phase) => (
+                    <button
+                      key={phase.id}
+                      type="button"
+                      className={`custom-select-item ${String(phase.id) === String(formData.phase_id) ? 'selected' : ''}`}
+                      onClick={() => handlePhaseSelect(phase)}
+                    >
+                      <div className="custom-select-item-main">
+                        <span
+                          className="custom-select-item-name"
+                          style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                        >
+                          <span
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: '50%',
+                              background: phase.color || 'var(--primary)',
+                              display: 'inline-block',
+                            }}
+                          />
+                          {phase.name}
+                        </span>
+                        {phase.is_terminal && (
+                          <span className="phase-terminal-label" style={{ fontSize: '0.7rem' }}>
+                            Terminal
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="form-row two-col">
@@ -172,12 +332,70 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
         </div>
 
         <div className="form-row two-col">
-          <Input
-            label="Assignee"
-            name="assignee"
-            value={formData.assignee}
-            onChange={handleChange}
-          />
+          <div className="custom-select-wrapper" ref={employeeDropdownRef}>
+            <label className="custom-select-label">Assignee</label>
+            <button
+              type="button"
+              className={`custom-select-trigger ${employeeDropdownOpen ? 'open' : ''}`}
+              onClick={() => setEmployeeDropdownOpen((prev) => !prev)}
+            >
+              <span className={`custom-select-value ${selectedEmployee ? '' : 'placeholder'}`}>
+                {selectedEmployee ? (
+                  <>
+                    <span>{selectedEmployee.user_name || selectedEmployee.full_name || `Employee #${selectedEmployee.id}`}</span>
+                    {selectedEmployee.role_name && (
+                      <span
+                        className="custom-role-chip"
+                        style={{ backgroundColor: roleColorFor(selectedEmployee.role_name) }}
+                      >
+                        {selectedEmployee.role_name}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  'Select assignee...'
+                )}
+              </span>
+            </button>
+            {employeeDropdownOpen && (
+              <div className="custom-select-menu">
+                {employeeLoading ? (
+                  <div className="custom-select-loading">
+                    <Loader size={20} />
+                    <span>Loading employees...</span>
+                  </div>
+                ) : employees.length === 0 ? (
+                  <div className="custom-select-empty">No employees available</div>
+                ) : (
+                  employees.map((emp) => (
+                    <button
+                      key={emp.id}
+                      type="button"
+                      className={`custom-select-item ${String(emp.id) === String(formData.assignee_id) ? 'selected' : ''}`}
+                      onClick={() => handleAssigneeSelect(emp)}
+                    >
+                      <div className="custom-select-item-main">
+                        <span className="custom-select-item-name">
+                          {emp.user_name || emp.full_name || `Employee #${emp.id}`}
+                        </span>
+                        {emp.role_name && (
+                          <span
+                            className="custom-role-chip"
+                            style={{ backgroundColor: roleColorFor(emp.role_name) }}
+                          >
+                            {emp.role_name}
+                          </span>
+                        )}
+                      </div>
+                      <span className="custom-select-item-subtitle">
+                        {emp.department_name || emp.department || emp.email || ''}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
           <Input
             label="Source"
             name="source"

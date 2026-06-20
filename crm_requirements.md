@@ -75,7 +75,10 @@ frontend/src/modules/crm/
 - Backend pipeline/phase support exists; pipeline editor UI is pending
 - Default phases (editable): `New → Contacted → Qualified → Proposal → Negotiation → Won / Lost`
 - ✅ Each phase has: name, color, order index, is_terminal flag (Won/Lost)
+- ✅ **NEW:** `creates_client` flag on phases — moving a lead to a phase with this flag automatically converts it to a Client
 - ✅ Phases are **pipeline-scoped** (different pipelines have different phases)
+- Example: "Won" phase can have `creates_client=True` to auto-create clients when deals close
+
 
 ### 2.3 Kanban Board ✅
 - ✅ Drag-and-drop board UI for phase movement
@@ -119,24 +122,33 @@ frontend/src/modules/crm/
 
 ---
 
-## Phase 4 — Clients
+## Phase 4 — Clients ✅
 
 > A Client is a Contact/Lead that has been converted (deal won or relationship established).
+> **NEW FEATURE:** Terminal phases in a pipeline can be configured to automatically convert leads to clients.
 
-### 4.1 Client Record
+### 4.1 Client Record ✅
 - Converted from Lead (one-click) or created directly
 - Inherits all contact data + custom fields
 - Adds: Client Since date, Account Manager, Tier (Standard/Premium/VIP), Status (Active/Inactive/Churned)
+- ✅ **Implemented:** SQLAlchemy Client model with all fields, Pydantic schemas (ClientCreateSchema, ClientUpdateSchema, ClientSchema, ClientDetailSchema), FastAPI CRUD endpoints (POST, GET, GET/{id}, PUT, DELETE)
+- **NEW:** Leads moving to a `creates_client=True` phase automatically become Clients (front-end link shown in client list)
 
-### 4.2 Client Management
+### 4.2 Client Management ✅
 - Activity history (from lead + ongoing)
 - Linked deals/projects (hooks into other modules via event bus)
 - Renewal / subscription tracking fields
 - Notes pinning and internal tagging
+- ✅ **Implemented:** Client model includes renewal_date, subscription_value, pinned_notes, internal_tags (JSON), activity_notes (JSON), linked_projects (JSON); endpoints support field updates
+- **NEW:** Client list shows source lead title (if converted from a lead); detail modal displays which lead created the client
 
-### 4.3 Client List
+### 4.3 Client List ✅
 - Filter by tier, status, account manager
 - Revenue tracking fields (manual entry or Accounts module sync)
+- ✅ **Implemented:** Frontend ClientsPage with tier/status/account_manager filtering, client list table with tier/status badges, **"From Lead" column** showing lead source, client detail modal for inline edits
+- **Supports multiple conversion paths:**
+  - **Automatic:** Lead moves to terminal phase with `creates_client=True` → Client record auto-created
+  - **Manual:** Direct client creation or button-click lead-to-client conversion
 
 ---
 
@@ -144,17 +156,45 @@ frontend/src/modules/crm/
 
 > Shared across Contacts, Leads, and Clients.
 
+Note: Mark each sub-task below with a checkmark (✅) when completed. When all sub-tasks for Phase 5 are completed, add a ✅ to the main phase header (change the header to "Phase 5 — Activities & Timeline ✅").
+
 ### 5.1 Activity Types
-- Note, Call, Email, Meeting, Task (linked to Tasks module), File Upload
+### 5.1 Activity Types
+- ✅ Note
+- ✅ Call
+- ✅ Email
+- ✅ Meeting
+- [ ] Task (linked to `Tasks` module)
+- ✅ File Upload
 
 ### 5.2 Timeline
-- Chronological feed on every entity
-- Automatic entries: status change, field edit, assignment change
-- Manual entries: any activity type above
+### 5.2 Timeline
+- ✅ Chronological feed on every entity (Contacts, Leads, Clients)
+- ✅ Automatic entries for: status change, field edit, assignment change
+- ✅ Manual activity entries (any activity type above)
+- [ ] Timeline UI: collapsible day groups, infinite scroll, and filters
 
 ### 5.3 Reminders & Follow-ups
-- Set follow-up date on any activity
-- Triggers notification (in-app; email in future)
+### 5.3 Reminders & Follow-ups
+- ✅ Set follow-up date on any activity
+- [ ] Trigger in-app notification for due follow-ups
+- [ ] (Optional) Email notification support (future)
+
+### How to use these checkboxes
+- When you complete a specific item (for example, implement reminder scheduling), replace the corresponding `- [ ]` with `- ✅` or append `✅` at the end of the line.
+- After all items under `5.1`, `5.2`, and `5.3` are marked completed, update the Phase header to include a ✅: change
+
+```
+## Phase 5 — Activities & Timeline
+```
+
+to
+
+```
+## Phase 5 — Activities & Timeline ✅
+```
+
+- If you prefer automation, we can add a small script to validate and update `crm_requirements.md` based on a lightweight JSON status file or CI step — ask if you want that.
 
 ---
 
@@ -163,6 +203,7 @@ frontend/src/modules/crm/
 ### 6.1 Pipeline & Phase Editor
 - Drag-to-reorder phases
 - Inline rename, color picker, terminal flag toggle
+- **NEW:** `creates_client` toggle — mark phases that auto-convert leads to clients
 - Warn before deleting a phase with active leads
 
 ### 6.2 Custom Field Templates
@@ -238,4 +279,12 @@ frontend/src/modules/crm/
 - **Custom fields:** `jsonb` column (Postgres) on Contact — no extra tables needed
 - **Kanban drag:** optimistic UI update → confirm with API → rollback on failure
 - **Lead ↔ Contact link:** FK on Lead; contact not required for standalone leads (edge case)
+- **Lead → Client conversion:** 
+  - Automatic: PUT /leads/{id}/move returns `{success, client_created, client_id}` if destination phase has `creates_client=True`
+  - Manual: POST /leads/{id}/convert for explicit conversion button
+  - One lead can only convert to one client (checked via `lead_id` FK on Client table)
+- **Terminal phases with creates_client flag:** 
+  - E.g., "Won" phase: `is_terminal=True, creates_client=True` = leads auto-become clients
+  - E.g., "Lost" phase: `is_terminal=True, creates_client=False` = leads end but don't convert
+  - E.g., "Negotiation" phase: `is_terminal=False, creates_client=False` = normal phase
 - **Event bus:** use internal pub/sub (Redis Pub/Sub or lightweight in-process broker) — same pattern as other modules

@@ -9,6 +9,9 @@ export const hrAPI = {
   getEmployees: (params = {}) =>
     api.get('/hr/employees', { params }),
 
+  getEmployeesByDepartment: (departmentId) =>
+    api.get('/hr/employees', { params: { department_id: departmentId } }),
+
   getEmployee: (id) =>
     api.get(`/hr/employees/${id}`),
 

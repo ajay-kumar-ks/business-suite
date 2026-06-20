@@ -70,10 +70,10 @@
 select {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
-  color: #111827;
+  background: var(--sidebar);
+  color: var(--text);
 }
 
 .ui-input-label {

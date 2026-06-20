@@ -58,7 +58,7 @@ app.include_router(accounts_router, prefix="/api/accounts", tags=["accounts"])
 app.include_router(crm_router, prefix="/api/crm", tags=["crm"])
 app.include_router(crm_leads_router, prefix="/api/crm", tags=["crm"])
 app.include_router(crm_pipelines_router, prefix="/api/crm", tags=["crm"])
-app.include_router(upload_router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(crm_clients_router, prefix="/api/crm", tags=["crm"])
 app.include_router(recruitment_router, prefix="/api/recruitment", tags=["recruitment"])
 app.include_router(crm_clients_router, prefix="/api/crm", tags=["crm"])
 

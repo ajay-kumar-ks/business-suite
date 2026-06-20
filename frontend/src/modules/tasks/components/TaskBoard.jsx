@@ -21,7 +21,7 @@ const COLUMNS = [
   { key: 'OVERDUE', label: 'Overdue', icon: AlertCircle },
 ]
 
-const TaskBoard = ({ tasks, employees, onTaskClick, onStatusChange }) => {
+const TaskBoard = ({ tasks, employees, onTaskClick, onStatusChange, isAdmin }) => {
   const [dragOverColumn, setDragOverColumn] = useState(null)
 
   const handleDragOver = useCallback((e, colKey) => {
@@ -53,9 +53,16 @@ const TaskBoard = ({ tasks, employees, onTaskClick, onStatusChange }) => {
     // Special backward transitions:
     //   OVERDUE  → ON_REVIEW    (overdue task completed, send for review)
     //   ON_HOLD  → ON_PROGRESS  (resume a held task)
+    //   ON_REVIEW → TODO        (admin rejects review, sends back to todo)
+    //   COMPLETED → ON_REVIEW   (admin reopens completed task for review)
     const isAllowedBackward =
       (task.status === 'OVERDUE' && colKey === 'ON_REVIEW') ||
-      (task.status === 'ON_HOLD' && colKey === 'ON_PROGRESS')
+      (task.status === 'ON_HOLD' && colKey === 'ON_PROGRESS') ||
+      (task.status === 'ON_REVIEW' && colKey === 'TODO' && isAdmin) ||
+      (task.status === 'COMPLETED' && colKey === 'ON_REVIEW' && isAdmin)
+
+    // COMPLETED can only be reached from ON_REVIEW
+    if (colKey === 'COMPLETED' && task.status !== 'ON_REVIEW') return
 
     // Prevent backward movement (unless it's a special allowed case)
     const currentOrder = STATUS_ORDER[task.status] ?? -1
@@ -111,6 +118,7 @@ const TaskBoard = ({ tasks, employees, onTaskClick, onStatusChange }) => {
                     key={task.id}
                     task={task}
                     employees={employees}
+                    isAdmin={isAdmin}
                     onClick={onTaskClick}
                     onStatusChange={onStatusChange}
                   />

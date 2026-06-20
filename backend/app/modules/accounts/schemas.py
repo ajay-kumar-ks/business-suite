@@ -18,8 +18,7 @@ class TenantRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 
 class ChartOfAccountCreate(BaseModel):
@@ -41,8 +40,7 @@ class ChartOfAccountRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 
 class JournalLineCreate(BaseModel):
@@ -62,8 +60,7 @@ class JournalLineRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 
 class JournalEntryCreate(BaseModel):
@@ -87,8 +84,7 @@ class JournalEntryRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 
 class LedgerEntryRead(BaseModel):
@@ -102,8 +98,7 @@ class LedgerEntryRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 
 class JournalStatusUpdate(BaseModel):

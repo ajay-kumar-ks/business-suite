@@ -63,7 +63,7 @@ const ContactList = ({ onSelectContact, onCreateContact, onConvertContact }) => 
   const handleDeleteContact = async (id) => {
     if (window.confirm('Are you sure you want to delete this contact?')) {
       try {
-        await fetch(`/api/crm/contacts/${id}`, { method: 'DELETE' })
+          await fetch(`/api/crm/contacts/${id}`, { method: 'DELETE' })
         setContacts(contacts.filter(c => c.id !== id))
       } catch (error) {
         console.error('Failed to delete contact:', error)
@@ -73,7 +73,7 @@ const ContactList = ({ onSelectContact, onCreateContact, onConvertContact }) => 
 
   const handleArchiveContact = async (id) => {
     try {
-      await fetch(`/api/crm/contacts/${id}/archive`, { method: 'PATCH' })
+        await fetch(`/api/crm/contacts/${id}/archive`, { method: 'PATCH' })
       setContacts(contacts.filter(c => c.id !== id))
     } catch (error) {
       console.error('Failed to archive contact:', error)
@@ -82,7 +82,7 @@ const ContactList = ({ onSelectContact, onCreateContact, onConvertContact }) => 
 
   const handleRestoreContact = async (id) => {
     try {
-      await fetch(`/api/crm/contacts/${id}`, {
+        await fetch(`/api/crm/contacts/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'active' }),

@@ -6,6 +6,10 @@ import {
   UserX,
   Clock,
   Plus,
+  UserPlus,
+  Eye,
+  Pencil,
+  Trash2,
 } from 'lucide-react'
 import {
   Chart as ChartJS,
@@ -30,8 +34,15 @@ import AttendanceTable from '../components/AttendanceTable'
 import LeaveTable from '../components/LeaveTable'
 import UserTable from '../components/UserTable'
 import UserModal from '../components/UserModal'
+import RecruitmentDashboard from '../components/RecruitmentDashboard'
+import RecruitmentKanban from '../components/RecruitmentKanban'
+import CandidateModal from '../components/CandidateModal'
+import CandidateDetail from '../components/CandidateDetail'
+import ConvertToEmployeeModal from '../components/ConvertToEmployeeModal'
 import { hrAPI } from '../services/hrApi'
+import { recruitmentAPI } from '../services/recruitmentApi'
 import Button from '../../../components/ui/Button'
+import '../styles/Recruitment.css'
 
 // ── Register Chart.js components ──
 ChartJS.register(
@@ -51,6 +62,7 @@ const TABS = [
   { id: 'roles', label: 'Roles', icon: Users },
   { id: 'departments', label: 'Departments', icon: Building2 },
   { id: 'employees', label: 'Employees', icon: Users },
+  { id: 'recruitment', label: 'Recruitment', icon: UserPlus },
   { id: 'attendance', label: 'Attendance', icon: UserCheck },
   { id: 'leaves', label: 'Leaves', icon: Clock },
 ]
@@ -89,6 +101,18 @@ const HRPage = () => {
   const [authUsers, setAuthUsers] = useState([])
   const [usersLoading, setUsersLoading] = useState(true)
   const [userModalOpen, setUserModalOpen] = useState(false)
+
+  // ── Recruitment state ──
+  const [recruitmentSubTab, setRecruitmentSubTab] = useState('dashboard')
+  const [candidates, setCandidates] = useState([])
+  const [candidatesLoading, setCandidatesLoading] = useState(true)
+  const [recruitmentStats, setRecruitmentStats] = useState(null)
+  const [recruitmentStatsLoading, setRecruitmentStatsLoading] = useState(true)
+  const [candidateModalOpen, setCandidateModalOpen] = useState(false)
+  const [editingCandidate, setEditingCandidate] = useState(null)
+  const [selectedCandidate, setSelectedCandidate] = useState(null)
+  const [convertModalOpen, setConvertModalOpen] = useState(false)
+  const [candidateToConvert, setCandidateToConvert] = useState(null)
 
   // ── Chart theme re-render key ──
   const [themeTick, setThemeTick] = useState(0)
@@ -186,6 +210,31 @@ const HRPage = () => {
     }
   }, [])
 
+  // ── Fetch recruitment data ──
+  const fetchCandidates = useCallback(async () => {
+    setCandidatesLoading(true)
+    try {
+      const res = await recruitmentAPI.getCandidates()
+      setCandidates(res.data || [])
+    } catch (err) {
+      console.error('Failed to fetch candidates:', err)
+    } finally {
+      setCandidatesLoading(false)
+    }
+  }, [])
+
+  const fetchRecruitmentStats = useCallback(async () => {
+    setRecruitmentStatsLoading(true)
+    try {
+      const res = await recruitmentAPI.getDashboard()
+      setRecruitmentStats(res.data)
+    } catch (err) {
+      console.error('Failed to fetch recruitment stats:', err)
+    } finally {
+      setRecruitmentStatsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchUsers()
     fetchRoles()
@@ -194,7 +243,9 @@ const HRPage = () => {
     fetchAttendance()
     fetchLeaves()
     fetchDashboard()
-  }, [fetchUsers, fetchRoles, fetchDepartments, fetchEmployees, fetchAttendance, fetchLeaves, fetchDashboard])
+    fetchCandidates()
+    fetchRecruitmentStats()
+  }, [fetchUsers, fetchRoles, fetchDepartments, fetchEmployees, fetchAttendance, fetchLeaves, fetchDashboard, fetchCandidates, fetchRecruitmentStats])
 
   // ── Employee handlers ──
   const handleAddEmployee = () => {
@@ -242,9 +293,100 @@ const HRPage = () => {
   }
 
   // ── User handlers ──
-  const handleCreateUser = async (data) => {
-    await hrAPI.createUser(data)
+  const [editingUser, setEditingUser] = useState(null)
+
+  const handleEditUser = (user) => {
+    setEditingUser(user)
+    setUserModalOpen(true)
+  }
+
+  const handleUpdateUser = async (data) => {
+    if (editingUser) {
+      await hrAPI.updateUser(editingUser.id, data)
+    } else {
+      await hrAPI.createUser(data)
+    }
     fetchUsers()
+  }
+
+  const handleDeleteUser = async (user) => {
+    if (!window.confirm(`Delete user "${user.username}"? This cannot be undone.`)) return
+    try {
+      await hrAPI.deleteUser(user.id)
+      fetchUsers()
+    } catch (err) {
+      console.error('Failed to delete user:', err)
+    }
+  }
+
+  const handleUserModalClose = () => {
+    setUserModalOpen(false)
+    setEditingUser(null)
+  }
+
+  // ── Recruitment handlers ──
+  const handleAddCandidate = () => {
+    setEditingCandidate(null)
+    setCandidateModalOpen(true)
+  }
+
+  const handleEditCandidate = (candidate) => {
+    setEditingCandidate(candidate)
+    setCandidateModalOpen(true)
+  }
+
+  const handleDeleteCandidate = async (candidate) => {
+    if (!window.confirm(`Delete candidate "${candidate.full_name}"? This cannot be undone.`)) return
+    try {
+      await recruitmentAPI.deleteCandidate(candidate.id)
+      fetchCandidates()
+      fetchRecruitmentStats()
+    } catch (err) {
+      console.error('Failed to delete candidate:', err)
+    }
+  }
+
+  const handleSaveCandidate = async (data) => {
+    if (editingCandidate) {
+      await recruitmentAPI.updateCandidate(editingCandidate.id, data)
+    } else {
+      await recruitmentAPI.createCandidate(data)
+    }
+    fetchCandidates()
+    fetchRecruitmentStats()
+  }
+
+  const handleViewCandidate = (candidate) => {
+    setSelectedCandidate(candidate)
+  }
+
+  const handleMoveStage = async (candidateId, targetStage) => {
+    await recruitmentAPI.moveStage(candidateId, targetStage)
+  }
+
+  const handleConvertToEmployee = (candidate) => {
+    setCandidateToConvert(candidate)
+    setConvertModalOpen(true)
+  }
+
+  const handleDoConvert = async (candidateId, data) => {
+    const res = await recruitmentAPI.convertToEmployee(candidateId, data)
+    alert(
+      `Candidate converted successfully!\n\n` +
+      `Username: ${res.data.user.username}\n` +
+      `Employee Code: ${res.data.employee.employee_code}\n` +
+      `Temp Password: ${res.data.temp_password}\n\n` +
+      `Please share these credentials with the new employee.`
+    )
+    fetchCandidates()
+    fetchRecruitmentStats()
+    fetchUsers()
+    fetchEmployees()
+  }
+
+  const handleCandidateModalClose = () => {
+    setCandidateModalOpen(false)
+    setEditingCandidate(null)
   }
 
   // ════════════════════════════════════════════════
@@ -489,8 +631,18 @@ const HRPage = () => {
               </Button>
             </div>
           </div>
-          <UserTable users={authUsers} loading={usersLoading} onRefresh={fetchUsers} />
-          <UserModal isOpen={userModalOpen} onClose={() => setUserModalOpen(false)} onSave={handleCreateUser} />
+          <UserTable
+            users={authUsers}
+            loading={usersLoading}
+            onEdit={handleEditUser}
+            onDelete={handleDeleteUser}
+          />
+          <UserModal
+            isOpen={userModalOpen}
+            onClose={handleUserModalClose}
+            onSave={handleUpdateUser}
+            initialData={editingUser}
+          />
         </div>
       )}
 
@@ -544,6 +696,157 @@ const HRPage = () => {
             onSave={handleSaveEmployee}
             initialData={editingEmployee}
             users={authUsers}
+            departments={departments}
+            roles={roles}
+          />
+        </div>
+      )}
+
+      {/* ── Recruitment Tab ── */}
+      {activeTab === 'recruitment' && (
+        <div className="page-section">
+          <div className="section-header">
+            <h3>Recruitment Pipeline</h3>
+            <div className="section-actions">
+              <span className="count-badge">{candidates.length} candidates</span>
+              <Button variant="primary" size="sm" onClick={handleAddCandidate}>
+                <Plus size={16} style={{ marginRight: 4 }} />
+                Add Candidate
+              </Button>
+            </div>
+          </div>
+
+          {/* Sub-tabs */}
+          <div className="recruitment-tabs">
+            <button
+              className={`recruitment-tab ${recruitmentSubTab === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setRecruitmentSubTab('dashboard')}
+            >
+              Dashboard
+            </button>
+            <button
+              className={`recruitment-tab ${recruitmentSubTab === 'pipeline' ? 'active' : ''}`}
+              onClick={() => setRecruitmentSubTab('pipeline')}
+            >
+              Pipeline View
+            </button>
+            <button
+              className={`recruitment-tab ${recruitmentSubTab === 'list' ? 'active' : ''}`}
+              onClick={() => setRecruitmentSubTab('list')}
+            >
+              All Candidates
+            </button>
+          </div>
+
+          {/* Dashboard View */}
+          {recruitmentSubTab === 'dashboard' && (
+            <RecruitmentDashboard stats={recruitmentStats} loading={recruitmentStatsLoading} />
+          )}
+
+          {/* Pipeline View */}
+          {recruitmentSubTab === 'pipeline' && (
+            <RecruitmentKanban
+              candidates={candidates}
+              loading={candidatesLoading}
+              onMoveStage={handleMoveStage}
+              onViewDetails={handleViewCandidate}
+              onConvertToEmployee={handleConvertToEmployee}
+              onRefresh={() => { fetchCandidates(); fetchRecruitmentStats() }}
+            />
+          )}
+
+          {/* List View */}
+          {recruitmentSubTab === 'list' && (
+            <div>
+              {candidatesLoading ? (
+                <div className="table-status">
+                  <div className="spinner" />
+                  <span>Loading candidates...</span>
+                </div>
+              ) : candidates.length === 0 ? (
+                <div className="table-status empty">
+                  <span>No candidates found. Add one to get started.</span>
+                </div>
+              ) : (
+                <div className="table-wrapper">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Position</th>
+                        <th>Experience</th>
+                        <th>Stage</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {candidates.map((c) => {
+                        const stageColors = {
+                          Applied: '#8b5cf6',
+                          Screening: '#3b82f6',
+                          Interview: '#f59e0b',
+                          'Technical Round': '#f97316',
+                          'HR Round': '#ec4899',
+                          Selected: '#22c55e',
+                          Rejected: '#ef4444',
+                          Onboarded: '#14b8a6',
+                        }
+                        return (
+                          <tr key={c.id}>
+                            <td className="name-cell">{c.full_name}</td>
+                            <td>{c.email}</td>
+                            <td>{c.position_applied}</td>
+                            <td>{c.experience_years} yrs</td>
+                            <td>
+                              <span className="status-badge" style={{ backgroundColor: stageColors[c.current_stage] || '#6b7280' }}>
+                                {c.current_stage}
+                              </span>
+                            </td>
+                            <td className="actions-cell">
+                              <button className="action-btn view" onClick={() => handleViewCandidate(c)} title="View details">
+                                <Eye size={16} />
+                              </button>
+                              <button className="action-btn edit" onClick={() => handleEditCandidate(c)} title="Edit candidate">
+                                <Pencil size={16} />
+                              </button>
+                              <button className="action-btn delete" onClick={() => handleDeleteCandidate(c)} title="Delete candidate">
+                                <Trash2 size={16} />
+                              </button>
+                              {c.current_stage === 'Selected' && (
+                                <button className="action-btn approve" onClick={() => handleConvertToEmployee(c)} title="Convert to employee">
+                                  <UserPlus size={16} />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Modals */}
+          <CandidateModal
+            isOpen={candidateModalOpen}
+            onClose={handleCandidateModalClose}
+            onSave={handleSaveCandidate}
+            initialData={editingCandidate}
+          />
+
+          <CandidateDetail
+            candidate={selectedCandidate}
+            onClose={() => setSelectedCandidate(null)}
+          />
+
+          <ConvertToEmployeeModal
+            isOpen={convertModalOpen}
+            onClose={() => { setConvertModalOpen(false); setCandidateToConvert(null) }}
+            onConvert={handleDoConvert}
+            candidate={candidateToConvert}
             departments={departments}
             roles={roles}
           />

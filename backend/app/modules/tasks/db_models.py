@@ -27,7 +27,7 @@ class Task(BaseModel):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    assignee_id = Column(Integer, ForeignKey("auth_users.id"), nullable=True)
+    assignee_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
     created_by = Column(Integer, ForeignKey("auth_users.id"), nullable=False)
     priority = Column(SqlEnum(Priority), nullable=False, default=Priority.MEDIUM)
     status = Column(SqlEnum(Status), nullable=False, default=Status.TODO)

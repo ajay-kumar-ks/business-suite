@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react'
-import { Calendar, Paperclip } from 'lucide-react'
+import { Calendar, Paperclip, Building2, Briefcase } from 'lucide-react'
 import Avatar from '../../../components/ui/Avatar'
 
 const PRIORITY_LABELS = {
@@ -41,12 +41,16 @@ const TaskCard = ({ task, employees = [], onClick, onStatusChange }) => {
   const [isDragging, setIsDragging] = useState(false)
   const [changingStatus, setChangingStatus] = useState(false)
 
-  const isOverdue =
-    task.status !== 'COMPLETED' &&
-    task.status !== 'OVERDUE' &&
-    new Date(task.due_date) < new Date()
-
-  const assignee = employees.find((e) => e.id === task.assignee_id)
+  // Resolve assignee from the enriched employee data
+  const assignee = task.assignee_name
+    ? {
+        id: task.assignee_id,
+        name: task.assignee_name,
+        email: task.assignee_email,
+        department: task.assignee_department,
+        designation: task.assignee_designation,
+      }
+    : employees.find((e) => e.id === task.assignee_id)
 
   // Determine which statuses are available in the dropdown
   const forwardStatusOptions = useMemo(() => {
@@ -99,6 +103,10 @@ const TaskCard = ({ task, employees = [], onClick, onStatusChange }) => {
   }, [task.id, task.status, onStatusChange])
 
   const statusClass = `status-${task.status.toLowerCase()}`
+  const isOverdue =
+    task.status !== 'COMPLETED' &&
+    task.status !== 'OVERDUE' &&
+    new Date(task.due_date) < new Date()
 
   return (
     <div
@@ -136,9 +144,21 @@ const TaskCard = ({ task, employees = [], onClick, onStatusChange }) => {
 
       <div className="task-card-meta">
         {assignee && (
-          <div className="task-card-assignee">
-            <Avatar name={assignee.name || assignee.username} size={22} />
-            <span>{assignee.name || assignee.username}</span>
+          <div className="task-card-assignee" title={assignee.email || ''}>
+            <Avatar name={assignee.name} size={22} />
+            <span>{assignee.name}</span>
+            {assignee.department && (
+              <span className="task-card-dept" title={assignee.department}>
+                <Building2 size={10} />
+                {assignee.department}
+              </span>
+            )}
+            {assignee.designation && (
+              <span className="task-card-dept" title={assignee.designation}>
+                <Briefcase size={10} />
+                {assignee.designation}
+              </span>
+            )}
           </div>
         )}
 

@@ -60,7 +60,7 @@ const Dashboard = () => {
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
         onLogout={handleLogout}
-        useLinks={false}
+        useLinks={true}
       />
 
       <div className={`main-content ${collapsed ? 'collapsed' : ''}`}>
@@ -91,9 +91,9 @@ const Dashboard = () => {
           )}
 
           {activeModule === 'hr' && (
-            <div className="module-section">
+            <>
               {user?.is_admin ? <HRPage /> : <EmployeeDashboard />}
-            </div>
+            </>
           )}
 
           {activeModule === 'accounts' ? (

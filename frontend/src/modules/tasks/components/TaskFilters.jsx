@@ -1,4 +1,5 @@
 import React from 'react'
+import { useAuth } from '../../../context/AuthContext'
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -19,6 +20,9 @@ const PRIORITY_OPTIONS = [
 ]
 
 const TaskFilters = ({ filters, onChange, employees, onClear }) => {
+  const { user } = useAuth()
+  const isAdmin = user?.is_admin
+
   return (
     <div className="tasks-filters">
       <div className="filter-group">
@@ -58,21 +62,24 @@ const TaskFilters = ({ filters, onChange, employees, onClear }) => {
         </select>
       </div>
 
-      <div className="filter-group">
-        <label htmlFor="filter-assignee">Assignee</label>
-        <select
-          id="filter-assignee"
-          value={filters.assignee_id || ''}
-          onChange={(e) => onChange({ ...filters, assignee_id: e.target.value })}
-        >
-          <option value="">All Assignees</option>
-          {employees.map((emp) => (
-            <option key={emp.id} value={emp.id}>
-              {emp.name || emp.username || emp.email}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Assignee filter — admin only */}
+      {isAdmin && (
+        <div className="filter-group">
+          <label htmlFor="filter-assignee">Assignee</label>
+          <select
+            id="filter-assignee"
+            value={filters.assignee_id || ''}
+            onChange={(e) => onChange({ ...filters, assignee_id: e.target.value })}
+          >
+            <option value="">All Assignees</option>
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.name || emp.email || emp.username}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <button className="filter-clear" onClick={onClear} type="button">
         Clear Filters

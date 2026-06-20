@@ -63,4 +63,10 @@ class TaskResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    # Employee details (populated at query time)
+    assignee_name: Optional[str] = None
+    assignee_email: Optional[str] = None
+    assignee_department: Optional[str] = None
+    assignee_designation: Optional[str] = None
+
     model_config = {"from_attributes": True}

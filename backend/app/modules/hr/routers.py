@@ -30,6 +30,8 @@ from app.modules.hr.crud import (
     get_dashboard_stats,
     get_hr_users,
     create_hr_user,
+    update_hr_user,
+    delete_hr_user,
     get_employee_by_user_id,
     check_in_employee,
     check_out_employee,
@@ -55,6 +57,7 @@ from app.modules.hr.schemas import (
     LeaveStatusUpdate,
     LeaveResponse,
     UserCreate,
+    UserUpdate,
     UserResponse,
     MyLeaveCreate,
 )
@@ -209,6 +212,36 @@ async def api_create_user(
     current_user: User = Depends(require_admin),
 ):
     return create_hr_user(db, data)
+
+
+@router.put("/users/{user_id}", response_model=UserResponse)
+async def api_update_user(
+    user_id: int,
+    data: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    user = update_hr_user(db, user_id, data)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {user_id} not found",
+        )
+    return user
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def api_delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    deleted = delete_hr_user(db, user_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {user_id} not found",
+        )
 
 
 # ──────────────────────────────────────────────

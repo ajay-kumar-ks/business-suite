@@ -42,7 +42,7 @@ def get_employee_by_user_id(db: Session, user_id: int) -> Employee | None:
     return db.query(Employee).filter(Employee.user_id == user_id).first()
 
 
-def _generate_employee_code(db: Session) -> str:
+def generate_employee_code(db: Session) -> str:
     last_employee = db.query(Employee).order_by(Employee.id.desc()).first()
     if last_employee:
         try:
@@ -88,7 +88,7 @@ def create_employee(db: Session, data: EmployeeCreate) -> Employee:
                 detail=f"Role with id {data.role_id} not found",
             )
 
-    employee_code = data.employee_code or _generate_employee_code(db)
+    employee_code = data.employee_code or generate_employee_code(db)
 
     employee = Employee(
         user_id=data.user_id,
@@ -465,6 +465,54 @@ def create_hr_user(db: Session, data: UserCreate) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+def update_hr_user(db: Session, user_id: int, data) -> User | None:
+    """Update an existing auth user from HR module."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return None
+
+    update_data = data.model_dump(exclude_unset=True)
+
+    # Check email uniqueness if changed
+    if "email" in update_data and update_data["email"] != user.email:
+        existing_email = db.query(User).filter(User.email == update_data["email"]).first()
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Email '{update_data['email']}' already exists",
+            )
+
+    # Hash password if provided
+    if "password" in update_data and update_data["password"]:
+        update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
+
+    for key, value in update_data.items():
+        setattr(user, key, value)
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def delete_hr_user(db: Session, user_id: int) -> bool:
+    """Delete an auth user from HR module."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return False
+
+    # Check if user is linked to any employee
+    linked_employee = db.query(Employee).filter(Employee.user_id == user_id).first()
+    if linked_employee:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot delete user: user is linked to employee '{linked_employee.employee_code}'. Remove the employee record first.",
+        )
+
+    db.delete(user)
+    db.commit()
+    return True
 
 
 # ──────────────────────────────────────────────

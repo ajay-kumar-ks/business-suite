@@ -74,6 +74,12 @@ export const hrAPI = {
   createUser: (data) =>
     api.post('/hr/users', data),
 
+  updateUser: (id, data) =>
+    api.put(`/hr/users/${id}`, data),
+
+  deleteUser: (id) =>
+    api.delete(`/hr/users/${id}`),
+
   // ── Employee Self-Service ──
   getMyProfile: () =>
     api.get('/hr/me'),

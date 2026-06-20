@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import List
 from pydantic import BaseModel, Field
@@ -13,7 +14,7 @@ class VendorCreate(BaseModel):
 
 class VendorRead(BaseModel):
     id: int
-    tenant_id: int
+    tenant_id: uuid.UUID
     name: str
     email: str | None
     phone: str | None
@@ -37,7 +38,7 @@ class BillCreate(BaseModel):
 
 class BillRead(BaseModel):
     id: int
-    tenant_id: int
+    tenant_id: uuid.UUID
     vendor_id: int
     bill_number: str
     bill_date: datetime
@@ -63,7 +64,7 @@ class VendorPaymentCreate(BaseModel):
 
 class VendorPaymentRead(BaseModel):
     id: int
-    tenant_id: int
+    tenant_id: uuid.UUID
     bill_id: int
     payment_date: datetime
     amount: float

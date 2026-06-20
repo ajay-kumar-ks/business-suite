@@ -17,10 +17,22 @@ from app.modules.tasks.routers import router as tasks_router
 from app.modules.tasks.upload import router as upload_router
 from app.modules.tasks.scheduler import run_overdue_scheduler
 from app.modules.tasks.event_handlers import register_handlers
+from app.modules.recruitment.routers import router as recruitment_router
 
 app = FastAPI(title="Business Suite Backend", version="0.1.0")
 app.add_middleware(TenantMiddleware)
 
+app.include_router(auth_router, prefix="/auth", tags=["auth"])
+app.include_router(tasks_router, prefix="/tasks", tags=["tasks"])
+app.include_router(hr_router, prefix="/hr", tags=["hr"])
+app.include_router(accounts_router, prefix="/accounts", tags=["accounts"])
+app.include_router(crm_router, prefix="/crm", tags=["crm"])
+app.include_router(crm_leads_router, prefix="/crm", tags=["crm"])
+app.include_router(crm_pipelines_router, prefix="/crm", tags=["crm"])
+app.include_router(upload_router, prefix="/tasks", tags=["tasks"])
+app.include_router(recruitment_router, prefix="/recruitment", tags=["recruitment"])
+
+# Also expose same API under /api/* so frontend can use /api prefixes
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(tasks_router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(hr_router, prefix="/api/hr", tags=["hr"])
@@ -29,6 +41,7 @@ app.include_router(crm_router, prefix="/api/crm", tags=["crm"])
 app.include_router(crm_leads_router, prefix="/api/crm", tags=["crm"])
 app.include_router(crm_pipelines_router, prefix="/api/crm", tags=["crm"])
 app.include_router(upload_router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(recruitment_router, prefix="/api/recruitment", tags=["recruitment"])
 
 # Serve uploaded files
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads")
@@ -52,10 +65,10 @@ async def startup_event():
                     conn.execute(text('ALTER TABLE contacts ADD COLUMN deleted_at TIMESTAMP NULL'))
                     print('✓ Added missing contacts.deleted_at column')
         Base.metadata.create_all(bind=engine)
-        print("✓ Database tables created")
+        print("[OK] Database tables created")
     except Exception as e:
-        print(f"⚠ Database connection warning: {str(e)[:100]}")
-        print("✓ Server started (database connection failed - check your DATABASE_URL credentials in .env)")
+        print(f"[WARN] Database connection warning: {str(e)[:100]}")
+        print("[OK] Server started (database connection failed - check your DATABASE_URL credentials in .env)")
 
     register_event_handlers()
     event_bus.connect()

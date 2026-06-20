@@ -1,10 +1,21 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import '../../../styles/ModulePage.css'
 import { accountsAPI } from '../../../services/api'
+import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
 import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
 
 const TransactionsPage = () => {
+  const { department, canPerformAction, loading } = useAccountsPermissions()
+  if (loading) return <div className="module-page"><p>Loading...</p></div>
+  if (!isPageAllowed(department, 'transactions')) {
+    return (
+      <div className="module-page">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to view Financial Transactions.</p>
+      </div>
+    )
+  }
   const [expenses, setExpenses] = useState([])
   const [income, setIncome] = useState([])
   const [accounts, setAccounts] = useState([])
@@ -94,11 +105,12 @@ const TransactionsPage = () => {
 
       <div className="accounts-summary">
         <h3>Record Expense</h3>
-        <form onSubmit={handleExpenseSubmit} className="accounts-form">
-          <div className="form-row">
-            <Input id="expense-desc" label="Description" value={expenseForm.description} onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })} />
-            <Input id="expense-amount" label="Amount" type="number" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: Number(e.target.value) })} />
-          </div>
+        {canPerformAction('createExpense') ? (
+          <form onSubmit={handleExpenseSubmit} className="accounts-form">
+            <div className="form-row">
+              <Input id="expense-desc" label="Description" value={expenseForm.description} onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })} />
+              <Input id="expense-amount" label="Amount" type="number" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: Number(e.target.value) })} />
+            </div>
           <div className="form-row">
             <div>
               <label className="ui-input-label">Expense Account</label>
@@ -111,31 +123,42 @@ const TransactionsPage = () => {
             </div>
             <Input id="expense-reference" label="Reference" value={expenseForm.reference} onChange={(e) => setExpenseForm({ ...expenseForm, reference: e.target.value })} />
           </div>
-          <Button type="submit">Record Expense</Button>
-        </form>
+            <Button type="submit">Record Expense</Button>
+          </form>
+        ) : (
+          <div className="permission-warning" style={{ padding: '14px', border: '1px solid #f59e0b', borderRadius: '8px', background: '#fffbeb' }}>
+            You do not have permission to record expenses.
+          </div>
+        )}
       </div>
 
       <div className="accounts-summary" style={{ marginTop: '20px' }}>
         <h3>Record Income</h3>
-        <form onSubmit={handleIncomeSubmit} className="accounts-form">
-          <div className="form-row">
-            <Input id="income-desc" label="Description" value={incomeForm.description} onChange={(e) => setIncomeForm({ ...incomeForm, description: e.target.value })} />
-            <Input id="income-amount" label="Amount" type="number" value={incomeForm.amount} onChange={(e) => setIncomeForm({ ...incomeForm, amount: Number(e.target.value) })} />
-          </div>
-          <div className="form-row">
-            <div>
-              <label className="ui-input-label">Income Account</label>
-              <select className="ui-input-field" value={incomeForm.account_id} onChange={(e) => setIncomeForm({ ...incomeForm, account_id: Number(e.target.value) })}>
-                <option value="">Select account</option>
-                {accounts.map((acct) => (
-                  <option key={acct.id} value={acct.id}>{acct.account_code} - {acct.account_name} ({acct.account_type})</option>
-                ))}
-              </select>
+        {canPerformAction('createIncome') ? (
+          <form onSubmit={handleIncomeSubmit} className="accounts-form">
+            <div className="form-row">
+              <Input id="income-desc" label="Description" value={incomeForm.description} onChange={(e) => setIncomeForm({ ...incomeForm, description: e.target.value })} />
+              <Input id="income-amount" label="Amount" type="number" value={incomeForm.amount} onChange={(e) => setIncomeForm({ ...incomeForm, amount: Number(e.target.value) })} />
             </div>
-            <Input id="income-reference" label="Reference" value={incomeForm.reference} onChange={(e) => setIncomeForm({ ...incomeForm, reference: e.target.value })} />
+            <div className="form-row">
+              <div>
+                <label className="ui-input-label">Income Account</label>
+                <select className="ui-input-field" value={incomeForm.account_id} onChange={(e) => setIncomeForm({ ...incomeForm, account_id: Number(e.target.value) })}>
+                  <option value="">Select account</option>
+                  {accounts.map((acct) => (
+                    <option key={acct.id} value={acct.id}>{acct.account_code} - {acct.account_name} ({acct.account_type})</option>
+                  ))}
+                </select>
+              </div>
+              <Input id="income-reference" label="Reference" value={incomeForm.reference} onChange={(e) => setIncomeForm({ ...incomeForm, reference: e.target.value })} />
+            </div>
+            <Button type="submit">Record Income</Button>
+          </form>
+        ) : (
+          <div className="permission-warning" style={{ padding: '14px', border: '1px solid #f59e0b', borderRadius: '8px', background: '#fffbeb' }}>
+            You do not have permission to record income transactions.
           </div>
-          <Button type="submit">Record Income</Button>
-        </form>
+        )}
       </div>
 
       <div className="accounts-summary" style={{ marginTop: '20px' }}>

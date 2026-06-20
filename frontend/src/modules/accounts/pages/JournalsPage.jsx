@@ -1,11 +1,22 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import '../../../styles/ModulePage.css'
 import { accountsAPI } from '../../../services/api'
+import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
 import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 
 const JournalsPage = () => {
+  const { department, canPerformAction, loading } = useAccountsPermissions()
+  if (loading) return <div className="module-page"><p>Loading...</p></div>
+  if (!isPageAllowed(department, 'journals')) {
+    return (
+      <div className="module-page">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to view Journals.</p>
+      </div>
+    )
+  }
   const [journals, setJournals] = useState([])
   const [accounts, setAccounts] = useState([])
   const [form, setForm] = useState({ reference: '', description: '', lines: [{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }] })
@@ -104,10 +115,11 @@ const JournalsPage = () => {
         <h3>Create Journal Entry</h3>
         {error && <div className="error-message">{error}</div>}
         {success && <div className="success-message">{success}</div>}
-        <form onSubmit={handleSubmit} className="accounts-form">
-          <Input id="reference" label="Reference" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} />
-          <Input id="description" label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-          {form.lines.map((line, index) => (
+        {canPerformAction('createJournal') ? (
+          <form onSubmit={handleSubmit} className="accounts-form">
+            <Input id="reference" label="Reference" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} />
+            <Input id="description" label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            {form.lines.map((line, index) => (
             <div key={index} className="journal-line-row">
               <div>
                 <label className="ui-input-label">Account #{index + 1}</label>
@@ -134,6 +146,11 @@ const JournalsPage = () => {
             <Button type="submit">Create Journal</Button>
           </div>
         </form>
+        ) : (
+          <div className="permission-warning" style={{ padding: '14px', border: '1px solid #f59e0b', borderRadius: '8px', background: '#fffbeb' }}>
+            You do not have permission to create journal entries.
+          </div>
+        )}
       </div>
 
       <div className="accounts-summary" style={{ marginTop: '24px' }}>
@@ -163,7 +180,7 @@ const JournalsPage = () => {
                     <td>{new Date(journal.date).toLocaleDateString()}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                        {journal.status === 'draft' && (
+                        {journal.status === 'draft' && canPerformAction('submitJournal') && (
                           <button
                             className="action-btn info"
                             onClick={(e) => { e.stopPropagation(); handleAction(journal.id, 'submit') }}
@@ -172,7 +189,7 @@ const JournalsPage = () => {
                             {loadingAction === `submit-${journal.id}` ? '...' : 'Submit'}
                           </button>
                         )}
-                        {journal.status === 'submitted' && (
+                        {journal.status === 'submitted' && canPerformAction('approveJournal') && (
                           <button
                             className="action-btn success"
                             onClick={(e) => { e.stopPropagation(); handleAction(journal.id, 'approve') }}
@@ -181,7 +198,7 @@ const JournalsPage = () => {
                             {loadingAction === `approve-${journal.id}` ? '...' : 'Approve'}
                           </button>
                         )}
-                        {journal.status === 'approved' && (
+                        {journal.status === 'approved' && canPerformAction('postJournal') && (
                           <button
                             className="action-btn primary"
                             onClick={(e) => { e.stopPropagation(); handleAction(journal.id, 'post') }}

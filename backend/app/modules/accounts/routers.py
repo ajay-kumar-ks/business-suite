@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.event_bus import event_bus
 from app.modules.accounts.models import ChartOfAccount, JournalEntry, JournalLine, LedgerEntry, Tenant
 from app.modules.accounts.schemas import (
     ChartOfAccountCreate,
@@ -24,6 +25,8 @@ from app.modules.accounts.services import (
     seed_default_chart_of_accounts,
     validate_journal_lines,
 )
+
+DEFAULT_COMPANY_NAME = "Default Company"
 from app.modules.accounts.transaction_models import Expense, Income
 from app.modules.accounts.transaction_schemas import ExpenseCreate, ExpenseRead, IncomeCreate, IncomeRead
 from app.modules.accounts.transaction_services import create_expense_journal, create_income_journal
@@ -59,13 +62,29 @@ router = APIRouter()
 def _get_default_tenant_id(db: Session) -> uuid.UUID:
     tenant = db.query(Tenant).order_by(Tenant.created_at).first()
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No Accounts tenant configured.")
+        tenant = Tenant(name=DEFAULT_COMPANY_NAME, status="active", is_active=True)
+        db.add(tenant)
+        db.commit()
+        db.refresh(tenant)
+        seed_default_chart_of_accounts(db, tenant.id)
     return tenant.id
 
 
 @router.get("/")
-async def health():
-    return {"status": "Accounts module ready"}
+async def health(db: Session = Depends(get_db)):
+    default_tenant_id = _get_default_tenant_id(db)
+    tenant = db.query(Tenant).filter(Tenant.id == default_tenant_id).first()
+    total_accounts = db.query(ChartOfAccount).filter(ChartOfAccount.tenant_id == default_tenant_id).count()
+    total_journals = db.query(JournalEntry).filter(JournalEntry.tenant_id == default_tenant_id).count()
+    total_ledger_entries = db.query(LedgerEntry).filter(LedgerEntry.tenant_id == default_tenant_id).count()
+    return {
+        "status": "Accounts module ready",
+        "tenant_id": default_tenant_id,
+        "tenant_name": tenant.name if tenant else None,
+        "total_accounts": total_accounts,
+        "total_journals": total_journals,
+        "total_ledger_entries": total_ledger_entries,
+    }
 
 
 @router.post("/tenants", response_model=TenantRead)
@@ -125,10 +144,12 @@ def create_journal_entry(
     db: Session = Depends(get_db),
 ):
     default_tenant_id = _get_default_tenant_id(db)
+    default_tenant_id = _get_default_tenant_id(db)
     account_ids = [line.account_id for line in data.lines]
     valid_accounts = {
         id for (id,) in db.query(ChartOfAccount.id).filter(
             ChartOfAccount.id.in_(account_ids),
+            ChartOfAccount.tenant_id == default_tenant_id,
         )
     }
 
@@ -195,7 +216,8 @@ def list_journal_entries(db: Session = Depends(get_db)):
 def _load_journal_lines(db: Session, journal: JournalEntry) -> None:
     """Helper to eager-load lines on a journal entry for schema serialization."""
     journal.lines = db.query(JournalLine).filter(
-        JournalLine.journal_id == journal.id
+        JournalLine.journal_id == journal.id,
+        JournalLine.tenant_id == journal.tenant_id,
     ).all()
 
 
@@ -317,6 +339,17 @@ def create_expense(
     db.commit()
     db.refresh(expense)
 
+    event_bus.publish(
+        "expense.created",
+        {
+            "tenant_id": str(default_tenant_id),
+            "expense_id": expense.id,
+            "amount": float(expense.amount),
+            "account_id": expense.account_id,
+            "journal_id": journal.id,
+        },
+    )
+
     return expense
 
 
@@ -349,6 +382,17 @@ def create_income(
     income.journal_id = journal.id
     db.commit()
     db.refresh(income)
+
+    event_bus.publish(
+        "income.created",
+        {
+            "tenant_id": str(default_tenant_id),
+            "income_id": income.id,
+            "amount": float(income.amount),
+            "account_id": income.account_id,
+            "journal_id": journal.id,
+        },
+    )
 
     return income
 
@@ -429,7 +473,11 @@ def create_customer_payment(
     data: CustomerPaymentCreate,
     db: Session = Depends(get_db),
 ):
-    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    default_tenant_id = _get_default_tenant_id(db)
+    invoice = db.query(Invoice).filter(
+        Invoice.id == invoice_id,
+        Invoice.tenant_id == default_tenant_id,
+    ).first()
     if not invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found.")
 
@@ -527,7 +575,11 @@ def create_vendor_payment(
     data: VendorPaymentCreate,
     db: Session = Depends(get_db),
 ):
-    bill = db.query(Bill).filter(Bill.id == bill_id).first()
+    default_tenant_id = _get_default_tenant_id(db)
+    bill = db.query(Bill).filter(
+        Bill.id == bill_id,
+        Bill.tenant_id == default_tenant_id,
+    ).first()
     if not bill:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bill not found.")
 
@@ -576,6 +628,18 @@ def create_budget(
     db.add(budget)
     db.commit()
     db.refresh(budget)
+
+    event_bus.publish(
+        "budget.created",
+        {
+            "tenant_id": str(default_tenant_id),
+            "budget_id": budget.id,
+            "name": budget.name,
+            "fiscal_year": budget.fiscal_year,
+            "total_amount": float(budget.total_amount),
+        },
+    )
+
     return budget
 
 
@@ -591,7 +655,11 @@ def create_budget_line(
     data: BudgetLineCreate,
     db: Session = Depends(get_db),
 ):
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    default_tenant_id = _get_default_tenant_id(db)
+    budget = db.query(Budget).filter(
+        Budget.id == budget_id,
+        Budget.tenant_id == default_tenant_id,
+    ).first()
     if not budget:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found.")
 

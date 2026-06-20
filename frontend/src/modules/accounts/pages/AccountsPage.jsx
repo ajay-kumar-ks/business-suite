@@ -5,11 +5,14 @@ import { accountsAPI } from '../../../services/api'
 
 const AccountsPage = () => {
   const [stats, setStats] = useState(null)
+  const [status, setStatus] = useState(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [coaRes, custRes, vendRes, billRes, invRes, budRes] = await Promise.all([
+        const [statusRes, coaRes, custRes, vendRes, billRes, invRes, budRes] = await Promise.all([
+          accountsAPI.getStatus(),
           accountsAPI.listCOA(),
           accountsAPI.listCustomers(),
           accountsAPI.listVendors(),
@@ -17,6 +20,7 @@ const AccountsPage = () => {
           accountsAPI.listInvoices(),
           accountsAPI.listBudgets(),
         ])
+        setStatus(statusRes.data)
         setStats({
           accounts: coaRes.data?.length || 0,
           customers: custRes.data?.length || 0,
@@ -26,7 +30,7 @@ const AccountsPage = () => {
           budgets: budRes.data?.length || 0,
         })
       } catch (err) {
-        // silently fail for overview
+        setError(err.response?.data?.detail || 'Failed to load account overview')
       }
     }
     fetchStats()
@@ -38,10 +42,15 @@ const AccountsPage = () => {
       <p>Use the tabs above to manage the chart of accounts, journal entries, ledger activity, AR/AP, budgets, and reports.</p>
       <div className="accounts-summary">
         <h3>Module Status</h3>
+        {error && <div className="error-message">{error}</div>}
         {status ? (
           <div>
             <p><strong>Status:</strong> {status.status || 'Unknown'}</p>
-            {status.tenant_id && <p><strong>Tenant ID:</strong> {status.tenant_id}</p>}
+            {status.tenant_name && <p><strong>Tenant:</strong> {status.tenant_name}</p>}
+            <p><strong>Tenant ID:</strong> {status.tenant_id}</p>
+            <p><strong>Accounts:</strong> {status.total_accounts}</p>
+            <p><strong>Journals:</strong> {status.total_journals}</p>
+            <p><strong>Ledger Entries:</strong> {status.total_ledger_entries}</p>
           </div>
         ) : (
           <p>Loading accounts status...</p>

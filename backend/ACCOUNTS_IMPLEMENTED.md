@@ -10,7 +10,8 @@
 ### Phase 2 - Event Bus Infrastructure ✓
 - Core event bus integration with event store persistence
 - Event recorder for all accounting events
-- Event handler registration for: `invoice.created`, `invoice.paid`, `bill.created`, `bill.paid`, `expense.created`, `journal.posted`, `budget.exceeded`
+- Event handler registration for: `invoice.created`, `invoice.paid`, `bill.created`, `bill.paid`, `expense.created`, `income.created`, `budget.created`, `budget.exceeded`, `journal.posted`
+- Events published for invoice creation/payment, bill creation/payment, expense creation, income creation, budget creation, and journal posting
 - Event store model for recording all accounting events
 
 ### Phase 3 - Chart of Accounts ✓
@@ -68,6 +69,7 @@
 - Trial Balance report (debit/credit totals, balance verification)
 - Profit & Loss report (revenue, expenses, net profit)
 - Balance Sheet report (assets, liabilities, equity validation)
+- Accounts health/status endpoint for the Accounts module
 - All reports generated from ledger data (not stored, real-time)
 
 ## Pending Work
@@ -121,13 +123,14 @@
 - `GET /api/accounts/budgets/{id}/lines` - List budget lines
 
 ### Reports
-- `GET /api/reports/trial-balance` - Trial balance report
-- `GET /api/reports/profit-loss` - P&L report
-- `GET /api/reports/balance-sheet` - Balance sheet report
+- `GET /api/accounts/reports/trial-balance` - Trial balance report
+- `GET /api/accounts/reports/profit-loss` - P&L report
+- `GET /api/accounts/reports/balance-sheet` - Balance sheet report
 
 ## Configuration Notes
 
-- Tenant context is required for all scoped endpoints; include `X-Tenant-ID` header
+- Accounts routes support single-company mode with default tenant fallback when `X-Tenant-ID` is omitted
+- Tenant context is still supported via `X-Tenant-ID` when explicitly provided
 - Default COA created on tenant creation:
   - 1000: Cash (Asset)
   - 1100: Bank (Asset)

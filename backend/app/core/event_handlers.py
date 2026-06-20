@@ -28,6 +28,7 @@ def register_event_handlers() -> None:
         "bill.created",
         "bill.paid",
         "expense.created",
+        "income.created",
         "salary.processed",
         "salary.paid",
         "budget.created",

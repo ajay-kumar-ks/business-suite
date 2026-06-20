@@ -8,7 +8,7 @@ import CRMPage from './modules/crm/pages/CRMPage'
 import TasksPage from './modules/tasks/pages/TasksPage'
 import HRPage from './modules/hr/pages/HRPage'
 import EmployeeDashboard from './modules/hr/pages/EmployeeDashboard'
-import AccountsPage from './modules/accounts/pages/AccountsPage'
+import AccountsModule from './modules/accounts/AccountsModule'
 import PageShell from './components/PageShell'
 import Loader from './components/ui/Loader'
 import { TaskNotificationProvider } from './context/TaskNotificationContext'
@@ -60,10 +60,10 @@ function App() {
               }
             />
 
-            <Route
-              path="/accounts"
-              element={<TaskNotificationProvider><PageShell><AccountsPage /></PageShell></TaskNotificationProvider>}
-            />
+        <Route
+          path="/accounts"
+          element={isAuthenticated ? <TaskNotificationProvider><PageShell><AccountsModule /></PageShell></TaskNotificationProvider> : <Navigate to="/login" />}
+        />
 
             <Route path="*" element={<Navigate to="/dashboard" />} />
           </Routes>

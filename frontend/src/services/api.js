@@ -47,64 +47,8 @@ export const authAPI = {
     api.get('/auth/users'),
 }
 
-const DEFAULT_TENANT_NAME = 'Default Tenant'
-
-const getTenantId = () => {
-  return localStorage.getItem('tenant_id') || null
-}
-
-const setTenantId = (tenantId) => {
-  if (tenantId) {
-    localStorage.setItem('tenant_id', tenantId)
-  }
-}
-
-const shouldAttachTenantHeader = (url) => {
-  if (!url) return false
-  return (
-    url.startsWith('/accounts/') &&
-    !url.startsWith('/accounts/tenants')
-  )
-}
-
-const ensureTenantId = async () => {
-  let tenantId = getTenantId()
-  if (tenantId) return tenantId
-
-  try {
-    const tenantsResponse = await api.get('/accounts/tenants')
-    const tenants = tenantsResponse.data
-
-    if (Array.isArray(tenants) && tenants.length > 0) {
-      tenantId = tenants[0].id
-      setTenantId(tenantId)
-      return tenantId
-    }
-
-    const createResponse = await api.post('/accounts/tenants', { name: DEFAULT_TENANT_NAME })
-    tenantId = createResponse.data.id
-    setTenantId(tenantId)
-    return tenantId
-  } catch (error) {
-    return null
-  }
-}
-
-api.interceptors.request.use(async (config) => {
-  const token = localStorage.getItem('access_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-
-  if (shouldAttachTenantHeader(config.url)) {
-    const tenantId = await ensureTenantId()
-    if (tenantId) {
-      config.headers['X-Tenant-ID'] = tenantId
-    }
-  }
-
-  return config
-})
+// Accounts no longer require X-Tenant-ID in single-company mode.
+// All account routes use the default tenant on the backend.
 
 export const accountsAPI = {
   getStatus: () => api.get('/accounts/'),

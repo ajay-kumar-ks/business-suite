@@ -1,9 +1,21 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import '../../../styles/ModulePage.css'
 import { accountsAPI } from '../../../services/api'
+import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
 import { BookOpen, RefreshCw } from 'lucide-react'
 
 const LedgerPage = () => {
+  const { department, loading: permissionsLoading } = useAccountsPermissions()
+  if (permissionsLoading) return <div className="module-page"><p>Loading...</p></div>
+  if (!isPageAllowed(department, 'ledger')) {
+    return (
+      <div className="module-page">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to view the General Ledger.</p>
+      </div>
+    )
+  }
+
   const [ledger, setLedger] = useState([])
   const [accounts, setAccounts] = useState([])
   const [error, setError] = useState('')

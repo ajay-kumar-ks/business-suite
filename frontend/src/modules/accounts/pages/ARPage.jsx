@@ -1,10 +1,21 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import '../../../styles/ModulePage.css'
 import { accountsAPI } from '../../../services/api'
+import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
 import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
 
 const ARPage = () => {
+  const { department, canPerformAction, loading } = useAccountsPermissions()
+  if (loading) return <div className="module-page"><p>Loading...</p></div>
+  if (!isPageAllowed(department, 'ar')) {
+    return (
+      <div className="module-page">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to view Accounts Receivable.</p>
+      </div>
+    )
+  }
   const [customers, setCustomers] = useState([])
   const [invoices, setInvoices] = useState([])
   const [customerForm, setCustomerForm] = useState({ name: '', email: '', phone: '', address: '' })
@@ -90,20 +101,22 @@ const ARPage = () => {
       {/* Customers Section */}
       <div className="accounts-summary">
         <h3>Customers</h3>
-        <details>
-          <summary style={{ cursor: 'pointer', marginBottom: '10px', fontWeight: 600, color: 'var(--primary)' }}>+ Add New Customer</summary>
-          <form onSubmit={createCustomer} className="accounts-form">
-            <div className="form-row">
-              <Input id="customer-name" label="Name" value={customerForm.name} onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} />
-              <Input id="customer-email" label="Email" value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} />
-            </div>
-            <div className="form-row">
-              <Input id="customer-phone" label="Phone" value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} />
-              <Input id="customer-address" label="Address" value={customerForm.address} onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })} />
-            </div>
-            <Button type="submit">Create Customer</Button>
-          </form>
-        </details>
+        {canPerformAction('createCustomer') && (
+          <details>
+            <summary style={{ cursor: 'pointer', marginBottom: '10px', fontWeight: 600, color: 'var(--primary)' }}>+ Add New Customer</summary>
+            <form onSubmit={createCustomer} className="accounts-form">
+              <div className="form-row">
+                <Input id="customer-name" label="Name" value={customerForm.name} onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} />
+                <Input id="customer-email" label="Email" value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} />
+              </div>
+              <div className="form-row">
+                <Input id="customer-phone" label="Phone" value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} />
+                <Input id="customer-address" label="Address" value={customerForm.address} onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })} />
+              </div>
+              <Button type="submit">Create Customer</Button>
+            </form>
+          </details>
+        )}
         <table className="accounts-table">
           <thead>
             <tr>
@@ -133,28 +146,30 @@ const ARPage = () => {
       {/* Invoices Section */}
       <div className="accounts-summary" style={{ marginTop: '20px' }}>
         <h3>Invoices</h3>
-        <details>
-          <summary style={{ cursor: 'pointer', marginBottom: '10px', fontWeight: 600, color: 'var(--primary)' }}>+ Create New Invoice</summary>
-          <form onSubmit={createInvoice} className="accounts-form">
-            <div className="form-row">
-              <div>
-                <label className="ui-input-label">Customer</label>
-                <select className="ui-input-field" value={invoiceForm.customer_id} onChange={(e) => setInvoiceForm({ ...invoiceForm, customer_id: Number(e.target.value) })}>
-                  <option value="">Select customer</option>
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>{customer.name}</option>
-                  ))}
-                </select>
+        {canPerformAction('createInvoice') && (
+          <details>
+            <summary style={{ cursor: 'pointer', marginBottom: '10px', fontWeight: 600, color: 'var(--primary)' }}>+ Create New Invoice</summary>
+            <form onSubmit={createInvoice} className="accounts-form">
+              <div className="form-row">
+                <div>
+                  <label className="ui-input-label">Customer</label>
+                  <select className="ui-input-field" value={invoiceForm.customer_id} onChange={(e) => setInvoiceForm({ ...invoiceForm, customer_id: Number(e.target.value) })}>
+                    <option value="">Select customer</option>
+                    {customers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>{customer.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <Input id="invoice-number" label="Invoice Number" value={invoiceForm.invoice_number} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoice_number: e.target.value })} />
               </div>
-              <Input id="invoice-number" label="Invoice Number" value={invoiceForm.invoice_number} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoice_number: e.target.value })} />
-            </div>
-            <div className="form-row">
-              <Input id="invoice-amount" label="Amount" type="number" value={invoiceForm.amount} onChange={(e) => setInvoiceForm({ ...invoiceForm, amount: Number(e.target.value) })} />
-              <Input id="invoice-description" label="Description" value={invoiceForm.description} onChange={(e) => setInvoiceForm({ ...invoiceForm, description: e.target.value })} />
-            </div>
-            <Button type="submit">Create Invoice</Button>
-          </form>
-        </details>
+              <div className="form-row">
+                <Input id="invoice-amount" label="Amount" type="number" value={invoiceForm.amount} onChange={(e) => setInvoiceForm({ ...invoiceForm, amount: Number(e.target.value) })} />
+                <Input id="invoice-description" label="Description" value={invoiceForm.description} onChange={(e) => setInvoiceForm({ ...invoiceForm, description: e.target.value })} />
+              </div>
+              <Button type="submit">Create Invoice</Button>
+            </form>
+          </details>
+        )}
         <table className="accounts-table">
           <thead>
             <tr>
@@ -192,24 +207,30 @@ const ARPage = () => {
       {/* Payments Section */}
       <div className="accounts-summary" style={{ marginTop: '20px' }}>
         <h3>Record Payment</h3>
-        <form onSubmit={createPayment} className="accounts-form">
-          <div className="form-row">
-            <div>
-              <label className="ui-input-label">Invoice</label>
-              <select className="ui-input-field" value={selectedInvoice} onChange={(e) => setSelectedInvoice(e.target.value)}>
-                <option value="">Select invoice</option>
-                {invoices.map((inv) => (
-                  <option key={inv.id} value={inv.id}>{inv.invoice_number} - Balance: {formatCurrency(Number(inv.amount) - Number(inv.paid_amount))}</option>
-                ))}
-              </select>
+        {canPerformAction('createInvoicePayment') ? (
+          <form onSubmit={createPayment} className="accounts-form">
+            <div className="form-row">
+              <div>
+                <label className="ui-input-label">Invoice</label>
+                <select className="ui-input-field" value={selectedInvoice} onChange={(e) => setSelectedInvoice(e.target.value)}>
+                  <option value="">Select invoice</option>
+                  {invoices.map((inv) => (
+                    <option key={inv.id} value={inv.id}>{inv.invoice_number} - Balance: {formatCurrency(Number(inv.amount) - Number(inv.paid_amount))}</option>
+                  ))}
+                </select>
+              </div>
+              <Input id="payment-amount" label="Amount" type="number" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: Number(e.target.value) })} />
             </div>
-            <Input id="payment-amount" label="Amount" type="number" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: Number(e.target.value) })} />
+            <div className="form-row">
+              <Input id="payment-reference" label="Reference" value={paymentForm.reference} onChange={(e) => setPaymentForm({ ...paymentForm, reference: e.target.value })} />
+            </div>
+            <Button type="submit">Record Payment</Button>
+          </form>
+        ) : (
+          <div className="permission-warning" style={{ padding: '14px', border: '1px solid #f59e0b', borderRadius: '8px', background: '#fffbeb' }}>
+            You do not have permission to record invoice payments.
           </div>
-          <div className="form-row">
-            <Input id="payment-reference" label="Reference" value={paymentForm.reference} onChange={(e) => setPaymentForm({ ...paymentForm, reference: e.target.value })} />
-          </div>
-          <Button type="submit">Record Payment</Button>
-        </form>
+        )}
       </div>
     </div>
   )

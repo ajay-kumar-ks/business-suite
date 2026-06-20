@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
 import Button from '../../../components/ui/Button'
+import Input from '../../../components/ui/Input'
+import { Plus, Trash2, Save, X } from 'lucide-react'
 import '../styles/LeadsView.css'
 import '../styles/PipelineSettings.css'
 
@@ -13,7 +15,7 @@ const DEFAULT_PHASES = [
 const CreatePipelinePanel = ({ onClose, onPipelineCreated }) => {
   const [form, setForm] = useState({ name: '', description: '', owner: '' })
   const [phases, setPhases] = useState([])
-  const [phaseForm, setPhaseForm] = useState({ name: '', color: '#6b7280', is_terminal: false })
+  const [phaseForm, setPhaseForm] = useState({ name: '', color: '#6366f1', is_terminal: false })
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -32,7 +34,7 @@ const CreatePipelinePanel = ({ onClose, onPipelineCreated }) => {
         is_terminal: !!phaseForm.is_terminal,
       },
     ])
-    setPhaseForm({ name: '', color: '#6b7280', is_terminal: false })
+    setPhaseForm({ name: '', color: '#6366f1', is_terminal: false })
   }
 
   // Initialize with sensible default phases when panel mounts
@@ -92,60 +94,105 @@ const CreatePipelinePanel = ({ onClose, onPipelineCreated }) => {
   }
 
   return (
-    <div className="pipeline-card">
-      <h4>Create Pipeline</h4>
-      {error && <div className="form-error">{error}</div>}
-      <form onSubmit={handleSubmit} className="pipeline-form">
-        <label>
-          Pipeline Name
-          <input type="text" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} required />
-        </label>
-        <label>
-          Description
-          <textarea value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
-        </label>
-        <label>
-          Owner
-          <input type="text" value={form.owner} onChange={(e) => setForm((p) => ({ ...p, owner: e.target.value }))} />
-        </label>
+    <div className="ps-card">
+      <div className="ps-card-header">
+        <h3>Create Pipeline</h3>
+      </div>
 
-        <div style={{ marginTop: 12 }}>
-          <h5 style={{ margin: '6px 0' }}>Initial Phases</h5>
-          <div className="phase-name-color-row">
-            <input type="text" placeholder="Phase name" value={phaseForm.name} onChange={(e) => setPhaseForm((p) => ({ ...p, name: e.target.value }))} />
-            <label className="color-box-label" data-tooltip="Select phase color">
-              <input type="color" className="phase-color-input" value={phaseForm.color} onChange={(e) => setPhaseForm((p) => ({ ...p, color: e.target.value }))} />
-              <span className="color-box" style={{ background: phaseForm.color }} />
+      {error && <div className="ps-error">{error}</div>}
+
+      <form onSubmit={handleSubmit} className="ps-form">
+        <div className="ps-form-row">
+          <Input
+            label="Pipeline Name *"
+            value={form.name}
+            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+            required
+          />
+        </div>
+        <div className="ps-form-row">
+          <label className="ps-field-label">Description</label>
+          <textarea
+            className="ps-textarea"
+            value={form.description}
+            onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+            placeholder="Describe the purpose of this pipeline..."
+            rows={3}
+          />
+        </div>
+        <div className="ps-form-row">
+          <Input
+            label="Owner"
+            value={form.owner}
+            onChange={(e) => setForm((p) => ({ ...p, owner: e.target.value }))}
+            placeholder="Team member name or email"
+          />
+        </div>
+
+        {/* Initial Phases */}
+        <div className="ps-add-phase" style={{ borderTop: 'none', paddingTop: 0 }}>
+          <h4>Initial Phases</h4>
+
+          {/* Add phase row */}
+          <div className="ps-add-phase-row">
+            <input
+              type="text"
+              className="ps-input-sm"
+              value={phaseForm.name}
+              onChange={(e) => setPhaseForm((p) => ({ ...p, name: e.target.value }))}
+              placeholder="Phase name"
+            />
+            <label className="ps-color-picker" data-tooltip="Color">
+              <input
+                type="color"
+                value={phaseForm.color}
+                onChange={(e) => setPhaseForm((p) => ({ ...p, color: e.target.value }))}
+              />
+              <span className="ps-color-swatch" style={{ background: phaseForm.color }} />
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" checked={phaseForm.is_terminal} onChange={(e) => setPhaseForm((p) => ({ ...p, is_terminal: e.target.checked }))} /> Terminal
+            <label className="ps-check-label" style={{ whiteSpace: 'nowrap' }}>
+              <input
+                type="checkbox"
+                checked={phaseForm.is_terminal}
+                onChange={(e) => setPhaseForm((p) => ({ ...p, is_terminal: e.target.checked }))}
+              />
+              Terminal
             </label>
-            <button type="button" className="add-phase-button" onClick={handleAddPhase}>+</button>
+            <button type="button" className="ps-add-btn" onClick={handleAddPhase} title="Add phase">
+              <Plus size={18} />
+            </button>
           </div>
 
+          {/* Phase list */}
           {phases.length > 0 && (
-            <div className="phase-list" style={{ marginTop: 10 }}>
+            <div className="ps-phase-list" style={{ marginTop: 4 }}>
               {phases.map((p, idx) => (
-                <div key={p.id} className="phase-item">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <div>
-                      <strong>{p.name}</strong>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Position: {idx + 1}</div>
+                <div key={p.id} className="ps-phase-item">
+                  <div className="ps-phase-row">
+                    <div className="ps-phase-info">
+                      <div className="ps-phase-visual">
+                        <span className="ps-phase-dot" style={{ background: p.color }} />
+                        <span className="ps-phase-name">{p.name}</span>
+                      </div>
+                      <div className="ps-phase-badges">
+                        <span className="ps-badge-sm" style={{
+                          background: 'rgba(107, 114, 128, 0.1)',
+                          color: 'var(--text-secondary, #6b7280)',
+                          fontWeight: 500,
+                        }}>
+                          #{idx + 1}
+                        </span>
+                        {p.is_terminal && <span className="ps-badge-sm info">Terminal</span>}
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <div style={{ width: 20, height: 20, borderRadius: 6, background: p.color }} />
+                    <div className="ps-phase-controls">
                       <button
                         type="button"
-                        className="action-btn"
+                        className="ps-icon-btn danger"
                         onClick={() => handleRemovePhase(p.id)}
-                        title="Remove phase"
-                        aria-label="Remove phase"
-                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 6 }}
+                        title="Remove"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </div>
@@ -155,9 +202,15 @@ const CreatePipelinePanel = ({ onClose, onPipelineCreated }) => {
           )}
         </div>
 
-        <div className="button-group" style={{ marginTop: 12 }}>
-          <Button type="submit">{isSaving ? 'Creating...' : 'Create'}</Button>
-          <Button type="button" onClick={onClose}>Cancel</Button>
+        <div className="ps-form-actions">
+          <Button type="submit" disabled={isSaving}>
+            <Save size={15} />
+            {isSaving ? 'Creating...' : 'Create Pipeline'}
+          </Button>
+          <Button type="button" variant="ghost" onClick={onClose}>
+            <X size={15} />
+            Cancel
+          </Button>
         </div>
       </form>
     </div>

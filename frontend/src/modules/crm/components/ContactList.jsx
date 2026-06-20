@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Search, Plus, Filter, MoreVertical, Trash2, Archive, Edit, ArrowRight } from 'lucide-react'
 import Button from '../../../components/ui/Button'
+import Select from '../../../components/ui/Select'
 import Loader from '../../../components/ui/Loader'
 import '../styles/ContactList.css'
 
@@ -109,19 +110,20 @@ const ContactList = ({ onSelectContact, onCreateContact, onConvertContact }) => 
           />
         </div>
         <div className="contact-filter-group">
-          <select
+          <Select
+            label="Status"
             value={contactStatusFilter}
             onChange={(e) => {
               setContactStatusFilter(e.target.value)
               setPage(0)
             }}
-            aria-label="Filter contacts by status"
-          >
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-            <option value="deleted">Deleted</option>
-            <option value="all">All</option>
-          </select>
+            options={[
+              { value: 'active', label: 'Active' },
+              { value: 'archived', label: 'Archived' },
+              { value: 'deleted', label: 'Deleted' },
+              { value: 'all', label: 'All' },
+            ]}
+          />
         </div>
         <Button
           onClick={onCreateContact}

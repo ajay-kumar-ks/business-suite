@@ -25,8 +25,7 @@ class ExpenseRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 
 class IncomeCreate(BaseModel):
@@ -50,5 +49,4 @@ class IncomeRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}

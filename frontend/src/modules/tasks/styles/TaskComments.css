@@ -1,0 +1,378 @@
+/* ── Task Comments Section ── */
+.task-comments-section {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  margin-top: 8px;
+}
+
+.task-comments-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.task-comments-count {
+  background: var(--hover);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  opacity: 0.6;
+}
+
+/* ── Comments List ── */
+.task-comments-list {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-right: 4px;
+}
+
+.task-comments-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.task-comments-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+/* ── Individual Comment ── */
+.task-comment-item {
+  display: flex;
+  gap: 10px;
+  position: relative;
+}
+
+.comment-avatar {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.comment-body {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 10px 14px;
+  position: relative;
+}
+
+.comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.comment-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.comment-author svg {
+  opacity: 0.5;
+}
+
+.comment-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.45;
+}
+
+.comment-content {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.comment-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  opacity: 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.comment-body:hover .comment-delete-btn {
+  opacity: 0.4;
+}
+
+.comment-delete-btn:hover {
+  opacity: 1 !important;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+/* ── Comment Input ── */
+.task-comments-input {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.comment-input-wrapper {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  transition: border-color 0.15s ease;
+  position: relative;
+}
+
+.comment-input-wrapper:focus-within {
+  border-color: var(--primary);
+}
+
+.comment-input-wrapper textarea {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  line-height: 1.5;
+  min-height: 20px;
+  max-height: 120px;
+}
+
+.comment-input-wrapper textarea::placeholder {
+  opacity: 0.4;
+}
+
+.comment-send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.comment-send-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: scale(1.05);
+}
+
+.comment-send-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.comment-send-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.comment-input-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.comment-input-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.comment-input-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.comment-mention-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--text);
+  opacity: 0.25;
+  transition: opacity 0.15s ease;
+}
+
+.comment-mention-hint:hover {
+  opacity: 0.5;
+}
+
+.comment-char-count {
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.35;
+}
+
+.comment-shortcut-hint {
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.3;
+}
+
+/* ── @Mention Dropdown ── */
+.mention-input-wrapper {
+  position: relative;
+}
+
+.mention-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 8px;
+  right: 8px;
+  margin-bottom: 4px;
+  background: var(--sidebar);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.mention-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  border-bottom: 1px solid var(--border);
+}
+
+.mention-option:last-child {
+  border-bottom: none;
+}
+
+.mention-option:hover,
+.mention-option-active {
+  background: var(--hover);
+}
+
+.mention-option-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.mention-option-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mention-option-email {
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.5;
+}
+
+/* ── Mentioned badge (shown when users are tagged) ── */
+.mentioned-badge-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ── Highlighted @mention in comment content ── */
+.mention-highlight {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 0 4px;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.mention-highlight svg {
+  flex-shrink: 0;
+}
+
+/* ── Empty / Loading / Error ── */
+.task-comments-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  color: var(--text);
+  opacity: 0.35;
+  gap: 8px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.task-comments-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.comment-skeleton {
+  height: 60px;
+  border-radius: 10px;
+  background: var(--sidebar);
+  border: 1px solid var(--border);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.85; }
+}
+
+.task-comments-error {
+  padding: 16px;
+  text-align: center;
+  color: #ef4444;
+  font-size: 13px;
+}

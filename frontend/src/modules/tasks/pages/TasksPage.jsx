@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, RotateCcw } from 'lucide-react'
+import { Plus, RotateCcw, LayoutGrid, BarChart3 } from 'lucide-react'
 import Loader from '../../../components/ui/Loader'
 import Button from '../../../components/ui/Button'
 import TaskBoard from '../components/TaskBoard'
@@ -7,10 +7,12 @@ import { STATUS_LABELS } from '../components/TaskCard'
 import TaskModal from '../components/TaskModal'
 import ProofModal from '../components/ProofModal'
 import TaskFilters from '../components/TaskFilters'
+import TasksAnalyticsPage from './TasksAnalyticsPage'
 import { taskApi } from '../services/taskApi'
 import { useAuth } from '../../../context/AuthContext'
 import { useTaskNotifications } from '../../../context/TaskNotificationContext'
 import '../styles/TasksPage.css'
+import '../styles/TasksAnalytics.css'
 
 const DEFAULT_FILTERS = {
   status: '',
@@ -35,6 +37,8 @@ const TasksPage = () => {
   const [editingTask, setEditingTask] = useState(null)
   const [saving, setSaving] = useState(false)
   const [proofPending, setProofPending] = useState(null)
+  // View toggle: 'board' | 'analytics'
+  const [view, setView] = useState('board')
   // Undo stack — each entry: { taskId, prevStatus, prevProof, taskTitle }
   const [undoStack, setUndoStack] = useState([])
   const [undoAnimating, setUndoAnimating] = useState(false)
@@ -266,29 +270,48 @@ const TasksPage = () => {
           <p>{isAdmin ? 'Manage, assign, and track team tasks' : 'View and update your assigned tasks'}</p>
         </div>
         <div className="header-actions">
-          <div className={`undo-wrapper ${undoAnimating ? 'animating' : ''}`}>
+          {/* View Toggle Tabs */}
+          <div className="tasks-view-tabs">
             <button
-              className="action-btn undo-btn"
-              onClick={handleUndo}
-              title={
-                canUndo
-                  ? `Undo: Move "${latestUndoEntry.taskTitle}" back to ${STATUS_LABELS[latestUndoEntry.prevStatus] || latestUndoEntry.prevStatus} (Ctrl+Z)`
-                  : 'Undo last status change (Ctrl+Z)'
-              }
+              className={`tasks-view-tab ${view === 'board' ? 'active' : ''}`}
+              onClick={() => setView('board')}
             >
-              <RotateCcw size={15} />
-              <span className="action-btn-text">
-                {canUndo ? (
-                  <>
-                    Undo <strong>"{latestUndoEntry.taskTitle}"</strong>
-                    <span className="undo-count">{undoStack.length}</span>
-                  </>
-                ) : (
-                  'Undo'
-                )}
-              </span>
+              <LayoutGrid size={16} />
+              Board
+            </button>
+            <button
+              className={`tasks-view-tab ${view === 'analytics' ? 'active' : ''}`}
+              onClick={() => setView('analytics')}
+            >
+              <BarChart3 size={16} />
+              Analytics
             </button>
           </div>
+          {view === 'board' && (
+            <div className={`undo-wrapper ${undoAnimating ? 'animating' : ''}`}>
+              <button
+                className="undo-btn"
+                onClick={handleUndo}
+                title={
+                  canUndo
+                    ? `Undo: Move "${latestUndoEntry.taskTitle}" back to ${STATUS_LABELS[latestUndoEntry.prevStatus] || latestUndoEntry.prevStatus} (Ctrl+Z)`
+                    : 'Undo last status change (Ctrl+Z)'
+                }
+              >
+                <RotateCcw size={15} />
+                <span className="undo-btn-text">
+                  {canUndo ? (
+                    <>
+                      Undo <strong>"{latestUndoEntry.taskTitle}"</strong>
+                      <span className="undo-count">{undoStack.length}</span>
+                    </>
+                  ) : (
+                    'Undo'
+                  )}
+                </span>
+              </button>
+            </div>
+          )}
           {isAdmin && (
             <Button onClick={handleOpenCreate}>
               <Plus size={18} />
@@ -298,95 +321,102 @@ const TasksPage = () => {
         </div>
       </div>
 
-      {/* Role-based quick stats */}
-      <div className="tasks-dashboard-stats">
-        {isAdmin && adminStats && (
-          <>
-            <div className="stat-card">
-              <span className="stat-value">{adminStats.total}</span>
-              <span className="stat-label">Total Tasks</span>
-            </div>
-            <div className="stat-card stat-todo">
-              <span className="stat-value">{adminStats.todo}</span>
-              <span className="stat-label">Pending</span>
-            </div>
-            <div className="stat-card stat-progress">
-              <span className="stat-value">{adminStats.inProgress}</span>
-              <span className="stat-label">In Progress</span>
-            </div>
-            <div className="stat-card stat-completed">
-              <span className="stat-value">{adminStats.completed}</span>
-              <span className="stat-label">Completed</span>
-            </div>
-            <div className="stat-card stat-overdue">
-              <span className="stat-value">{adminStats.overdue}</span>
-              <span className="stat-label">Overdue</span>
-            </div>
-          </>
-        )}
-        {!isAdmin && employeeStats && (
-          <>
-            <div className="stat-card">
-              <span className="stat-value">{employeeStats.total}</span>
-              <span className="stat-label">My Tasks</span>
-            </div>
-            <div className="stat-card stat-todo">
-              <span className="stat-value">{employeeStats.todo}</span>
-              <span className="stat-label">Pending</span>
-            </div>
-            <div className="stat-card stat-progress">
-              <span className="stat-value">{employeeStats.inProgress}</span>
-              <span className="stat-label">In Progress</span>
-            </div>
-            <div className="stat-card stat-completed">
-              <span className="stat-value">{employeeStats.completed}</span>
-              <span className="stat-label">Completed</span>
-            </div>
-            <div className="stat-card stat-overdue">
-              <span className="stat-value">{employeeStats.overdue}</span>
-              <span className="stat-label">Overdue</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      <TaskFilters
-        filters={filters}
-        onChange={handleFilterChange}
-        employees={employees}
-        onClear={handleClearFilters}
-      />
-
-      {loading && tasks.length === 0 ? (
-        <div className="tasks-loading">
-          <Loader size={32} />
-          <span>Loading tasks...</span>
-        </div>
-      ) : error ? (
-        <div className="tasks-error">{error}</div>
-      ) : (
+      {view === 'board' ? (
         <>
-          <TaskBoard
-            tasks={tasks}
-            employees={employees}
-            onTaskClick={handleOpenEdit}
-            onStatusChange={handleStatusChange}
-          />
-          <div className="tasks-summary">
-            <span className="summary-item">
-              <span className="summary-dot" style={{ background: 'var(--primary)' }} />
-              {tasks.length} {isAdmin ? 'total' : 'assigned'} tasks
-            </span>
-            <span className="summary-item">
-              <span className="summary-dot" style={{ background: '#ef4444' }} />
-              {tasks.filter((t) => t.status === 'OVERDUE').length} overdue
-            </span>
-            <span className="summary-item">
-              <span className="summary-dot" style={{ background: '#22c55e' }} />
-              {tasks.filter((t) => t.status === 'COMPLETED').length} completed
-            </span>
+          {/* Role-based quick stats */}
+          <div className="tasks-dashboard-stats">
+            {isAdmin && adminStats && (
+              <>
+                <div className="stat-card">
+                  <span className="stat-value">{adminStats.total}</span>
+                  <span className="stat-label">Total Tasks</span>
+                </div>
+                <div className="stat-card stat-todo">
+                  <span className="stat-value">{adminStats.todo}</span>
+                  <span className="stat-label">Pending</span>
+                </div>
+                <div className="stat-card stat-progress">
+                  <span className="stat-value">{adminStats.inProgress}</span>
+                  <span className="stat-label">In Progress</span>
+                </div>
+                <div className="stat-card stat-completed">
+                  <span className="stat-value">{adminStats.completed}</span>
+                  <span className="stat-label">Completed</span>
+                </div>
+                <div className="stat-card stat-overdue">
+                  <span className="stat-value">{adminStats.overdue}</span>
+                  <span className="stat-label">Overdue</span>
+                </div>
+              </>
+            )}
+            {!isAdmin && employeeStats && (
+              <>
+                <div className="stat-card">
+                  <span className="stat-value">{employeeStats.total}</span>
+                  <span className="stat-label">My Tasks</span>
+                </div>
+                <div className="stat-card stat-todo">
+                  <span className="stat-value">{employeeStats.todo}</span>
+                  <span className="stat-label">Pending</span>
+                </div>
+                <div className="stat-card stat-progress">
+                  <span className="stat-value">{employeeStats.inProgress}</span>
+                  <span className="stat-label">In Progress</span>
+                </div>
+                <div className="stat-card stat-completed">
+                  <span className="stat-value">{employeeStats.completed}</span>
+                  <span className="stat-label">Completed</span>
+                </div>
+                <div className="stat-card stat-overdue">
+                  <span className="stat-value">{employeeStats.overdue}</span>
+                  <span className="stat-label">Overdue</span>
+                </div>
+              </>
+            )}
           </div>
+
+          <TaskFilters
+            filters={filters}
+            onChange={handleFilterChange}
+            employees={employees}
+            onClear={handleClearFilters}
+          />
+
+          {loading && tasks.length === 0 ? (
+            <div className="tasks-loading">
+              <Loader size={32} />
+              <span>Loading tasks...</span>
+            </div>
+          ) : error ? (
+            <div className="tasks-error">{error}</div>
+          ) : (
+            <>
+              <TaskBoard
+                tasks={tasks}
+                employees={employees}
+                isAdmin={isAdmin}
+                onTaskClick={handleOpenEdit}
+                onStatusChange={handleStatusChange}
+              />
+              <div className="tasks-summary">
+                <span className="summary-item">
+                  <span className="summary-dot" style={{ background: 'var(--primary)' }} />
+                  {tasks.length} {isAdmin ? 'total' : 'assigned'} tasks
+                </span>
+                <span className="summary-item">
+                  <span className="summary-dot" style={{ background: '#ef4444' }} />
+                  {tasks.filter((t) => t.status === 'OVERDUE').length} overdue
+                </span>
+                <span className="summary-item">
+                  <span className="summary-dot" style={{ background: '#22c55e' }} />
+                  {tasks.filter((t) => t.status === 'COMPLETED').length} completed
+                </span>
+              </div>
+            </>
+          )}
         </>
+      ) : (
+        <TasksAnalyticsPage />
       )}
 
       {modalOpen && (

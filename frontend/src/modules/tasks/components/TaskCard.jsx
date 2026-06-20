@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react'
-import { Calendar, Paperclip, Building2, Briefcase } from 'lucide-react'
+import { Calendar, Paperclip, Building2, Briefcase, ListChecks } from 'lucide-react'
 import Avatar from '../../../components/ui/Avatar'
 
 const PRIORITY_LABELS = {
@@ -37,7 +37,7 @@ const ALL_STATUS_OPTIONS = [
   { value: 'OVERDUE', label: 'Overdue' },
 ]
 
-const TaskCard = ({ task, employees = [], onClick, onStatusChange }) => {
+const TaskCard = ({ task, employees = [], onClick, onStatusChange, isAdmin }) => {
   const [isDragging, setIsDragging] = useState(false)
   const [changingStatus, setChangingStatus] = useState(false)
 
@@ -53,10 +53,17 @@ const TaskCard = ({ task, employees = [], onClick, onStatusChange }) => {
     : employees.find((e) => e.id === task.assignee_id)
 
   // Determine which statuses are available in the dropdown
+  // OVERDUE is excluded — it can only be set automatically by the overdue scheduler
   const forwardStatusOptions = useMemo(() => {
     const currentOrder = STATUS_ORDER[task.status] ?? -1
     return ALL_STATUS_OPTIONS.filter((opt) => {
+      // Never allow manually setting to OVERDUE (auto-assigned only by scheduler)
+      if (opt.value === 'OVERDUE') return false
+
       const optOrder = STATUS_ORDER[opt.value] ?? -1
+
+      // COMPLETED can only be reached from ON_REVIEW
+      if (opt.value === 'COMPLETED' && task.status !== 'ON_REVIEW') return false
 
       // Forward transitions are always allowed
       if (optOrder > currentOrder) return true
@@ -64,16 +71,20 @@ const TaskCard = ({ task, employees = [], onClick, onStatusChange }) => {
       // Special backward transitions:
       //   OVERDUE → ON_REVIEW    (overdue task completed, send for review)
       //   ON_HOLD → ON_PROGRESS  (resume a held task)
+      //   ON_REVIEW → TODO       (admin rejects review, sends back to todo)
+      //   COMPLETED → ON_REVIEW  (admin reopens completed task for review)
       if (
         (task.status === 'OVERDUE' && opt.value === 'ON_REVIEW') ||
-        (task.status === 'ON_HOLD' && opt.value === 'ON_PROGRESS')
+        (task.status === 'ON_HOLD' && opt.value === 'ON_PROGRESS') ||
+        (task.status === 'ON_REVIEW' && opt.value === 'TODO' && isAdmin) ||
+        (task.status === 'COMPLETED' && opt.value === 'ON_REVIEW' && isAdmin)
       ) {
         return true
       }
 
       return false
     })
-  }, [task.status])
+  }, [task.status, isAdmin])
 
   const formatDate = (dateStr) => {
     const d = new Date(dateStr)
@@ -121,6 +132,22 @@ const TaskCard = ({ task, employees = [], onClick, onStatusChange }) => {
       {task.status === 'ON_PROGRESS' && <div className="task-card-progress-bar" />}
 
       <div className="task-card-title">{task.title}</div>
+
+      {/* Checklist progress bar */}
+      {task.subtask_count > 0 && (
+        <div className="task-card-checklist-bar">
+          <div className="task-card-checklist-bar-track">
+            <div
+              className="task-card-checklist-bar-fill"
+              style={{ width: `${Math.round((task.subtask_completed_count / task.subtask_count) * 100)}%` }}
+            />
+          </div>
+          <span className="task-card-checklist-label">
+            <ListChecks size={10} />
+            {task.subtask_completed_count}/{task.subtask_count}
+          </span>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <span className={`priority-badge priority-${task.priority.toLowerCase()}`}>

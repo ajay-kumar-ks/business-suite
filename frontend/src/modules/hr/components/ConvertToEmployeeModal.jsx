@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { X, Info } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import '../styles/HRPage.css'
@@ -20,7 +20,7 @@ const ConvertToEmployeeModal = ({ isOpen, onClose, onConvert, candidate, departm
     if (isOpen && candidate) {
       setForm({
         department_id: '',
-        role_id: '',
+        role_id: candidate.role_id?.toString() || '',
         employee_code: '',
         phone: candidate.phone || '',
         joining_date: new Date().toISOString().split('T')[0],
@@ -74,8 +74,14 @@ const ConvertToEmployeeModal = ({ isOpen, onClose, onConvert, candidate, departm
           {error && <div className="form-error">{error}</div>}
 
           <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: '0.85rem', color: '#16a34a' }}>
-            Converting <strong>{candidate.full_name}</strong> from <strong>{candidate.position_applied}</strong> position.
-            A new user account and employee record will be created.
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              <Info size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+              <div>
+                Converting <strong>{candidate.full_name}</strong> to an employee for <strong>{candidate.position_applied}</strong> position.
+                <br /><br />
+                <strong>Note:</strong> An employee record will be created. A user account will NOT be automatically created — use <strong>User Management</strong> to create login credentials separately.
+              </div>
+            </div>
           </div>
 
           <div className="form-row">

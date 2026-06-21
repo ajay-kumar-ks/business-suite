@@ -1,13 +1,13 @@
 import React from 'react'
-import { Users, UserPlus, UserCheck, UserX, ClipboardList, Briefcase } from 'lucide-react'
+import { Users, UserPlus, UserCheck, UserX, Briefcase, Target } from 'lucide-react'
 
 const STAGE_CARDS = [
   { key: 'total_candidates', label: 'Total Candidates', icon: Users, color: '#3b82f6', bg: '#eff6ff' },
-  { key: 'applied', label: 'Applied', icon: ClipboardList, color: '#8b5cf6', bg: '#f5f3ff' },
-  { key: 'in_interview', label: 'In Interview', icon: UserCheck, color: '#f59e0b', bg: '#fffbeb' },
+  { key: 'in_progress', label: 'In Progress', icon: Target, color: '#8b5cf6', bg: '#f5f3ff' },
   { key: 'selected', label: 'Selected', icon: UserPlus, color: '#22c55e', bg: '#f0fdf4' },
+  { key: 'onboarded', label: 'Onboarded', icon: UserCheck, color: '#14b8a6', bg: '#f0fdfa' },
+  { key: 'converted', label: 'Converted', icon: Briefcase, color: '#3b82f6', bg: '#eff6ff' },
   { key: 'rejected', label: 'Rejected', icon: UserX, color: '#ef4444', bg: '#fef2f2' },
-  { key: 'onboarded', label: 'Onboarded', icon: Briefcase, color: '#14b8a6', bg: '#f0fdfa' },
 ]
 
 const RecruitmentDashboard = ({ stats, loading }) => {
@@ -31,6 +31,12 @@ const RecruitmentDashboard = ({ stats, loading }) => {
 
   if (!stats) return null
 
+  // Compute open_positions from by_position data
+  const enrichedStats = {
+    ...stats,
+    open_positions: stats.by_position?.length || 0,
+  }
+
   return (
     <>
       <div className="dashboard-cards">
@@ -42,7 +48,7 @@ const RecruitmentDashboard = ({ stats, loading }) => {
                 <IconComp size={22} />
               </div>
               <div className="card-info">
-                <span className="card-value">{stats[card.key] ?? 0}</span>
+                <span className="card-value">{enrichedStats[card.key] ?? 0}</span>
                 <span className="card-label">{card.label}</span>
               </div>
             </div>
@@ -59,7 +65,7 @@ const RecruitmentDashboard = ({ stats, loading }) => {
                 {stats.hiring.success_rate}%
               </div>
               <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: 4 }}>
-                {stats.hiring.onboarded} onboarded out of {stats.hiring.total_candidates} total
+                {stats.hiring.converted} converted out of {stats.hiring.total_candidates} total
               </div>
             </div>
           </div>

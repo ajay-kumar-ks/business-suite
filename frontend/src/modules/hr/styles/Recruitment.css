@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════
-   Recruitment Pipeline — Kanban & Styles
+   Recruitment Pipeline — Professional ATS Design
    ══════════════════════════════════════════════ */
 
 /* ── Recruitment Sub-tabs ── */
@@ -32,126 +32,232 @@
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
 }
 
-/* ── Kanban Board ── */
+/* ══════════════════════════════════════════════
+   SINGLE-ROW KANBAN BOARD  (8 Columns)
+   All stages fit within page width — no horizontal scroll
+   ══════════════════════════════════════════════ */
+
+.kanban-wrapper {
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
 .kanban-board {
   display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 12px;
-  min-height: 400px;
+  gap: 8px;
+  min-height: 350px;
+  overflow: visible;
 }
 
 .kanban-column {
-  flex: 0 0 220px;
-  min-width: 220px;
-  background: var(--card-bg, #f8fafc);
+  flex: 1;
+  min-width: 0;
+  width: 12.5%;
+  background: var(--row-hover, #f8fafc);
   border: 1px solid var(--border, #e2e8f0);
-  border-radius: 10px;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
-  max-height: 70vh;
+  max-height: 420px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kanban-column:hover {
+  border-color: var(--primary-light, #bfdbfe);
+}
+
+.kanban-column.drag-over {
+  border-color: var(--primary, #2563eb);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  background: rgba(37, 99, 235, 0.03);
 }
 
 .kanban-column-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
+  padding: 8px 8px;
   border-bottom: 1px solid var(--border, #e2e8f0);
   border-top: 3px solid transparent;
-  border-radius: 10px 10px 0 0;
+  border-radius: 8px 8px 0 0;
   flex-shrink: 0;
+  cursor: default;
+  min-height: 36px;
 }
 
 .kanban-column-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.82rem;
-  font-weight: 600;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
   color: var(--text, #1e293b);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .kanban-stage-dot {
-  width: 10px;
-  height: 10px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   display: inline-block;
+  flex-shrink: 0;
 }
 
 .kanban-count {
   background: var(--border, #e2e8f0);
   color: var(--text-secondary, #64748b);
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 2px 10px;
-  border-radius: 12px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  min-width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+  line-height: 1.4;
 }
 
 .kanban-column-body {
-  padding: 8px;
+  padding: 4px;
   overflow-y: auto;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
+/* ── Kanban Card (Compact ATS Card) ── */
 .kanban-card {
   background: var(--card-bg, #ffffff);
   border: 1px solid var(--border, #e2e8f0);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 6px;
+  padding: 8px 8px;
   cursor: grab;
   transition: all 0.15s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  position: relative;
+  overflow: hidden;
+}
+
+.kanban-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+  border-radius: 3px 0 0 3px;
+  transition: background 0.2s ease;
 }
 
 .kanban-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
   border-color: var(--primary-light, #bfdbfe);
+}
+
+.kanban-card:hover::before {
+  background: var(--primary, #2563eb);
 }
 
 .kanban-card:active {
   cursor: grabbing;
+  transform: scale(0.97);
 }
 
 .kanban-card-name {
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--text, #1e293b);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .kanban-card-position,
-.kanban-card-exp {
+.kanban-card-exp,
+.kanban-card-date {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.75rem;
+  gap: 3px;
+  font-size: 0.65rem;
   color: var(--text-secondary, #64748b);
-  margin-top: 2px;
+  margin-top: 1px;
+}
+
+.kanban-card-position svg,
+.kanban-card-exp svg,
+.kanban-card-date svg {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+}
+
+.kanban-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border, #f1f5f9);
+}
+
+.kanban-card-resume {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.62rem;
+  color: var(--primary, #2563eb);
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s;
+  background: none;
+  border: none;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.kanban-card-resume:hover {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.kanban-card-resume svg {
+  width: 10px;
+  height: 10px;
 }
 
 .kanban-card-actions {
-  margin-top: 8px;
+  margin-top: 4px;
   display: flex;
-  gap: 4px;
+  gap: 3px;
+  flex-wrap: wrap;
 }
 
 .kanban-advance-btn,
 .kanban-convert-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  gap: 2px;
+  padding: 2px 6px;
   border: none;
-  border-radius: 6px;
-  font-size: 0.72rem;
+  border-radius: 4px;
+  font-size: 0.62rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.12s ease;
+  white-space: nowrap;
 }
 
 .kanban-advance-btn {
@@ -172,12 +278,81 @@
   background: #dcfce7;
 }
 
+/* ── Empty State ── */
 .kanban-empty {
   text-align: center;
   color: var(--text-secondary, #94a3b8);
-  font-size: 0.78rem;
-  padding: 24px 8px;
+  font-size: 0.65rem;
+  padding: 16px 4px;
   font-style: italic;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+  justify-content: center;
+  min-height: 50px;
+}
+
+.kanban-empty-icon {
+  opacity: 0.35;
+}
+
+.kanban-empty-text {
+  line-height: 1.3;
+}
+
+/* ── Drag ghost accent ── */
+.kanban-card.dragging {
+  opacity: 0.5;
+  transform: rotate(2deg);
+}
+
+/* ── Column scrollbar ── */
+.kanban-column-body::-webkit-scrollbar {
+  width: 3px;
+}
+
+.kanban-column-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kanban-column-body::-webkit-scrollbar-thumb {
+  background: var(--border, #cbd5e1);
+  border-radius: 3px;
+}
+
+.kanban-column-body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary, #94a3b8);
+}
+
+/* ── Responsive ── */
+/* On narrower screens, wrap columns instead of scrolling */
+@media (max-width: 1400px) {
+  .kanban-board {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .kanban-column {
+    flex: 1 1 calc(25% - 8px);
+    min-width: calc(25% - 8px);
+    max-height: 320px;
+  }
+}
+
+@media (max-width: 900px) {
+  .kanban-column {
+    flex: 1 1 calc(50% - 8px);
+    min-width: calc(50% - 8px);
+  }
+}
+
+@media (max-width: 500px) {
+  .kanban-column {
+    flex: 1 1 100%;
+    min-width: 100%;
+    max-height: 280px;
+  }
 }
 
 /* ── Action button view variant ── */

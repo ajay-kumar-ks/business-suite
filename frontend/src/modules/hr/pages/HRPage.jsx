@@ -10,6 +10,7 @@ import {
   Eye,
   Pencil,
   Trash2,
+  Settings,
 } from 'lucide-react'
 import {
   Chart as ChartJS,
@@ -39,6 +40,7 @@ import RecruitmentKanban from '../components/RecruitmentKanban'
 import CandidateModal from '../components/CandidateModal'
 import CandidateDetail from '../components/CandidateDetail'
 import ConvertToEmployeeModal from '../components/ConvertToEmployeeModal'
+import PipelineManager from '../components/PipelineManager'
 import { hrAPI } from '../services/hrApi'
 import { recruitmentAPI } from '../services/recruitmentApi'
 import Button from '../../../components/ui/Button'
@@ -113,6 +115,7 @@ const HRPage = () => {
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [convertModalOpen, setConvertModalOpen] = useState(false)
   const [candidateToConvert, setCandidateToConvert] = useState(null)
+  const [pipelineManagerOpen, setPipelineManagerOpen] = useState(false)
 
   // ── Chart theme re-render key ──
   const [themeTick, setThemeTick] = useState(0)
@@ -347,13 +350,18 @@ const HRPage = () => {
   }
 
   const handleSaveCandidate = async (data) => {
-    if (editingCandidate) {
-      await recruitmentAPI.updateCandidate(editingCandidate.id, data)
-    } else {
-      await recruitmentAPI.createCandidate(data)
+    try {
+      if (editingCandidate) {
+        await recruitmentAPI.updateCandidate(editingCandidate.id, data)
+      } else {
+        await recruitmentAPI.createCandidate(data)
+      }
+      fetchCandidates()
+      fetchRecruitmentStats()
+    } catch (err) {
+      console.error('Failed to save candidate:', err)
+      throw err // Let the modal catch and display the error
     }
-    fetchCandidates()
-    fetchRecruitmentStats()
   }
 
   const handleViewCandidate = (candidate) => {
@@ -371,17 +379,20 @@ const HRPage = () => {
 
   const handleDoConvert = async (candidateId, data) => {
     const res = await recruitmentAPI.convertToEmployee(candidateId, data)
+    const emp = res.data.employee
     alert(
-      `Candidate converted successfully!\n\n` +
-      `Username: ${res.data.user.username}\n` +
-      `Employee Code: ${res.data.employee.employee_code}\n` +
-      `Temp Password: ${res.data.temp_password}\n\n` +
-      `Please share these credentials with the new employee.`
+      `Candidate converted to employee successfully!\n\n` +
+      `Employee Code: ${emp.employee_code}\n` +
+      `Name: ${emp.full_name || candidateToConvert?.full_name}\n\n` +
+      `A user account was NOT created. Go to User Management to create login credentials for this employee.`
     )
     fetchCandidates()
     fetchRecruitmentStats()
-    fetchUsers()
     fetchEmployees()
+  }
+
+  const handlePipelinesSaved = () => {
+    fetchRoles()
   }
 
   const handleCandidateModalClose = () => {
@@ -737,6 +748,12 @@ const HRPage = () => {
             >
               All Candidates
             </button>
+            <button
+              className={`recruitment-tab ${recruitmentSubTab === 'pipelines' ? 'active' : ''}`}
+              onClick={() => setRecruitmentSubTab('pipelines')}
+            >
+              Pipelines
+            </button>
           </div>
 
           {/* Dashboard View */}
@@ -754,6 +771,21 @@ const HRPage = () => {
               onConvertToEmployee={handleConvertToEmployee}
               onRefresh={() => { fetchCandidates(); fetchRecruitmentStats() }}
             />
+          )}
+
+          {/* Pipelines View */}
+          {recruitmentSubTab === 'pipelines' && (
+            <div>
+              <div style={{ marginBottom: 16 }}>
+                <Button variant="secondary" size="sm" onClick={() => setPipelineManagerOpen(true)}>
+                  <Settings size={16} style={{ marginRight: 4 }} />
+                  Manage Pipeline Templates
+                </Button>
+              </div>
+              <p style={{ color: '#64748b', fontSize: '0.85rem', fontStyle: 'italic' }}>
+                Configure which recruitment stages each role should have. Click "Manage Pipeline Templates" to view and edit.
+              </p>
+            </div>
           )}
 
           {/* List View */}
@@ -814,7 +846,7 @@ const HRPage = () => {
                               <button className="action-btn delete" onClick={() => handleDeleteCandidate(c)} title="Delete candidate">
                                 <Trash2 size={16} />
                               </button>
-                              {c.current_stage === 'Selected' && (
+                              {c.current_stage === 'Onboarded' && !c.converted_to_employee && (
                                 <button className="action-btn approve" onClick={() => handleConvertToEmployee(c)} title="Convert to employee">
                                   <UserPlus size={16} />
                                 </button>
@@ -831,12 +863,19 @@ const HRPage = () => {
           )}
 
           {/* Modals */}
-          <CandidateModal
-            isOpen={candidateModalOpen}
-            onClose={handleCandidateModalClose}
-            onSave={handleSaveCandidate}
-            initialData={editingCandidate}
+          <PipelineManager
+            isOpen={pipelineManagerOpen}
+            onClose={() => setPipelineManagerOpen(false)}
+            onSaved={handlePipelinesSaved}
           />
+
+          <CandidateModal
+              isOpen={candidateModalOpen}
+              onClose={handleCandidateModalClose}
+              onSave={handleSaveCandidate}
+              initialData={editingCandidate}
+              roles={roles}
+            />
 
           <CandidateDetail
             candidate={selectedCandidate}

@@ -3,6 +3,9 @@
   padding: 24px;
   border-radius: 10px;
   box-shadow: 0 12px 30px rgba(2,6,23,0.06);
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .module-page h2 {
@@ -13,4 +16,22 @@
 .module-page p {
   color: var(--text);
   line-height: 1.8;
+}
+
+@media (max-width: 1200px) {
+  .module-page {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  .module-page {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .module-page {
+    padding: 10px;
+  }
 }

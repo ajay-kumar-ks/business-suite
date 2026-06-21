@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
+from sqlalchemy.types import NullType
 from app.core.config import settings
 from app.core.event_bus import event_bus
 from app.core.event_handlers import register_event_handlers
@@ -83,6 +84,45 @@ async def startup_event():
                 with engine.begin() as conn:
                     conn.execute(text('ALTER TABLE contacts ADD COLUMN deleted_at TIMESTAMP NULL'))
                     print('✓ Added missing contacts.deleted_at column')
+
+        # Migration: candidates table — add new columns and migrate current_stage from ENUM to VARCHAR
+        if 'candidates' in inspector.get_table_names():
+            cols = {col['name']: col for col in inspector.get_columns('candidates')}
+
+            # Add new columns if they don't exist (create_all cannot add cols to existing tables)
+            new_columns = {
+                'role_id': 'INTEGER REFERENCES roles(id)',
+                'pipeline_stages': 'JSON',
+                'converted_to_employee': 'BOOLEAN DEFAULT FALSE',
+            }
+            for col_name, col_def in new_columns.items():
+                if col_name not in cols:
+                    with engine.begin() as conn:
+                        conn.execute(text(f'ALTER TABLE candidates ADD COLUMN {col_name} {col_def}'))
+                        print(f'✓ Added candidates.{col_name}')
+
+            # Migrate current_stage from ENUM to VARCHAR if still needed
+            # (We just try the ALTER; if it fails the column is already VARCHAR)
+            stage_col = cols.get('current_stage')
+            if stage_col:
+                type_str = str(stage_col.get('type', '')).lower()
+                # The PostgreSQL ENUM type is named 'recruitmentstage' — contains no 'enum' substring.
+                # Check if the column type is NullType (SQLAlchemy's marker for unrecognized types)
+                is_enum = isinstance(stage_col.get('type'), NullType) or 'enum' in type_str
+                if is_enum:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE candidates ALTER COLUMN current_stage TYPE VARCHAR(100) USING current_stage::text"))
+                        conn.execute(text("ALTER TABLE candidates ALTER COLUMN current_stage SET DEFAULT 'Applied'"))
+                        conn.execute(text("UPDATE candidates SET current_stage = 'Applied' WHERE current_stage = 'APPLIED'"))
+                        conn.execute(text("UPDATE candidates SET current_stage = 'Screening' WHERE current_stage = 'SCREENING'"))
+                        conn.execute(text("UPDATE candidates SET current_stage = 'Interview' WHERE current_stage = 'INTERVIEW'"))
+                        conn.execute(text("UPDATE candidates SET current_stage = 'Technical Round' WHERE current_stage = 'TECHNICAL_ROUND'"))
+                        conn.execute(text("UPDATE candidates SET current_stage = 'HR Round' WHERE current_stage = 'HR_ROUND'"))
+                        conn.execute(text("UPDATE candidates SET current_stage = 'Selected' WHERE current_stage = 'SELECTED'"))
+                        conn.execute(text("UPDATE candidates SET current_stage = 'Rejected' WHERE current_stage = 'REJECTED'"))
+                        conn.execute(text("UPDATE candidates SET current_stage = 'Onboarded' WHERE current_stage = 'ONBOARDED'"))
+                        print('✓ Migrated candidates.current_stage from ENUM to VARCHAR')
+
         Base.metadata.create_all(bind=engine)
         print("[OK] Database tables created")
     except Exception as e:

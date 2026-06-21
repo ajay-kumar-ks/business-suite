@@ -4,13 +4,15 @@ from typing import Optional
 from app.core.database import get_db
 from app.modules.auth.routers import get_current_user
 from app.modules.auth.models import User
-from app.modules.recruitment.db_models import RecruitmentStage
 from app.modules.recruitment.schemas import (
     CandidateCreate,
     CandidateUpdate,
     CandidateResponse,
     MoveStageRequest,
     ConvertToEmployeeRequest,
+    PipelineTemplateCreate,
+    PipelineTemplateUpdate,
+    PipelineTemplateResponse,
 )
 from app.modules.recruitment.crud import (
     get_candidates,
@@ -24,6 +26,12 @@ from app.modules.recruitment.crud import (
     get_candidates_by_position,
     get_candidates_by_stage,
     get_hiring_stats,
+    get_pipeline_templates,
+    get_pipeline_template,
+    create_pipeline_template,
+    update_pipeline_template,
+    delete_pipeline_template,
+    seed_default_pipeline_templates,
 )
 from app.modules.recruitment.services import format_candidate_response
 
@@ -52,6 +60,116 @@ def require_admin(current_user: User = Depends(get_current_user)):
 @router.get("/")
 async def health():
     return {"status": "Recruitment module ready"}
+
+
+# ──────────────────────────────────────────────
+# Pipeline Templates
+# ──────────────────────────────────────────────
+
+
+@router.get("/pipeline-templates", response_model=list[PipelineTemplateResponse])
+async def api_get_pipeline_templates(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    templates = get_pipeline_templates(db)
+    result = []
+    for t in templates:
+        result.append({
+            "id": t.id,
+            "role_id": t.role_id,
+            "stages": t.stages,
+            "role_name": t.role.name if t.role else None,
+            "created_at": t.created_at,
+            "updated_at": t.updated_at,
+        })
+    return result
+
+
+@router.get("/pipeline-templates/{template_id}", response_model=PipelineTemplateResponse)
+async def api_get_pipeline_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    template = get_pipeline_template(db, template_id)
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline template with id {template_id} not found",
+        )
+    return {
+        "id": template.id,
+        "role_id": template.role_id,
+        "stages": template.stages,
+        "role_name": template.role.name if template.role else None,
+        "created_at": template.created_at,
+        "updated_at": template.updated_at,
+    }
+
+
+@router.post("/pipeline-templates", response_model=PipelineTemplateResponse, status_code=status.HTTP_201_CREATED)
+async def api_create_pipeline_template(
+    data: PipelineTemplateCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    template = create_pipeline_template(db, data)
+    return {
+        "id": template.id,
+        "role_id": template.role_id,
+        "stages": template.stages,
+        "role_name": template.role.name if template.role else None,
+        "created_at": template.created_at,
+        "updated_at": template.updated_at,
+    }
+
+
+@router.put("/pipeline-templates/{template_id}", response_model=PipelineTemplateResponse)
+async def api_update_pipeline_template(
+    template_id: int,
+    data: PipelineTemplateUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    template = update_pipeline_template(db, template_id, data)
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline template with id {template_id} not found",
+        )
+    return {
+        "id": template.id,
+        "role_id": template.role_id,
+        "stages": template.stages,
+        "role_name": template.role.name if template.role else None,
+        "created_at": template.created_at,
+        "updated_at": template.updated_at,
+    }
+
+
+@router.delete("/pipeline-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def api_delete_pipeline_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    deleted = delete_pipeline_template(db, template_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline template with id {template_id} not found",
+        )
+
+
+@router.post("/seed-pipelines")
+async def api_seed_pipeline_templates(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Auto-create pipeline templates for roles that don't have one yet."""
+    created = seed_default_pipeline_templates(db)
+    return {"message": f"Created {created} pipeline template(s)", "created": created}
 
 
 # ──────────────────────────────────────────────
@@ -146,7 +264,7 @@ async def api_move_candidate_stage(
 
 
 # ──────────────────────────────────────────────
-# Convert to Employee
+# Convert to Employee (from Onboarded)
 # ──────────────────────────────────────────────
 
 

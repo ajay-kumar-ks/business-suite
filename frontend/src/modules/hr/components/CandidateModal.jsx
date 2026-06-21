@@ -8,12 +8,13 @@ const EMPTY_FORM = {
   full_name: '',
   email: '',
   phone: '',
+  role_id: '',
   position_applied: '',
   experience_years: '',
   notes: '',
 }
 
-const CandidateModal = ({ isOpen, onClose, onSave, initialData }) => {
+const CandidateModal = ({ isOpen, onClose, onSave, initialData, roles = [] }) => {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -26,6 +27,7 @@ const CandidateModal = ({ isOpen, onClose, onSave, initialData }) => {
           full_name: initialData.full_name || '',
           email: initialData.email || '',
           phone: initialData.phone || '',
+          role_id: initialData.role_id?.toString() || '',
           position_applied: initialData.position_applied || '',
           experience_years: initialData.experience_years?.toString() || '',
           notes: initialData.notes || '',
@@ -41,6 +43,18 @@ const CandidateModal = ({ isOpen, onClose, onSave, initialData }) => {
 
   const handleChange = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
+    if (error) setError('')
+  }
+
+  const handleRoleChange = (e) => {
+    const selectedRoleId = e.target.value
+    const selectedRole = roles.find((r) => r.id.toString() === selectedRoleId)
+    setForm((prev) => ({
+      ...prev,
+      role_id: selectedRoleId,
+      // Auto-fill position from role name
+      position_applied: selectedRole ? selectedRole.name : prev.position_applied,
+    }))
     if (error) setError('')
   }
 
@@ -64,6 +78,7 @@ const CandidateModal = ({ isOpen, onClose, onSave, initialData }) => {
       full_name: form.full_name.trim(),
       email: form.email.trim(),
       phone: form.phone.trim() || null,
+      role_id: form.role_id ? parseInt(form.role_id, 10) : undefined,
       position_applied: form.position_applied.trim(),
       experience_years: parseFloat(form.experience_years) || 0,
       notes: form.notes.trim() || null,
@@ -131,6 +146,23 @@ const CandidateModal = ({ isOpen, onClose, onSave, initialData }) => {
               />
             </div>
             <div className="form-group">
+              <label htmlFor="role_id">Role / Position</label>
+              <select
+                id="role_id"
+                value={form.role_id}
+                onChange={handleRoleChange}
+                disabled={isEditing}
+              >
+                <option value="">Select a role (auto-fills pipeline)...</option>
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
               <label htmlFor="position_applied">Position Applied *</label>
               <input
                 id="position_applied"
@@ -141,9 +173,6 @@ const CandidateModal = ({ isOpen, onClose, onSave, initialData }) => {
                 required
               />
             </div>
-          </div>
-
-          <div className="form-row">
             <div className="form-group">
               <Input
                 label="Experience (Years)"
@@ -156,7 +185,6 @@ const CandidateModal = ({ isOpen, onClose, onSave, initialData }) => {
                 placeholder="e.g. 3"
               />
             </div>
-            <div className="form-group" />
           </div>
 
           <div className="form-group" style={{ marginBottom: 16 }}>

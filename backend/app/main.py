@@ -65,29 +65,6 @@ async def startup_event():
         Base.metadata.create_all(bind=engine)
         print("[OK] Database tables created")
 
-        # Ensure default Accounts tenant exists locally (single-company mode)
-        try:
-            from app.core.database import SessionLocal
-            from app.modules.accounts.models import Tenant as AccountsTenant
-            from app.modules.accounts.services import seed_default_chart_of_accounts
-
-            db = SessionLocal()
-            try:
-                tenant = db.query(AccountsTenant).order_by(AccountsTenant.created_at).first()
-                if not tenant:
-                    tenant = AccountsTenant(name="Default Company", status="active", is_active=True)
-                    db.add(tenant)
-                    db.commit()
-                    db.refresh(tenant)
-                    seed_default_chart_of_accounts(db, tenant.id)
-                    print(f"[OK] Default tenant created: {tenant.id} ({tenant.name})")
-                else:
-                    print(f"[OK] Default tenant exists: {tenant.id} ({tenant.name})")
-            finally:
-                db.close()
-        except Exception as e:
-            print(f"[WARN] Default tenant sync failed: {str(e)[:200]}")
-
     except Exception as e:
         print(f"[WARN] Database connection warning: {str(e)[:100]}")
         print("[OK] Server started (database connection failed - check your DATABASE_URL credentials in .env)")

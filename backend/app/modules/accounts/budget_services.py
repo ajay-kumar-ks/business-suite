@@ -12,7 +12,6 @@ def calculate_budget_consumption(db: Session, budget_line) -> None:
         db.query(func.sum(LedgerEntry.debit).label("total_spent"))
         .filter(
             LedgerEntry.account_id == budget_line.account_id,
-            LedgerEntry.tenant_id == budget_line.tenant_id,
         )
         .first()
     )

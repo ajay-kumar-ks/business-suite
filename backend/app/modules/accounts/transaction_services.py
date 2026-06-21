@@ -15,7 +15,6 @@ def create_expense_journal(db: Session, expense: Expense) -> JournalEntry:
     cash_account_id = 2
 
     journal = JournalEntry(
-        tenant_id=expense.tenant_id,
         reference=expense.reference or f"EXP-{expense.id}",
         description=f"Expense: {expense.description}",
         status="draft",
@@ -25,7 +24,6 @@ def create_expense_journal(db: Session, expense: Expense) -> JournalEntry:
     db.flush()
 
     debit_line = JournalLine(
-        tenant_id=expense.tenant_id,
         journal_id=journal.id,
         account_id=expense.account_id,
         memo=expense.description,
@@ -35,7 +33,6 @@ def create_expense_journal(db: Session, expense: Expense) -> JournalEntry:
     db.add(debit_line)
 
     credit_line = JournalLine(
-        tenant_id=expense.tenant_id,
         journal_id=journal.id,
         account_id=cash_account_id,
         memo=f"Payment for {expense.description}",
@@ -58,7 +55,6 @@ def create_income_journal(db: Session, income: Income) -> JournalEntry:
     cash_account_id = 2
 
     journal = JournalEntry(
-        tenant_id=income.tenant_id,
         reference=income.reference or f"INC-{income.id}",
         description=f"Income: {income.description}",
         status="draft",
@@ -68,7 +64,6 @@ def create_income_journal(db: Session, income: Income) -> JournalEntry:
     db.flush()
 
     debit_line = JournalLine(
-        tenant_id=income.tenant_id,
         journal_id=journal.id,
         account_id=cash_account_id,
         memo=f"Receipt from {income.description}",
@@ -78,7 +73,6 @@ def create_income_journal(db: Session, income: Income) -> JournalEntry:
     db.add(debit_line)
 
     credit_line = JournalLine(
-        tenant_id=income.tenant_id,
         journal_id=journal.id,
         account_id=income.account_id,
         memo=income.description,

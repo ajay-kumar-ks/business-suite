@@ -14,7 +14,6 @@ class CustomerCreate(BaseModel):
 
 class CustomerRead(BaseModel):
     id: int
-    tenant_id: uuid.UUID
     name: str
     email: str | None
     phone: str | None
@@ -37,7 +36,6 @@ class InvoiceCreate(BaseModel):
 
 class InvoiceRead(BaseModel):
     id: int
-    tenant_id: uuid.UUID
     customer_id: int
     invoice_number: str
     invoice_date: datetime
@@ -62,7 +60,6 @@ class CustomerPaymentCreate(BaseModel):
 
 class CustomerPaymentRead(BaseModel):
     id: int
-    tenant_id: uuid.UUID
     invoice_id: int
     payment_date: datetime
     amount: float

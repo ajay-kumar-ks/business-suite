@@ -229,6 +229,86 @@ class LeadSchema(LeadBaseSchema):
         from_attributes = True
 
 
+# ── AI Pipeline Insights Schemas (Phase 4) ──
+
+class PipelineInsight(BaseModel):
+    severity: str = "info"  # critical, warning, info, positive
+    type: str = "insight"   # summary, risk, opportunity, bottleneck, recommendation, insight
+    message: str
+    details: Optional[str] = None  # AI-generated detailed explanation
+    count: int = 0
+    filter_query: Optional[str] = None  # e.g. "stalled" or "phase=phase_id"
+    lead_ids: Optional[list[str]] = None  # related lead IDs for click-through
+    action_label: Optional[str] = None  # e.g. "View stalled leads", "View hot leads"
+
+
+class PipelineHealthSummary(BaseModel):
+    score: int = 0  # 0-100 overall pipeline health
+    total_value: int = 0
+    lead_count: int = 0
+    top_risk: Optional[str] = None
+    top_opportunity: Optional[str] = None
+    recommendation: Optional[str] = None
+
+
+class PipelineInsightsResponse(BaseModel):
+    insights: list[PipelineInsight] = []
+    summary: Optional[PipelineHealthSummary] = None
+    pipeline_id: str
+    pipeline_name: str = ""
+
+
+# ── AI Next-Best-Action Schemas (Phase 3) ──
+
+class AINextActionRequest(BaseModel):
+    lead_id: str
+
+
+class AINextActionResponse(BaseModel):
+    action: str
+    description: str
+    suggested_phase_id: Optional[str] = None
+    urgency: str = "medium"  # high, medium, low
+
+
+# ── AI Suggest Assignee Schemas (Phase 2) ──
+
+class AISuggestAssigneeRequest(BaseModel):
+    title: str = ""
+    value: Optional[int] = None
+    source: Optional[str] = None
+    notes: Optional[str] = None
+    pipeline_id: str
+    contact_company: Optional[str] = None
+
+
+class AssigneeSuggestion(BaseModel):
+    employee_id: int
+    name: str
+    confidence: int
+    reason: str
+    current_load: int
+
+
+class AISuggestAssigneeResponse(BaseModel):
+    suggestions: list[AssigneeSuggestion] = []
+
+
+# ── CRM Chatbot Schemas (Phase 5) ──
+
+class ChatbotMessage(BaseModel):
+    role: str = "user"  # user, assistant
+    content: str
+
+
+class ChatbotRequest(BaseModel):
+    message: str
+    history: list[ChatbotMessage] = []
+
+
+class ChatbotResponse(BaseModel):
+    reply: str
+
 
 # Merge Request Schema
 class MergeContactsSchema(BaseModel):

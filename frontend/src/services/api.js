@@ -107,6 +107,8 @@ export const crmAPI = {
   deleteLead: (id) => api.delete(`/crm/leads/${id}`),
   moveLead: (id, data) => api.put(`/crm/leads/${id}/move`, data),
   convertLead: (id) => api.post(`/crm/leads/${id}/convert`),
+  scoreLead: (id) => api.post(`/crm/leads/${id}/score`),
+  scoreAllLeads: (params = {}) => api.post('/crm/leads/score-all', null, { params }),
   
   // Clients
   listClients: (params = {}) => api.get('/crm/clients', { params }),

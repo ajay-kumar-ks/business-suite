@@ -13,7 +13,7 @@ from app.core.tenant import TenantMiddleware
 from app.modules.auth.routers import router as auth_router
 from app.modules.hr.routers import router as hr_router
 from app.modules.accounts.routers import router as accounts_router
-from app.modules.crm.routers import router as crm_router, leads_router as crm_leads_router, pipelines_router as crm_pipelines_router, clients_router as crm_clients_router
+from app.modules.crm.routers import router as crm_router, leads_router as crm_leads_router, pipelines_router as crm_pipelines_router, clients_router as crm_clients_router, ai_router as crm_ai_router
 from app.modules.tasks.routers import router as tasks_router
 from app.modules.tasks.upload import router as upload_router
 from app.modules.tasks.scheduler import run_overdue_scheduler
@@ -61,6 +61,7 @@ app.include_router(crm_pipelines_router, prefix="/api/crm", tags=["crm"])
 app.include_router(upload_router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(recruitment_router, prefix="/api/recruitment", tags=["recruitment"])
 app.include_router(crm_clients_router, prefix="/api/crm", tags=["crm"])
+app.include_router(crm_ai_router, prefix="/api/crm", tags=["crm"])
 
 # Serve uploaded files
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads")

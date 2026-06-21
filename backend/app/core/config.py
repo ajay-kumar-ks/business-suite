@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     API_HOST: str = "https://us-west-2.api.thenile.dev/v2/databases/019ed429-f542-7277-a13f-29f08d50a550"
     EVENT_BUS_URL: str = "memory://local"
     ENVIRONMENT: str = "development"
+    GEMINI_API_KEY: str = ""
 
     model_config = ConfigDict(env_file=DOTENV_PATH, extra="ignore")
 

@@ -24,8 +24,13 @@ body {
   --sidebar: #FFFFFF;
   --primary: #3B82F6;
   --text: #1E293B;
+  --text-secondary: #64748B;
   --border: #E5E7EB;
   --hover: #F1F5F9;
+  --surface: #FFFFFF;
+  --success: #22C55E;
+  --warning: #EAB308;
+  --danger: #EF4444;
 }
 
 
@@ -35,8 +40,13 @@ body {
   --sidebar: #1E293B;
   --primary: #3B82F6;
   --text: #E2E8F0;
+  --text-secondary: #94A3B8;
   --border: #334155;
   --hover: #334155;
+  --surface: #1E293B;
+  --success: #22C55E;
+  --warning: #EAB308;
+  --danger: #EF4444;
 }
 
 /* Keep sidebar-specific class in case we want scoped-only sidebar theme elsewhere */

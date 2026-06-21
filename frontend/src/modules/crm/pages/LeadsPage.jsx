@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { Plus, Trash2, Search, Settings, ChevronDown, Check, CheckCircle2, Check as CheckIcon, X as XIcon, AlertTriangle } from 'lucide-react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { Plus, Trash2, Search, Settings, ChevronDown, Check, CheckCircle2, Check as CheckIcon, X as XIcon, AlertTriangle, Sparkles, BarChart3, ChevronUp, TrendingUp, TrendingDown, Lightbulb, Target, Zap } from 'lucide-react'
 import LeadForm from '../components/LeadForm'
 import LeadDetailModal from '../components/LeadDetailModal'
 import SettingsModal from '../components/SettingsModal'
@@ -25,12 +25,26 @@ const LeadsPage = ({ prefillContact = null }) => {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [orphanedLeads, setOrphanedLeads] = useState([])
   const [showOrphaned, setShowOrphaned] = useState(true)
+  const [scoringLeads, setScoringLeads] = useState(false)
+  const [insights, setInsights] = useState([])
+  const [insightsSummary, setInsightsSummary] = useState(null)
+  const [insightsLoading, setInsightsLoading] = useState(false)
+  const [showInsights, setShowInsights] = useState(true)
+  const [filterByPhase, setFilterByPhase] = useState(null)
   const dropdownRef = useRef(null)
 
   const fetchLeads = async () => {
     try {
       const response = await fetch('/api/crm/leads/')
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
       const data = await response.json()
+      if (!Array.isArray(data)) {
+        console.error('Leads API returned non-array:', data)
+        setLeads([])
+        return
+      }
       setLeads(data)
       // Fetch pipeline info for each lead
       const uniquePipelineIds = [...new Set(data.map(l => l.pipeline_id).filter(Boolean))]
@@ -39,6 +53,7 @@ const LeadsPage = ({ prefillContact = null }) => {
       }
     } catch (error) {
       console.error('Failed to fetch leads:', error)
+      setLeads([])
     }
   }
 
@@ -88,10 +103,16 @@ const LeadsPage = ({ prefillContact = null }) => {
       const response = await fetch('/api/crm/pipelines/')
       if (!response.ok) throw new Error('Failed to fetch pipelines')
       const data = await response.json()
+      if (!Array.isArray(data)) {
+        console.error('Pipelines API returned non-array:', data)
+        setPipelineList([])
+        return
+      }
       setPipelineList(data)
       await Promise.all(data.map((pipeline) => fetchPipelineInfo(pipeline.id)))
     } catch (error) {
       console.error('Failed to fetch pipelines:', error)
+      setPipelineList([])
     }
   }
 
@@ -143,6 +164,32 @@ const LeadsPage = ({ prefillContact = null }) => {
   useEffect(() => {
     loadData()
   }, [])
+
+  const fetchInsights = useCallback(async (pipelineId) => {
+    if (!pipelineId) return
+    setInsights([])
+    setInsightsSummary(null)
+    setInsightsLoading(true)
+    try {
+      const res = await fetch(`/api/crm/ai/pipeline-insights?pipeline_id=${pipelineId}`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        setInsights(data.insights || [])
+        setInsightsSummary(data.summary || null)
+      }
+    } catch {
+      setInsights([])
+      setInsightsSummary(null)
+    } finally {
+      setInsightsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (pipelineFilter) {
+      fetchInsights(pipelineFilter)
+    }
+  }, [pipelineFilter, fetchInsights])
 
   useEffect(() => {
     if (pipelineList.length > 0 && !pipelineFilter) {
@@ -276,6 +323,17 @@ const LeadsPage = ({ prefillContact = null }) => {
   const filteredLeads = leads.filter((lead) => {
     if (searchTerm && !lead.title.toLowerCase().includes(searchTerm.toLowerCase())) return false
     if (pipelineFilter && String(lead.pipeline_id) !== pipelineFilter) return false
+    if (filterByPhase === 'stalled') {
+      // Show only leads stalled >7 days in non-terminal phases
+      if (!lead.phase_id) return false
+      const phase = Object.values(phases).find((p) => p.id === lead.phase_id)
+      if (phase?.is_terminal) return false
+      const daysSinceUpdate = lead.updated_at ? Math.floor((Date.now() - new Date(lead.updated_at).getTime()) / (1000 * 60 * 60 * 24)) : 0
+      if (daysSinceUpdate < 7) return false
+    } else if (filterByPhase && filterByPhase.startsWith('phase=')) {
+      const targetPhase = filterByPhase.replace('phase=', '')
+      if (lead.phase_id !== targetPhase) return false
+    }
     return true
   })
 
@@ -379,6 +437,122 @@ const LeadsPage = ({ prefillContact = null }) => {
           </div>
         </div>
 
+      {/* ── AI Pipeline Health Insights Panel ── */}
+      {(insights.length > 0 || insightsSummary) && (
+        <div className="pipeline-insights">
+          <div className="pipeline-insights-header" onClick={() => setShowInsights((prev) => !prev)}>
+            <div className="pipeline-insights-title">
+              <Sparkles size={15} />
+              <span>AI Pipeline Health</span>
+              <span className="pipeline-insights-count">{insights.length}</span>
+            </div>
+            <ChevronUp size={16} className={`pipeline-insights-chevron ${showInsights ? '' : 'collapsed'}`} />
+          </div>
+          {showInsights && (
+            <div className="pipeline-insights-body">
+              {/* ── Health Score Summary Card ── */}
+              {insightsSummary && (
+                <div className="health-summary-card">
+                  <div className="health-score-ring">
+                    <svg viewBox="0 0 48 48" width="48" height="48">
+                      <circle cx="24" cy="24" r="20" fill="none" stroke="var(--border)" strokeWidth="4" />
+                      <circle
+                        cx="24" cy="24" r="20" fill="none"
+                        stroke={insightsSummary.score >= 70 ? '#22c55e' : insightsSummary.score >= 40 ? '#eab308' : '#ef4444'}
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeDasharray={`${2 * Math.PI * 20}`}
+                        strokeDashoffset={`${2 * Math.PI * 20 * (1 - (insightsSummary.score || 0) / 100)}`}
+                        transform="rotate(-90 24 24)"
+                        style={{ transition: 'stroke-dashoffset 0.8s ease' }}
+                      />
+                    </svg>
+                    <span className="health-score-value">{insightsSummary.score || '?'}</span>
+                  </div>
+                  <div className="health-summary-details">
+                    <div className="health-summary-stat">
+                      <span className="health-stat-label">Pipeline Value</span>
+                      <span className="health-stat-value">
+                        ${(insightsSummary.total_value || 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="health-summary-stat">
+                      <span className="health-stat-label">Total Leads</span>
+                      <span className="health-stat-value">{insightsSummary.lead_count || 0}</span>
+                    </div>
+                  </div>
+                  <div className="health-summary-analysis">
+                    {insightsSummary.top_risk && (
+                      <div className="health-analysis-item risk">
+                        <TrendingDown size={13} />
+                        <span>{insightsSummary.top_risk}</span>
+                      </div>
+                    )}
+                    {insightsSummary.top_opportunity && (
+                      <div className="health-analysis-item opportunity">
+                        <TrendingUp size={13} />
+                        <span>{insightsSummary.top_opportunity}</span>
+                      </div>
+                    )}
+                    {insightsSummary.recommendation && (
+                      <div className="health-analysis-item recommendation">
+                        <Lightbulb size={13} />
+                        <span>{insightsSummary.recommendation}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── AI Insight Cards ── */}
+              {insights.map((insight, idx) => (
+                <div key={idx} className={`pipeline-insight-item severity-${insight.severity} type-${insight.type}`}>
+                  <div className="pipeline-insight-icon">
+                    {insight.severity === 'critical' && <AlertTriangle size={14} />}
+                    {insight.severity === 'warning' && <AlertTriangle size={14} />}
+                    {insight.severity === 'positive' && <Target size={14} />}
+                    {insight.severity === 'info' && insight.type === 'recommendation' && <Lightbulb size={14} />}
+                    {insight.severity === 'info' && insight.type === 'summary' && <BarChart3 size={14} />}
+                    {insight.severity === 'info' && insight.type === 'opportunity' && <TrendingUp size={14} />}
+                    {insight.type === 'bottleneck' && <Zap size={14} />}
+                  </div>
+                  <div className="pipeline-insight-content">
+                    <span className="pipeline-insight-message">{insight.message}</span>
+                    {insight.details && (
+                      <span className="pipeline-insight-details">{insight.details}</span>
+                    )}
+                  </div>
+                  <div className="pipeline-insight-actions">
+                    {insight.filter_query && (
+                      <button
+                        type="button"
+                        className={`pipeline-insight-filter-btn ${filterByPhase === insight.filter_query ? 'active' : ''}`}
+                        onClick={() => {
+                          if (filterByPhase === insight.filter_query) {
+                            setFilterByPhase(null)
+                          } else {
+                            setFilterByPhase(insight.filter_query)
+                          }
+                        }}
+                      >
+                        {insight.action_label || 'View'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {insightsLoading && (
+        <div className="pipeline-insights pipeline-insights-loading">
+          <Loader size={14} />
+          <span>AI analyzing pipeline health...</span>
+        </div>
+      )}
+
       <div className="kanban-board">
         {isRefreshing && (
           <div className="kanban-loader-overlay">
@@ -410,6 +584,31 @@ const LeadsPage = ({ prefillContact = null }) => {
                       {showOrphaned ? 'Hide' : `${orphanedLeads.length} orphaned`}
                     </button>
                   )}
+                  <button
+                    type="button"
+                    className="score-all-btn"
+                    onClick={async () => {
+                      setScoringLeads(true)
+                      try {
+                        const res = await fetch(`/api/crm/leads/score-all?pipeline_id=${selectedPipeline.id}`, { method: 'POST' })
+                        if (!res.ok) {
+                          const errData = await res.json().catch(() => ({}))
+                          throw new Error(errData.detail || `HTTP ${res.status}`)
+                        }
+                        await fetchLeads()
+                        showMessage(`Leads scored successfully!`, 'success')
+                      } catch (e) {
+                        showMessage(`Failed to score leads: ${e.message}`, 'error')
+                      } finally {
+                        setScoringLeads(false)
+                      }
+                    }}
+                    disabled={scoringLeads}
+                    title="Run AI scoring on all leads in this pipeline"
+                  >
+                    <Sparkles size={13} />
+                    {scoringLeads ? 'Scoring...' : 'Score Leads'}
+                  </button>
                   <span>{filteredLeads.filter((lead) => lead.pipeline_id === selectedPipeline.id).length} leads</span>
                 </div>
               </div>
@@ -445,6 +644,15 @@ const LeadsPage = ({ prefillContact = null }) => {
                                 <span className="card-title">{lead.title}</span>
                                 {company && company !== '-' && <span className="card-company">{company}</span>}
                               </div>
+                              {(lead.extra_data?.ai_score != null) && (
+                                <span
+                                  className="ai-score-badge"
+                                  data-score={lead.extra_data.ai_score}
+                                  title={`AI Score: ${lead.extra_data.ai_score}/100`}
+                                >
+                                  {lead.extra_data.ai_score}
+                                </span>
+                              )}
                             </div>
                             <div className="card-middle">
                               <div className="card-contact-info">
@@ -530,7 +738,18 @@ const LeadsPage = ({ prefillContact = null }) => {
                                     <span className="card-title">{lead.title}</span>
                                     {company && company !== '-' && <span className="card-company">{company}</span>}
                                   </div>
-                                  {isConverted && <CheckCircle2 size={16} className="card-converted" />}
+                                  <div className="card-top-right">
+                                    {(lead.extra_data?.ai_score != null) && (
+                                      <span
+                                        className="ai-score-badge"
+                                        data-score={lead.extra_data.ai_score}
+                                        title={`AI Score: ${lead.extra_data.ai_score}/100 — ${lead.extra_data.ai_score_reason || ''}`}
+                                      >
+                                        {lead.extra_data.ai_score}
+                                      </span>
+                                    )}
+                                    {isConverted && <CheckCircle2 size={16} className="card-converted" />}
+                                  </div>
                                 </div>
                                 <div className="card-middle">
                                   <div className="card-contact-info">

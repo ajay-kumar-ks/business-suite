@@ -36,6 +36,15 @@ from .schemas import (
     PipelineAssignmentUpdateSchema,
     DepartmentAssignmentConfig,
     AssignToPipelineSchema,
+    AISuggestAssigneeRequest,
+    AISuggestAssigneeResponse,
+    AssigneeSuggestion,
+    AINextActionRequest,
+    AINextActionResponse,
+    PipelineInsight,
+    PipelineInsightsResponse,
+    ChatbotRequest,
+    ChatbotResponse,
 )
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
@@ -501,7 +510,327 @@ async def convert_lead(lead_id: str, db: Session = Depends(get_db)):
     return {"success": True, "lead_id": lead.id, "client_id": client.id}
 
 
-# ============= CLIENTS ENDPOINTS (Phase 4) ✅ 4.1 ✅ 4.2 =============
+# ════════════════════════════════════════════════════════════
+# AI ENDPOINTS (Phase 1 — Lead Scoring)
+# ════════════════════════════════════════════════════════════
+
+
+@leads_router.post("/{lead_id}/score")
+async def score_lead_ai(lead_id: str, db: Session = Depends(get_db)):
+    """Score a single lead using Gemini AI. Stores result in extra_data."""
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    from app.modules.crm.ai_service import score_lead as ai_score
+    from sqlalchemy.orm.attributes import flag_modified
+    score, reason = ai_score(lead)
+
+    extra = dict(lead.extra_data or {})
+    extra["ai_score"] = score
+    extra["ai_score_reason"] = reason
+    extra["ai_scored_at"] = datetime.utcnow().isoformat()
+    lead.extra_data = extra
+    flag_modified(lead, "extra_data")
+
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    return {"lead_id": lead.id, "score": score, "reason": reason}
+
+
+@leads_router.post("/score-all")
+async def score_all_leads_ai(pipeline_id: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    """Score all leads (optionally filtered by pipeline)."""
+    query = db.query(Lead)
+    if pipeline_id:
+        query = query.filter(Lead.pipeline_id == pipeline_id)
+
+    leads = query.all()
+    from app.modules.crm.ai_service import score_lead_basic
+    from sqlalchemy.orm.attributes import flag_modified
+    results = []
+    for lead in leads:
+        score, reason = score_lead_basic(lead)
+        extra = dict(lead.extra_data or {})
+        extra["ai_score"] = score
+        extra["ai_score_reason"] = reason
+        extra["ai_scored_at"] = datetime.utcnow().isoformat()
+        lead.extra_data = extra
+        flag_modified(lead, "extra_data")
+        db.add(lead)
+        results.append({"lead_id": lead.id, "score": score, "reason": reason})
+
+    db.commit()
+    return {"scored": len(results), "results": results}
+
+
+# ════════════════════════════════════════════════════════════
+# AI ENDPOINTS (Phase 2 — Smart Lead Assignment)
+# ════════════════════════════════════════════════════════════
+
+ai_router = APIRouter(prefix="/ai", tags=["ai"])
+
+
+@ai_router.post("/suggest-assignee", response_model=AISuggestAssigneeResponse)
+async def suggest_assignee_ai(
+    data: AISuggestAssigneeRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Given lead details + pipeline_id, return top 3 suggested assignees
+    based on workload, role fit, and past performance.
+    """
+    # 1. Find pipeline assignment config
+    assignment = db.query(PipelineAssignment).filter(
+        PipelineAssignment.pipeline_id == data.pipeline_id
+    ).first()
+    if not assignment or not assignment.departments_config:
+        raise HTTPException(
+            status_code=404,
+            detail="No assignment config found for this pipeline. Configure department groups in Settings > Assign Member first."
+        )
+
+    # 2. Collect employee IDs from all configured departments
+    from app.modules.hr.crud import get_employee
+
+    candidate_emp_ids = set()
+    for dc in assignment.departments_config:
+        members = dc.get("selected_members", [])
+        if dc.get("individual_assignee_id"):
+            members.append(dc["individual_assignee_id"])
+        for eid in members:
+            candidate_emp_ids.add(eid)
+
+    if not candidate_emp_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="No members configured in pipeline assignment. Add members in Settings > Assign Member first."
+        )
+
+    # 3. Build candidate list with workload counts
+    candidates = []
+    for eid in candidate_emp_ids:
+        emp = get_employee(db, eid)
+        if not emp:
+            continue
+        # Count current leads assigned to this employee in this pipeline
+        lead_count = db.query(Lead).filter(
+            Lead.assignee == (emp.user.full_name or emp.user.username or str(emp.id)),
+            Lead.pipeline_id == data.pipeline_id,
+        ).count()
+
+        candidates.append({
+            "id": emp.id,
+            "name": emp.user.full_name or emp.user.username or f"Employee #{emp.id}",
+            "role": emp.role.name if emp.role else "",
+            "department": emp.department.name if emp.department else "",
+            "current_lead_count": lead_count,
+        })
+
+    if not candidates:
+        raise HTTPException(status_code=400, detail="No valid employees found from pipeline assignment config")
+
+    # 4. Call AI service for suggestions
+    from app.modules.crm.ai_service import suggest_assignee as ai_suggest
+    suggestions = ai_suggest(
+        title=data.title,
+        value=data.value,
+        source=data.source,
+        notes=data.notes,
+        company=data.contact_company,
+        candidates=candidates,
+    )
+
+    return AISuggestAssigneeResponse(suggestions=suggestions)
+
+
+@ai_router.post("/next-action", response_model=AINextActionResponse)
+async def next_best_action_ai(
+    data: AINextActionRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Analyze a lead and recommend the single most impactful next action.
+    Based on current phase, days in phase, value, history, notes, and source.
+    Returns action, description, suggested_phase_id, and urgency.
+    """
+    lead = db.query(Lead).filter(Lead.id == data.lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Get all phases for this lead's pipeline
+    phases_q = db.query(Phase).filter(Phase.pipeline_id == lead.pipeline_id).order_by(Phase.position).all()
+    phases = [{"id": p.id, "name": p.name} for p in phases_q]
+
+    from app.modules.crm.ai_service import next_best_action as ai_next
+    result = ai_next(lead, phases)
+
+    return AINextActionResponse(**result)
+
+
+@ai_router.post("/chat")
+async def crm_chatbot(
+    data: ChatbotRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    CRM Chatbot: Answers user questions about CRM data.
+    Uses Gemini AI with full CRM context to provide intelligent responses.
+    Only answers questions related to CRM content.
+    """
+    # Fetch all CRM data
+    contacts = db.query(Contact).all()
+    leads = db.query(Lead).all()
+    pipelines = db.query(Pipeline).all()
+    phases = db.query(Phase).all()
+    clients = db.query(Client).all()
+    recent_activities = db.query(Activity).order_by(Activity.created_at.desc()).limit(25).all()
+    tags = db.query(Tag).all()
+
+    # Convert to dicts for the AI service
+    from app.modules.crm.ai_service import crm_chatbot as ai_chat
+
+    contacts_data = []
+    for c in contacts:
+        d = {
+            "id": c.id,
+            "name": c.name,
+            "email": c.email,
+            "phone": c.phone,
+            "company": c.company,
+            "job_title": c.job_title,
+            "status": c.status,
+            "source": c.source,
+            "tags": [{"name": t.name, "color": t.color} for t in (c.tags or [])],
+            "notes": c.notes,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        }
+        contacts_data.append(d)
+
+    leads_data = []
+    for l in leads:
+        d = {
+            "id": l.id,
+            "title": l.title,
+            "value": l.value,
+            "assignee": l.assignee,
+            "source": l.source,
+            "notes": l.notes,
+            "extra_data": l.extra_data,
+            "phase_id": l.phase_id,
+            "pipeline_id": l.pipeline_id,
+            "created_at": l.created_at.isoformat() if l.created_at else None,
+            "updated_at": l.updated_at.isoformat() if l.updated_at else None,
+        }
+        leads_data.append(d)
+
+    pipelines_data = []
+    for p in pipelines:
+        d = {
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "owner": p.owner,
+        }
+        pipelines_data.append(d)
+
+    phases_data = []
+    for p in phases:
+        d = {
+            "id": p.id,
+            "pipeline_id": p.pipeline_id,
+            "name": p.name,
+            "position": p.position,
+            "is_terminal": p.is_terminal,
+        }
+        phases_data.append(d)
+
+    clients_data = []
+    for c in clients:
+        d = {
+            "id": c.id,
+            "contact_id": c.contact_id,
+            "lead_id": c.lead_id,
+            "tier": c.tier,
+            "status": c.status,
+            "account_manager": c.account_manager,
+            "client_since": c.client_since.isoformat() if c.client_since else None,
+        }
+        clients_data.append(d)
+
+    activities_data = []
+    for a in recent_activities:
+        d = {
+            "id": a.id,
+            "contact_id": a.contact_id,
+            "activity_type": a.activity_type,
+            "title": a.title,
+            "description": a.description,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        activities_data.append(d)
+
+    tags_data = [{"name": t.name, "color": t.color} for t in tags]
+
+    history = [{"role": m.role, "content": m.content} for m in data.history]
+
+    reply = ai_chat(
+        message=data.message,
+        history=history,
+        contacts=contacts_data,
+        leads=leads_data,
+        pipelines=pipelines_data,
+        phases=phases_data,
+        clients=clients_data,
+        activities=activities_data,
+        tags=tags_data,
+    )
+
+    return ChatbotResponse(reply=reply)
+
+
+@ai_router.post("/pipeline-insights", response_model=PipelineInsightsResponse)
+async def pipeline_insights_ai(
+    pipeline_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Analyze a pipeline using AI and return structured health insights.
+    Uses Gemini AI to identify risks, opportunities, bottlenecks, and recommendations.
+    """
+    pipeline = db.query(Pipeline).filter(Pipeline.id == pipeline_id).first()
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    # Get all leads in this pipeline
+    leads = db.query(Lead).filter(Lead.pipeline_id == pipeline_id).all()
+
+    # Get all phases for this pipeline
+    phases_q = db.query(Phase).filter(Phase.pipeline_id == pipeline_id).order_by(Phase.position).all()
+    phases = [{
+        "id": p.id,
+        "name": p.name,
+        "position": p.position,
+        "is_terminal": p.is_terminal,
+    } for p in phases_q]
+
+    from app.modules.crm.ai_service import pipeline_insights as ai_insights
+    result = ai_insights(leads, phases)
+
+    return PipelineInsightsResponse(
+        insights=result.get("insights", []),
+        summary=result.get("summary"),
+        pipeline_id=pipeline_id,
+        pipeline_name=pipeline.name,
+    )
+
+
+# ════════════════════════════════════════════════════════════
+# CLIENTS ENDPOINTS (Phase 4) ✅ 4.1 ✅ 4.2
+# ════════════════════════════════════════════════════════════
+
 
 @clients_router.post("/", response_model=ClientSchema, status_code=201)
 async def create_client(client_data: ClientCreateSchema, db: Session = Depends(get_db)):

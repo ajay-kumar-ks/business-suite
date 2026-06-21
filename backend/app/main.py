@@ -8,7 +8,6 @@ from app.core.event_bus import event_bus
 from app.core.event_handlers import register_event_handlers
 from app.core.database import engine
 from app.core.base import Base
-from app.core.tenant import TenantMiddleware
 from app.modules.auth.routers import router as auth_router
 from app.modules.hr.routers import router as hr_router
 from app.modules.accounts.routers import router as accounts_router
@@ -20,7 +19,6 @@ from app.modules.tasks.event_handlers import register_handlers
 from app.modules.recruitment.routers import router as recruitment_router
 
 app = FastAPI(title="Business Suite Backend", version="0.1.0")
-app.add_middleware(TenantMiddleware)
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(tasks_router, prefix="/tasks", tags=["tasks"])
@@ -66,6 +64,30 @@ async def startup_event():
                     print('✓ Added missing contacts.deleted_at column')
         Base.metadata.create_all(bind=engine)
         print("[OK] Database tables created")
+
+        # Ensure default Accounts tenant exists locally (single-company mode)
+        try:
+            from app.core.database import SessionLocal
+            from app.modules.accounts.models import Tenant as AccountsTenant
+            from app.modules.accounts.services import seed_default_chart_of_accounts
+
+            db = SessionLocal()
+            try:
+                tenant = db.query(AccountsTenant).order_by(AccountsTenant.created_at).first()
+                if not tenant:
+                    tenant = AccountsTenant(name="Default Company", status="active", is_active=True)
+                    db.add(tenant)
+                    db.commit()
+                    db.refresh(tenant)
+                    seed_default_chart_of_accounts(db, tenant.id)
+                    print(f"[OK] Default tenant created: {tenant.id} ({tenant.name})")
+                else:
+                    print(f"[OK] Default tenant exists: {tenant.id} ({tenant.name})")
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"[WARN] Default tenant sync failed: {str(e)[:200]}")
+
     except Exception as e:
         print(f"[WARN] Database connection warning: {str(e)[:100]}")
         print("[OK] Server started (database connection failed - check your DATABASE_URL credentials in .env)")

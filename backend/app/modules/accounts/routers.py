@@ -87,26 +87,6 @@ async def health(db: Session = Depends(get_db)):
     }
 
 
-@router.post("/tenants", response_model=TenantRead)
-def create_tenant(data: TenantCreate, db: Session = Depends(get_db)):
-    existing_tenant = db.query(Tenant).filter(Tenant.name == data.name).first()
-    if existing_tenant:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant name already exists.")
-
-    tenant = Tenant(name=data.name, status=data.status, is_active=data.is_active)
-    db.add(tenant)
-    db.commit()
-    db.refresh(tenant)
-
-    seed_default_chart_of_accounts(db, tenant.id)
-    return tenant
-
-
-@router.get("/tenants", response_model=List[TenantRead])
-def list_tenants(db: Session = Depends(get_db)):
-    return db.query(Tenant).all()
-
-
 @router.post("/coa", response_model=ChartOfAccountRead)
 def create_coa_entry(
     data: ChartOfAccountCreate,

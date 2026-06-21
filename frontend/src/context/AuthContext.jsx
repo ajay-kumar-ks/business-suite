@@ -43,14 +43,12 @@ export const AuthProvider = ({ children }) => {
       const response = await authAPI.login(username, password)
       const { access_token } = response.data
       localStorage.setItem('access_token', access_token)
-
-      const dashboardResponse = await authAPI.getDashboard()
-      setUser(dashboardResponse.data.user)
       setIsAuthenticated(true)
       return true
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed')
       setIsAuthenticated(false)
+      localStorage.removeItem('access_token')
       return false
     } finally {
       setLoading(false)

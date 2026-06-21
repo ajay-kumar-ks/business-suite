@@ -11,8 +11,6 @@ Base = declarative_base()
 
 engine = create_engine(
     settings.DATABASE_URL,
-    echo=True,
-    pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,
 )

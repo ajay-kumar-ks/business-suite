@@ -1,7 +1,14 @@
-import React from 'react'
-import { X, ArrowLeftRight, CheckCircle2, Trash2 } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { X, ArrowLeftRight, CheckCircle2, Trash2, Sparkles, Mail, Calendar, ArrowRightCircle } from 'lucide-react'
 import Button from '../../../components/ui/Button'
+import Loader from '../../../components/ui/Loader'
 import '../styles/LeadsView.css'
+
+const URGENCY_ICONS = {
+  high: <ArrowRightCircle size={14} />,
+  medium: <Calendar size={14} />,
+  low: <Mail size={14} />,
+}
 
 const LeadDetailModal = ({
   lead,
@@ -14,6 +21,32 @@ const LeadDetailModal = ({
   onDelete,
   onClose,
 }) => {
+  const [aiAction, setAiAction] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
+
+  useEffect(() => {
+    if (!lead?.id) return
+    setAiAction(null)
+    setAiLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/crm/ai/next-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lead_id: lead.id }),
+        })
+        if (res.ok) {
+          setAiAction(await res.json())
+        }
+      } catch {
+        // Silently fail — AI suggestion is optional
+      } finally {
+        setAiLoading(false)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [lead?.id])
+
   if (!lead) return null
 
   const currentPhaseIndex = pipelinePhases.findIndex((p) => p.id === lead.phase_id)
@@ -25,18 +58,66 @@ const LeadDetailModal = ({
   const converted = lead.extra_data?.converted
   const history = lead.extra_data?.history || []
 
+  const handleApplyAction = () => {
+    if (!aiAction) return
+    if (aiAction.suggested_phase_id) {
+      // Move to suggested phase
+      const targetPhase = pipelinePhases.find((p) => p.id === aiAction.suggested_phase_id)
+      if (targetPhase) {
+        onMove(lead.id, targetPhase.id)
+        setAiAction(null)
+      }
+    }
+  }
+
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="lead-detail-modal">
         <div className="lead-detail-header">
           <div>
             <h3>{lead.title}</h3>
-            <p className="lead-detail-status">{pipeline?.name || 'No pipeline'} • {phase?.name || 'No phase'}</p>
+            <p className="lead-detail-status">{pipeline?.name || 'No pipeline'} &bull; {phase?.name || 'No phase'}</p>
           </div>
           <button className="close-btn" type="button" onClick={onClose} aria-label="Close Lead Details">
             <X size={18} />
           </button>
         </div>
+
+        {/* ── AI Next-Best-Action Card ── */}
+        {aiLoading && (
+          <div className="ai-next-action-card ai-loading">
+            <Loader size={16} />
+            <span>AI analyzing next best action...</span>
+          </div>
+        )}
+        {aiAction && !aiLoading && (
+          <div className="ai-next-action-card">
+            <div className="ai-next-action-header">
+              <Sparkles size={15} />
+              <span>AI Recommended Next Action</span>
+              <span className={`ai-urgency-badge urgency-${aiAction.urgency}`}>
+                {URGENCY_ICONS[aiAction.urgency] || null}
+                {aiAction.urgency}
+              </span>
+            </div>
+            <div className="ai-next-action-body">
+              <span className="ai-action-name">{aiAction.action}</span>
+              <span className="ai-action-desc">{aiAction.description}</span>
+            </div>
+            {aiAction.suggested_phase_id && (
+              <div className="ai-next-action-actions">
+                <button
+                  type="button"
+                  className="ai-action-apply-btn"
+                  onClick={handleApplyAction}
+                >
+                  <ArrowLeftRight size={13} />
+                  Move to phase
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="lead-detail-grid">
           <div className="lead-detail-row">

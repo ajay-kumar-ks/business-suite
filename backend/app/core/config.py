@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     EVENT_BUS_URL: str = "memory://local"
     ENVIRONMENT: str = "development"
+    GEMINI_API_KEY: str = ""
 
     model_config = ConfigDict(env_file=DOTENV_PATH, extra="ignore")
 

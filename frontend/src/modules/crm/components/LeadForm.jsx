@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { X, ChevronDown } from 'lucide-react'
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { X, ChevronDown, Sparkles } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import Loader from '../../../components/ui/Loader'
@@ -25,6 +25,8 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
   const [employeeDropdownOpen, setEmployeeDropdownOpen] = useState(false)
   const [pipelineDropdownOpen, setPipelineDropdownOpen] = useState(false)
   const [phaseDropdownOpen, setPhaseDropdownOpen] = useState(false)
+  const [aiSuggestions, setAiSuggestions] = useState([])
+  const [aiLoading, setAiLoading] = useState(false)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
   const employeeDropdownRef = useRef(null)
@@ -51,6 +53,46 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
       setFormData((prev) => ({ ...prev, phase_id: '' }))
     }
   }, [formData.pipeline_id])
+
+  // Fetch AI assignee suggestions when form data changes
+  const fetchAISuggestions = useCallback(async () => {
+    if (!formData.pipeline_id || !formData.title.trim()) {
+      setAiSuggestions([])
+      return
+    }
+    setAiLoading(true)
+    try {
+      const res = await fetch('/api/crm/ai/suggest-assignee', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formData.title,
+          value: formData.value ? Number(formData.value) : null,
+          source: formData.source || null,
+          notes: formData.notes || null,
+          pipeline_id: formData.pipeline_id,
+          contact_company: contact?.company || '',
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAiSuggestions(data.suggestions || [])
+      }
+    } catch (e) {
+      console.error('AI suggest error:', e)
+      setAiSuggestions([])
+    } finally {
+      setAiLoading(false)
+    }
+  }, [formData.title, formData.value, formData.source, formData.notes, formData.pipeline_id])
+
+  // Debounced AI suggestion fetch
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchAISuggestions()
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [fetchAISuggestions])
 
   // Click outside handlers for all three dropdowns
   useEffect(() => {
@@ -359,6 +401,56 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
             </button>
             {employeeDropdownOpen && (
               <div className="custom-select-menu">
+                {/* AI Suggested Section */}
+                {aiSuggestions.length > 0 && (
+                  <>
+                    <div className="custom-select-item" style={{ cursor: 'default', padding: '8px 16px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary, #6b7280)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <Sparkles size={12} style={{ marginRight: 4 }} />
+                      AI Suggested
+                    </div>
+                    {aiSuggestions.map((s) => {
+                      const matchedEmp = employees.find((e) => String(e.id) === String(s.employee_id))
+                      return (
+                        <button
+                          key={`ai-${s.employee_id}`}
+                          type="button"
+                          className={`custom-select-item ${String(s.employee_id) === String(formData.assignee_id) ? 'selected' : ''}`}
+                          onClick={() => matchedEmp && handleAssigneeSelect(matchedEmp)}
+                        >
+                          <div className="custom-select-item-main">
+                            <span className="custom-select-item-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <Sparkles size={12} style={{ color: 'var(--primary)' }} />
+                              {s.name}
+                            </span>
+                            <span
+                              className="custom-role-chip"
+                              style={{
+                                backgroundColor: s.confidence >= 80 ? '#22c55e' : s.confidence >= 60 ? '#eab308' : '#f97316',
+                                fontSize: '0.65rem',
+                              }}
+                            >
+                              {s.confidence}%
+                            </span>
+                          </div>
+                          <span className="custom-select-item-subtitle" style={{ paddingLeft: 20 }}>
+                            {s.reason} · {s.current_load} current lead(s)
+                          </span>
+                        </button>
+                      )
+                    })}
+                    <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+                  </>
+                )}
+
+                {/* AI Loading State */}
+                {aiLoading && (
+                  <div className="custom-select-loading">
+                    <Loader size={16} />
+                    <span>AI analyzing best assignee...</span>
+                  </div>
+                )}
+
+                {/* Full Employee List */}
                 {employeeLoading ? (
                   <div className="custom-select-loading">
                     <Loader size={20} />

@@ -7,10 +7,12 @@ import ActivitiesPage from './ActivitiesPage'
 import LeadsPage from './LeadsPage'
 import ClientsPage from './ClientsPage'
 import CRMAnalyticsDashboard from '../components/CRMAnalyticsDashboard'
+import CRMChatBot from '../components/CRMChatBot'
 import '../../../styles/ModulePage.css'
 import '../styles/CRMPageLayout.css'
 import '../styles/LeadsView.css'
 import '../styles/CRMAnalyticsDashboard.css'
+import '../styles/CRMChatBot.css'
 
 const CRMPage = () => {
   const [activeView, setActiveView] = useState('contacts')
@@ -216,6 +218,9 @@ const CRMPage = () => {
       {activeView === 'activities' && (
         <ActivitiesPage />
       )}
+
+      {/* CRM Chatbot — only appears when CRM is open */}
+      <CRMChatBot />
     </div>
   )
 }

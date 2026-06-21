@@ -83,3 +83,5 @@ yarn-error.log*
 *.user
 *.userosscache
 *.sln
+
+backend/.env

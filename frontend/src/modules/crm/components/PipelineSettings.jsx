@@ -3,6 +3,8 @@ import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import Loader from '../../../components/ui/Loader'
 import { ArrowUp, ArrowDown, Edit3, Trash2, ChevronDown, Plus, Check, Save } from 'lucide-react'
+import { crmAPI } from '../../../services/api'
+import api from '../../../services/api'
 import '../../../styles/ThemeToggle.css'
 import '../styles/LeadsView.css'
 import '../styles/PipelineSettings.css'
@@ -27,9 +29,8 @@ const PipelineSettings = ({ onPipelineCreated }) => {
   const fetchPipelines = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch('/api/crm/pipelines/')
-      if (!response.ok) throw new Error('Unable to load pipelines')
-      const data = await response.json()
+      const response = await crmAPI.listPipelines()
+      const data = response.data
       setPipelines(data)
       if (!selectedPipeline && data.length > 0) {
         setSelectedPipeline(data[0])
@@ -65,10 +66,8 @@ const PipelineSettings = ({ onPipelineCreated }) => {
       }
       setIsLoading(true)
       try {
-        const response = await fetch(`/api/crm/pipelines/${pipelineId}/phases`)
-        if (!response.ok) throw new Error('Unable to load phases')
-        const data = await response.json()
-        setPhases(data)
+        const response = await crmAPI.getPhases(pipelineId)
+        setPhases(response.data)
       } catch (err) {
         console.error(err)
         setError('Failed to load pipeline phases.')
@@ -91,34 +90,21 @@ const PipelineSettings = ({ onPipelineCreated }) => {
       const existingPhases = orderedPhases.filter((phase) => !phase.isNew)
       const newPhases = orderedPhases.filter((phase) => phase.isNew)
 
-      const updateResponses = await Promise.all(existingPhases.map((phase) =>
-        fetch(`/api/crm/pipelines/${selectedPipeline.id}/phases/${phase.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ position: phase.position }),
+      await Promise.all(existingPhases.map((phase) =>
+        crmAPI.updatePhase(selectedPipeline.id, phase.id, { position: phase.position })
+      ))
+
+      await Promise.all(newPhases.map((phase) =>
+        crmAPI.createPhase(selectedPipeline.id, {
+          name: phase.name,
+          color: phase.color,
+          is_terminal: phase.is_terminal,
+          position: phase.position,
         })
       ))
 
-      const createResponses = await Promise.all(newPhases.map((phase) =>
-        fetch(`/api/crm/pipelines/${selectedPipeline.id}/phases`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: phase.name,
-            color: phase.color,
-            is_terminal: phase.is_terminal,
-            position: phase.position,
-          }),
-        })
-      ))
-
-      if (updateResponses.some((response) => !response.ok) || createResponses.some((response) => !response.ok)) {
-        throw new Error('Failed to save phase updates')
-      }
-
-      const response = await fetch(`/api/crm/pipelines/${selectedPipeline.id}/phases`)
-      if (!response.ok) throw new Error('Failed to refresh phases')
-      const refreshed = await response.json()
+      const response = await crmAPI.getPhases(selectedPipeline.id)
+      const refreshed = response.data
       setPhases(refreshed)
       setPhaseForm({ name: '', color: '#6366f1', position: 0, is_terminal: false })
       setError('')
@@ -166,10 +152,7 @@ const PipelineSettings = ({ onPipelineCreated }) => {
 
     if (!selectedPipeline) return
     try {
-      const response = await fetch(`/api/crm/pipelines/${selectedPipeline.id}/phases/${phaseId}`, {
-        method: 'DELETE',
-      })
-      if (!response.ok) throw new Error('Failed to delete phase')
+      await api.delete(`/crm/pipelines/${selectedPipeline.id}/phases/${phaseId}`)
       setPhases((prev) => prev.filter((p) => p.id !== phaseId))
       setError('')
       setPhaseStatus({ type: 'success', message: 'Phase deleted successfully.' })
@@ -189,13 +172,8 @@ const PipelineSettings = ({ onPipelineCreated }) => {
   const handleEditPhaseSave = async () => {
     if (!selectedPipeline || !editingPhaseId) return
     try {
-      const response = await fetch(`/api/crm/pipelines/${selectedPipeline.id}/phases/${editingPhaseId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingPhaseData),
-      })
-      if (!response.ok) throw new Error('Failed to update phase')
-      const updated = await response.json()
+      const response = await crmAPI.updatePhase(selectedPipeline.id, editingPhaseId, editingPhaseData)
+      const updated = response.data
       setPhases((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
       setEditingPhaseId(null)
       setEditingPhaseData({})
@@ -241,13 +219,8 @@ const PipelineSettings = ({ onPipelineCreated }) => {
     event.preventDefault()
     if (!selectedPipeline) return
     try {
-      const response = await fetch(`/api/crm/pipelines/${selectedPipeline.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingPipelineData),
-      })
-      if (!response.ok) throw new Error('Unable to update pipeline')
-      const updatedPipeline = await response.json()
+      const response = await crmAPI.updatePipeline(selectedPipeline.id, editingPipelineData)
+      const updatedPipeline = response.data
       setPipelines((prev) => prev.map((p) => (p.id === updatedPipeline.id ? updatedPipeline : p)))
       setSelectedPipeline(updatedPipeline)
       if (onPipelineCreated) onPipelineCreated()

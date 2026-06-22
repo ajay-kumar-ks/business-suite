@@ -60,12 +60,11 @@ const AssignMemberPanel = ({ onPipelineCreated }) => {
       setLoading(true)
       try {
         const [pipelinesRes, deptsRes, empsRes] = await Promise.all([
-          fetch('/api/crm/pipelines/'),
+          crmAPI.listPipelines(),
           hrAPI.getDepartments(),
           hrAPI.getEmployees({ status: 'Active', limit: 200 }),
         ])
-        const pipelinesData = await pipelinesRes.json()
-        setPipelines(pipelinesData)
+        setPipelines(pipelinesRes.data)
         setDepartments(deptsRes.data || [])
         setEmployees(empsRes.data?.employees || [])
       } catch (err) {

@@ -6,6 +6,8 @@ import SettingsModal from '../components/SettingsModal'
 import Button from '../../../components/ui/Button'
 import Loader from '../../../components/ui/Loader'
 import Alert from '../../../components/ui/Alert'
+import { crmAPI } from '../../../services/api'
+import api from '../../../services/api'
 import '../styles/LeadsView.css'
 
 const LeadsPage = ({ prefillContact = null }) => {
@@ -35,11 +37,8 @@ const LeadsPage = ({ prefillContact = null }) => {
 
   const fetchLeads = async () => {
     try {
-      const response = await fetch('/api/crm/leads/')
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-      const data = await response.json()
+      const response = await crmAPI.listLeads()
+      const data = response.data
       if (!Array.isArray(data)) {
         console.error('Leads API returned non-array:', data)
         setLeads([])
@@ -60,26 +59,24 @@ const LeadsPage = ({ prefillContact = null }) => {
   const fetchPipelineInfo = async (pipelineId) => {
     try {
       const [pipelineRes, phasesRes] = await Promise.all([
-        fetch(`/api/crm/pipelines/${pipelineId}`),
-        fetch(`/api/crm/pipelines/${pipelineId}/phases`),
+        crmAPI.getPipeline(pipelineId),
+        crmAPI.getPhases(pipelineId),
       ])
-      if (pipelineRes.ok && phasesRes.ok) {
-        const pipeline = await pipelineRes.json()
-        const phasesData = await phasesRes.json()
-        setPipelines((prev) => ({ ...prev, [pipelineId]: pipeline }))
-        setPhases((prev) => {
-          const next = { ...prev }
-          Object.keys(next).forEach((phaseId) => {
-            if (next[phaseId]?.pipeline_id === pipelineId) {
-              delete next[phaseId]
-            }
-          })
-          return {
-            ...next,
-            ...Object.fromEntries(phasesData.map((p) => [p.id, p])),
+      const pipeline = pipelineRes.data
+      const phasesData = phasesRes.data
+      setPipelines((prev) => ({ ...prev, [pipelineId]: pipeline }))
+      setPhases((prev) => {
+        const next = { ...prev }
+        Object.keys(next).forEach((phaseId) => {
+          if (next[phaseId]?.pipeline_id === pipelineId) {
+            delete next[phaseId]
           }
         })
-      }
+        return {
+          ...next,
+          ...Object.fromEntries(phasesData.map((p) => [p.id, p])),
+        }
+      })
     } catch (error) {
       console.error(`Failed to fetch pipeline ${pipelineId}:`, error)
     }
@@ -88,11 +85,9 @@ const LeadsPage = ({ prefillContact = null }) => {
   const fetchContactInfo = async (contactId) => {
     if (!contactId || contacts[contactId]) return
     try {
-      const response = await fetch(`/api/crm/contacts/${contactId}`)
-      if (response.ok) {
-        const contact = await response.json()
-        setContacts((prev) => ({ ...prev, [contactId]: contact }))
-      }
+      const response = await crmAPI.getContact(contactId)
+      const contact = response.data
+      setContacts((prev) => ({ ...prev, [contactId]: contact }))
     } catch (error) {
       console.error(`Failed to fetch contact ${contactId}:`, error)
     }
@@ -100,9 +95,8 @@ const LeadsPage = ({ prefillContact = null }) => {
 
   const fetchPipelines = async () => {
     try {
-      const response = await fetch('/api/crm/pipelines/')
-      if (!response.ok) throw new Error('Failed to fetch pipelines')
-      const data = await response.json()
+      const response = await crmAPI.listPipelines()
+      const data = response.data
       if (!Array.isArray(data)) {
         console.error('Pipelines API returned non-array:', data)
         setPipelineList([])
@@ -134,11 +128,8 @@ const LeadsPage = ({ prefillContact = null }) => {
 
   const fetchOrphanedLeads = async (pipelineId) => {
     try {
-      const res = await fetch(`/api/crm/leads/?pipeline_id=${pipelineId}&orphaned=true`)
-      if (res.ok) {
-        const data = await res.json()
-        setOrphanedLeads(data)
-      }
+      const res = await crmAPI.listLeads({ pipeline_id: pipelineId, orphaned: true })
+      setOrphanedLeads(res.data)
     } catch (err) {
       console.error('Failed to fetch orphaned leads:', err)
       setOrphanedLeads([])
@@ -171,12 +162,10 @@ const LeadsPage = ({ prefillContact = null }) => {
     setInsightsSummary(null)
     setInsightsLoading(true)
     try {
-      const res = await fetch(`/api/crm/ai/pipeline-insights?pipeline_id=${pipelineId}`, { method: 'POST' })
-      if (res.ok) {
-        const data = await res.json()
-        setInsights(data.insights || [])
-        setInsightsSummary(data.summary || null)
-      }
+      const res = await api.post('/crm/ai/pipeline-insights', null, { params: { pipeline_id: pipelineId } })
+      const data = res.data
+      setInsights(data.insights || [])
+      setInsightsSummary(data.summary || null)
     } catch {
       setInsights([])
       setInsightsSummary(null)
@@ -251,7 +240,7 @@ const LeadsPage = ({ prefillContact = null }) => {
   const handleDeleteLead = async (leadId) => {
     if (!window.confirm('Delete this lead?')) return
     try {
-      await fetch(`/api/crm/leads/${leadId}`, { method: 'DELETE' })
+      await crmAPI.deleteLead(leadId)
       setLeads((prev) => prev.filter((l) => l.id !== leadId))
       setSelectedLead((prev) => (prev?.id === leadId ? null : prev))
       showMessage('Lead deleted successfully.', 'success')
@@ -270,13 +259,7 @@ const LeadsPage = ({ prefillContact = null }) => {
     }
 
     try {
-      const response = await fetch(`/api/crm/leads/${leadId}/move?phase_id=${phaseId}`, {
-        method: 'PUT',
-      })
-      if (!response.ok) {
-        throw new Error('Failed to move lead')
-      }
-      await response.json()
+      await api.put(`/crm/leads/${leadId}/move`, null, { params: { phase_id: phaseId } })
       showMessage('Lead moved successfully.', 'success')
     } catch (error) {
       console.error('Failed to move lead:', error)
@@ -290,10 +273,7 @@ const LeadsPage = ({ prefillContact = null }) => {
 
   const handleConvertLead = async (leadId) => {
     try {
-      const response = await fetch(`/api/crm/leads/${leadId}/convert`, {
-        method: 'POST',
-      })
-      if (!response.ok) throw new Error('Failed to convert lead')
+      await crmAPI.convertLead(leadId)
       setLeads((prev) => prev.map((lead) => lead.id === leadId ? { ...lead, extra_data: { ...lead.extra_data, converted: true } } : lead))
       if (selectedLead?.id === leadId) {
         setSelectedLead((prev) => prev ? { ...prev, extra_data: { ...prev.extra_data, converted: true } } : prev)
@@ -590,11 +570,7 @@ const LeadsPage = ({ prefillContact = null }) => {
                     onClick={async () => {
                       setScoringLeads(true)
                       try {
-                        const res = await fetch(`/api/crm/leads/score-all?pipeline_id=${selectedPipeline.id}`, { method: 'POST' })
-                        if (!res.ok) {
-                          const errData = await res.json().catch(() => ({}))
-                          throw new Error(errData.detail || `HTTP ${res.status}`)
-                        }
+                        const res = await crmAPI.scoreAllLeads({ pipeline_id: selectedPipeline.id })
                         await fetchLeads()
                         showMessage(`Leads scored successfully!`, 'success')
                       } catch (e) {

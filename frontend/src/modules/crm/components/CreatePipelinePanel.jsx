@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import { Plus, Trash2, Save, X } from 'lucide-react'
+import { crmAPI } from '../../../services/api'
 import '../styles/LeadsView.css'
 import '../styles/PipelineSettings.css'
 
@@ -57,26 +58,17 @@ const CreatePipelinePanel = ({ onClose, onPipelineCreated }) => {
     }
     setIsSaving(true)
     try {
-      const resp = await fetch('/api/crm/pipelines/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      if (!resp.ok) throw new Error('Failed to create pipeline')
-      const created = await resp.json()
+      const resp = await crmAPI.createPipeline(form)
+      const created = resp.data
 
       // create phases sequentially for the new pipeline
       for (let i = 0; i < phases.length; i++) {
         const p = phases[i]
-        await fetch(`/api/crm/pipelines/${created.id}/phases`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: p.name,
-            color: p.color,
-            is_terminal: p.is_terminal,
-            position: i,
-          }),
+        await crmAPI.createPhase(created.id, {
+          name: p.name,
+          color: p.color,
+          is_terminal: p.is_terminal,
+          position: i,
         })
       }
 

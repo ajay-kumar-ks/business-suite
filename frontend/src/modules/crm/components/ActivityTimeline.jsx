@@ -3,6 +3,7 @@ import { MessageSquare, Phone, Mail, Calendar, FileText, Plus } from 'lucide-rea
 import Button from '../../../components/ui/Button'
 import Select from '../../../components/ui/Select'
 import Loader from '../../../components/ui/Loader'
+import { crmAPI } from '../../../services/api'
 import '../styles/ActivityTimeline.css'
 
 const ActivityTimeline = ({ contactId, activities = [], onActivityAdd }) => {
@@ -45,15 +46,8 @@ const ActivityTimeline = ({ contactId, activities = [], onActivityAdd }) => {
     setLoading(true)
 
     try {
-      const response = await fetch(`/api/crm/contacts/${contactId}/activities`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      })
-
-      if (!response.ok) throw new Error('Failed to add activity')
-
-      const newActivity = await response.json()
+      const response = await crmAPI.createActivity(contactId, formData)
+      const newActivity = response.data
       onActivityAdd(newActivity)
 
       // Reset form

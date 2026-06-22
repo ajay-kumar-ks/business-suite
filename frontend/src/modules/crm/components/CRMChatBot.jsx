@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageCircle, X, Send, Sparkles, Minimize2, Maximize2, User } from 'lucide-react'
+import api from '../../../services/api'
 import '../styles/CRMChatBot.css'
 
 const STORAGE_KEY = 'crm_chatbot_history'
@@ -275,24 +276,12 @@ const CRMChatBot = () => {
     setIsLoading(true)
 
     try {
-      const res = await fetch('/api/crm/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          history: messages.slice(-20).map((m) => ({ role: m.role, content: m.content })),
-        }),
+      const res = await api.post('/crm/ai/chat', {
+        message,
+        history: messages.slice(-20).map((m) => ({ role: m.role, content: m.content })),
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }])
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: "I'm sorry, I couldn't process your request. Please try again." },
-        ])
-      }
+      setMessages((prev) => [...prev, { role: 'assistant', content: res.data.reply }])
     } catch {
       setMessages((prev) => [
         ...prev,

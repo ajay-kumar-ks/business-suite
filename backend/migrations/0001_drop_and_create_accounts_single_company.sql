@@ -4,20 +4,21 @@
 BEGIN;
 
 -- Drop existing Accounts-related tables if they exist
-DROP TABLE IF EXISTS public.journal_lines CASCADE;
-DROP TABLE IF EXISTS public.ledger_entries CASCADE;
-DROP TABLE IF EXISTS public.customer_payments CASCADE;
-DROP TABLE IF EXISTS public.vendor_payments CASCADE;
-DROP TABLE IF EXISTS public.budget_lines CASCADE;
-DROP TABLE IF EXISTS public.invoices CASCADE;
-DROP TABLE IF EXISTS public.bills CASCADE;
-DROP TABLE IF EXISTS public.expenses CASCADE;
-DROP TABLE IF EXISTS public.income CASCADE;
-DROP TABLE IF EXISTS public.budgets CASCADE;
-DROP TABLE IF EXISTS public.chart_of_accounts CASCADE;
-DROP TABLE IF EXISTS public.customers CASCADE;
-DROP TABLE IF EXISTS public.vendors CASCADE;
-DROP TABLE IF EXISTS public.event_store CASCADE;
+DROP TABLE IF EXISTS public.journal_lines;
+DROP TABLE IF EXISTS public.ledger_entries;
+DROP TABLE IF EXISTS public.customer_payments;
+DROP TABLE IF EXISTS public.vendor_payments;
+DROP TABLE IF EXISTS public.budget_lines;
+DROP TABLE IF EXISTS public.invoices;
+DROP TABLE IF EXISTS public.bills;
+DROP TABLE IF EXISTS public.expenses;
+DROP TABLE IF EXISTS public.income;
+DROP TABLE IF EXISTS public.budgets;
+DROP TABLE IF EXISTS public.chart_of_accounts;
+DROP TABLE IF EXISTS public.journal_entries;
+DROP TABLE IF EXISTS public.customers;
+DROP TABLE IF EXISTS public.vendors;
+DROP TABLE IF EXISTS public.event_store;
 
 -- Create chart_of_accounts
 CREATE TABLE public.chart_of_accounts (

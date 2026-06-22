@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import '../../../styles/ModulePage.css'
-import { accountsAPI } from '../../../services/api'
+import { accountsAPI, getAPIErrorMessage } from '../../../services/api'
 import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
 import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
@@ -43,7 +43,7 @@ const TransactionsPage = () => {
         setExpenses(expenseResponse.data)
         setIncome(incomeResponse.data)
       } catch (err) {
-        setError(err.response?.data?.detail || 'Unable to load transactions')
+        setError(getAPIErrorMessage(err, 'Unable to load transactions'))
       }
     }
     loadData()
@@ -65,7 +65,7 @@ const TransactionsPage = () => {
       const response = await accountsAPI.listExpenses()
       setExpenses(response.data)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Unable to record expense')
+      setError(getAPIErrorMessage(err, 'Unable to record expense'))
       setSuccess('')
     }
   }
@@ -80,7 +80,7 @@ const TransactionsPage = () => {
       const response = await accountsAPI.listIncome()
       setIncome(response.data)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Unable to record income')
+      setError(getAPIErrorMessage(err, 'Unable to record income'))
       setSuccess('')
     }
   }
@@ -114,7 +114,7 @@ const TransactionsPage = () => {
           <div className="form-row">
             <div>
               <label className="ui-input-label">Expense Account</label>
-              <select className="ui-input-field" value={expenseForm.account_id} onChange={(e) => setExpenseForm({ ...expenseForm, account_id: Number(e.target.value) })}>
+              <select className="ui-input-field" value={expenseForm.account_id} onChange={(e) => setExpenseForm({ ...expenseForm, account_id: e.target.value === '' ? '' : Number(e.target.value) })}>
                 <option value="">Select account</option>
                 {accounts.map((acct) => (
                   <option key={acct.id} value={acct.id}>{acct.account_code} - {acct.account_name} ({acct.account_type})</option>
@@ -143,7 +143,7 @@ const TransactionsPage = () => {
             <div className="form-row">
               <div>
                 <label className="ui-input-label">Income Account</label>
-                <select className="ui-input-field" value={incomeForm.account_id} onChange={(e) => setIncomeForm({ ...incomeForm, account_id: Number(e.target.value) })}>
+                <select className="ui-input-field" value={incomeForm.account_id} onChange={(e) => setIncomeForm({ ...incomeForm, account_id: e.target.value === '' ? '' : Number(e.target.value) })}>
                   <option value="">Select account</option>
                   {accounts.map((acct) => (
                     <option key={acct.id} value={acct.id}>{acct.account_code} - {acct.account_name} ({acct.account_type})</option>

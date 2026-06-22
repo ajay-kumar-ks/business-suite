@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import '../../../styles/ModulePage.css'
-import { accountsAPI } from '../../../services/api'
+import { accountsAPI, getAPIErrorMessage } from '../../../services/api'
 import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
 import { BookOpen, RefreshCw } from 'lucide-react'
 
@@ -38,7 +38,7 @@ const LedgerPage = () => {
       setLedger(response.data)
       setError('')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load ledger entries')
+      setError(getAPIErrorMessage(err, 'Failed to load ledger entries'))
     } finally {
       setLoading(false)
     }

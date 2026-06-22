@@ -49,7 +49,7 @@ app.add_middleware(
 )
 
 # Then add other middleware
-app.add_middleware(TenantMiddleware)
+
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(tasks_router, prefix="/tasks", tags=["tasks"])
@@ -137,6 +137,7 @@ async def startup_event():
 
         Base.metadata.create_all(bind=engine)
         print("[OK] Database tables created")
+
     except Exception as e:
         print(f"[WARN] Database connection warning: {str(e)[:100]}")
         print("[OK] Server started (database connection failed - check your DATABASE_URL credentials in .env)")

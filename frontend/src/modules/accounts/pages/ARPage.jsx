@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import '../../../styles/ModulePage.css'
-import { accountsAPI } from '../../../services/api'
+import { accountsAPI, getAPIErrorMessage } from '../../../services/api'
 import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
 import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
@@ -54,7 +54,7 @@ const ARPage = () => {
       setCustomerForm({ name: '', email: '', phone: '', address: '' })
       loadData()
     } catch (err) {
-      showMessage(err.response?.data?.detail || 'Unable to create customer', 'error')
+      showMessage(getAPIErrorMessage(err, 'Unable to create customer'), 'error')
     }
   }
 
@@ -66,7 +66,7 @@ const ARPage = () => {
       setInvoiceForm({ customer_id: '', invoice_number: '', amount: 0, description: '' })
       loadData()
     } catch (err) {
-      showMessage(err.response?.data?.detail || 'Unable to create invoice', 'error')
+      showMessage(getAPIErrorMessage(err, 'Unable to create invoice'), 'error')
     }
   }
 
@@ -81,7 +81,7 @@ const ARPage = () => {
       setPaymentForm({ amount: 0, reference: '' })
       loadData()
     } catch (err) {
-      showMessage(err.response?.data?.detail || 'Unable to create payment', 'error')
+      showMessage(getAPIErrorMessage(err, 'Unable to create payment'), 'error')
     }
   }
 
@@ -153,7 +153,7 @@ const ARPage = () => {
               <div className="form-row">
                 <div>
                   <label className="ui-input-label">Customer</label>
-                  <select className="ui-input-field" value={invoiceForm.customer_id} onChange={(e) => setInvoiceForm({ ...invoiceForm, customer_id: Number(e.target.value) })}>
+                  <select className="ui-input-field" value={invoiceForm.customer_id} onChange={(e) => setInvoiceForm({ ...invoiceForm, customer_id: e.target.value === '' ? '' : Number(e.target.value) })}>
                     <option value="">Select customer</option>
                     {customers.map((customer) => (
                       <option key={customer.id} value={customer.id}>{customer.name}</option>

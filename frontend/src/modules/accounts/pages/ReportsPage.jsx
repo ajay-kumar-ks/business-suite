@@ -3,7 +3,7 @@ import '../../../styles/ModulePage.css'
 import '../../../styles/AccountsReports.css'
 import '../../../styles/AccountsTheme.css'
 import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
-import { accountsAPI } from '../../../services/api'
+import { accountsAPI, getAPIErrorMessage } from '../../../services/api'
 import { DollarSign, TrendingUp, TrendingDown, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
 
 const ReportsPage = () => {
@@ -37,7 +37,7 @@ const ReportsPage = () => {
       ])
       setError('')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Unable to load reports')
+      setError(getAPIErrorMessage(err, 'Unable to load reports'))
     } finally {
       setReportsLoading(false)
     }

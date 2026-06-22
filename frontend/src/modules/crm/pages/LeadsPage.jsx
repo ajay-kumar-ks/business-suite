@@ -45,11 +45,18 @@ const LeadsPage = ({ prefillContact = null }) => {
         return
       }
       setLeads(data)
-      // Fetch pipeline info for each lead
-      const uniquePipelineIds = [...new Set(data.map(l => l.pipeline_id).filter(Boolean))]
-      for (const pipelineId of uniquePipelineIds) {
-        await fetchPipelineInfo(pipelineId)
-      }
+      // Populate pipelines, phases, and contacts from nested lead payload to avoid N+1 requests
+      const pipelinesMap = {}
+      const phasesMap = {}
+      const contactsMap = {}
+      data.forEach((l) => {
+        if (l.pipeline) pipelinesMap[l.pipeline.id] = l.pipeline
+        if (l.phase) phasesMap[l.phase.id] = l.phase
+        if (l.contact) contactsMap[l.contact.id] = l.contact
+      })
+      setPipelines((prev) => ({ ...prev, ...pipelinesMap }))
+      setPhases((prev) => ({ ...prev, ...phasesMap }))
+      setContacts((prev) => ({ ...prev, ...contactsMap }))
     } catch (error) {
       console.error('Failed to fetch leads:', error)
       setLeads([])
@@ -174,11 +181,7 @@ const LeadsPage = ({ prefillContact = null }) => {
     }
   }, [])
 
-  useEffect(() => {
-    if (pipelineFilter) {
-      fetchInsights(pipelineFilter)
-    }
-  }, [pipelineFilter, fetchInsights])
+  // Do not auto-run pipeline insights on page load — run on-demand to avoid blocking UI
 
   useEffect(() => {
     if (pipelineList.length > 0 && !pipelineFilter) {
@@ -342,14 +345,24 @@ const LeadsPage = ({ prefillContact = null }) => {
           <h1>Leads</h1>
           <p>Track your pipeline, manage opportunities, and move leads through stages.</p>
         </div>
-        <Button
-          className="btn-icon lead-add-btn"
-          onClick={() => setShowForm(true)}
-          data-tooltip="New Lead"
-          aria-label="New Lead"
-        >
-          <Plus size={18} />
-        </Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button
+            className="btn-icon lead-add-btn"
+            onClick={() => setShowForm(true)}
+            data-tooltip="New Lead"
+            aria-label="New Lead"
+          >
+            <Plus size={18} />
+          </Button>
+          <Button
+            className="btn-icon"
+            onClick={() => { if (pipelineFilter) fetchInsights(pipelineFilter) }}
+            data-tooltip="Run Pipeline Insights"
+            aria-label="Run Insights"
+          >
+            <Sparkles size={18} />
+          </Button>
+        </div>
       </div>
 
       {showForm && (

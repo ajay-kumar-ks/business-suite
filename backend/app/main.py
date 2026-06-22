@@ -11,6 +11,8 @@ from app.core.event_handlers import register_event_handlers
 from app.core.database import engine
 from app.core.base import Base
 from app.core.tenant import TenantMiddleware
+import logging
+import time
 from app.modules.auth.routers import router as auth_router
 from app.modules.hr.routers import router as hr_router
 from app.modules.accounts.routers import router as accounts_router
@@ -22,6 +24,20 @@ from app.modules.tasks.event_handlers import register_handlers
 from app.modules.recruitment.routers import router as recruitment_router
 
 app = FastAPI(title="Business Suite Backend", version="0.1.0")
+
+logger = logging.getLogger(__name__)
+
+
+@app.middleware("http")
+async def log_request_time(request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    total = (time.time() - start) * 1000.0
+    if total >= 1000:
+        logger.warning(f"Slow request {request.method} {request.url.path} took {total:.0f}ms")
+    elif total >= 500:
+        logger.info(f"Slow request {request.method} {request.url.path} took {total:.0f}ms")
+    return response
 
 # CORS Middleware must be added FIRST (middleware is applied in reverse order)
 app.add_middleware(

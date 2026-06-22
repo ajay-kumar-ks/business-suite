@@ -191,12 +191,64 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 12px 14px;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.2s ease, transform 0.2s ease, background-color 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+  cursor: grab;
+  user-select: none;
+  position: relative;
+}
+
+.ps-phase-item * {
+  cursor: inherit;
 }
 
 .ps-phase-item.pending {
   border-color: rgba(59, 130, 246, 0.3);
   background: rgba(59, 130, 246, 0.04);
+}
+
+.ps-phase-item.drag-over {
+  border-color: rgba(59, 130, 246, 0.8);
+  background: rgba(59, 130, 246, 0.16);
+}
+
+.ps-phase-item.drag-over.before {
+  transform: translateY(-12px);
+}
+
+.ps-phase-item.drag-over.after {
+  transform: translateY(12px);
+}
+
+.ps-phase-item.dragging {
+  opacity: 0.6;
+  cursor: grabbing !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+}
+
+.ps-phase-item.dragging .ps-drag-handle {
+  cursor: grabbing !important;
+}
+
+.ps-phase-placeholder {
+  height: 76px;
+  border: 2px dashed rgba(59, 130, 246, 0.4);
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.06);
+  margin-bottom: 8px;
+  transition: height 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+
+.ps-phase-placeholder.before {
+  transform: translateY(-8px);
+}
+
+.ps-phase-placeholder.after {
+  transform: translateY(8px);
+}
+
+.ps-phase-item.dragging,
+.ps-phase-item.dragging * {
+  cursor: grabbing !important;
 }
 
 .ps-phase-row {
@@ -218,6 +270,15 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.ps-drag-handle {
+  cursor: grab;
+  color: var(--text-secondary, #6b7280);
+}
+
+.ps-phase-item.dragging .ps-drag-handle {
+  cursor: grabbing !important;
 }
 
 .ps-phase-dot {

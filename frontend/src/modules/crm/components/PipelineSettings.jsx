@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import Loader from '../../../components/ui/Loader'
-import { ArrowUp, ArrowDown, Edit3, Trash2, ChevronDown, Plus, Check, Save } from 'lucide-react'
+import { ArrowUp, Edit3, Trash2, ChevronDown, Plus, Check, Save, GripVertical } from 'lucide-react'
 import { crmAPI } from '../../../services/api'
 import api from '../../../services/api'
 import '../../../styles/ThemeToggle.css'
@@ -20,7 +20,11 @@ const PipelineSettings = ({ onPipelineCreated }) => {
   const [editingPhaseData, setEditingPhaseData] = useState({})
   const [visibleSection, setVisibleSection] = useState('edit')
   const [pipelineDropdownOpen, setPipelineDropdownOpen] = useState(false)
+  const [draggedPhaseId, setDraggedPhaseId] = useState(null)
+  const [dragOverPhaseId, setDragOverPhaseId] = useState(null)
+  const [dragOverPosition, setDragOverPosition] = useState('before')
   const pipelineDropdownRef = useRef(null)
+  const dragImageRef = useRef(null)
 
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -183,17 +187,136 @@ const PipelineSettings = ({ onPipelineCreated }) => {
     }
   }
 
-  const handleMovePhase = (phaseId, direction) => {
-    const idx = phases.findIndex((p) => p.id === phaseId)
-    if (idx === -1) return
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
-    if (swapIdx < 0 || swapIdx >= phases.length) return
-    const newPhases = [...phases]
-    const a = { ...newPhases[idx], position: swapIdx }
-    const b = { ...newPhases[swapIdx], position: idx }
-    newPhases[idx] = b
-    newPhases[swapIdx] = a
-    setPhases(newPhases)
+  const handleDragStart = (event, phaseId) => {
+    const target = event.currentTarget
+    const rect = target.getBoundingClientRect()
+    const clone = target.cloneNode(true)
+    clone.style.position = 'absolute'
+    clone.style.top = '-9999px'
+    clone.style.left = '-9999px'
+    clone.style.width = `${rect.width}px`
+    clone.style.height = `${rect.height}px`
+    clone.style.margin = '0'
+    clone.style.background = 'var(--sidebar)'
+    clone.style.border = '1px solid rgba(0,0,0,0.08)'
+    clone.style.boxSizing = 'border-box'
+    clone.style.boxShadow = '0 14px 36px rgba(15, 23, 42, 0.15)'
+    clone.style.opacity = '0.92'
+    clone.style.transform = 'scale(1.02)'
+    clone.style.pointerEvents = 'none'
+    clone.style.zIndex = '9999'
+    document.body.appendChild(clone)
+    dragImageRef.current = clone
+
+    event.dataTransfer.setDragImage(clone, event.clientX - rect.left, event.clientY - rect.top)
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', phaseId)
+    setDraggedPhaseId(phaseId)
+  }
+
+  const handleDragOver = (event, phaseId) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+
+    const targetRect = event.currentTarget.getBoundingClientRect()
+    const isAfter = event.clientY > targetRect.top + targetRect.height / 2
+    const position = isAfter ? 'after' : 'before'
+
+    if (dragOverPhaseId !== phaseId || dragOverPosition !== position) {
+      setDragOverPhaseId(phaseId)
+      setDragOverPosition(position)
+    }
+  }
+
+  const handleDrop = (event, phaseId) => {
+    event.preventDefault()
+    const sourceId = event.dataTransfer.getData('text/plain')
+    if (!sourceId || sourceId === phaseId) {
+      setDragOverPhaseId(null)
+      setDragOverPosition('before')
+      return
+    }
+
+    const sourcePhase = phases.find((p) => p.id === sourceId)
+    if (!sourcePhase) {
+      setDragOverPhaseId(null)
+      setDragOverPosition('before')
+      return
+    }
+
+    const filtered = phases.filter((p) => p.id !== sourceId)
+    const targetIndex = filtered.findIndex((p) => p.id === phaseId)
+    if (targetIndex === -1) {
+      setDragOverPhaseId(null)
+      setDragOverPosition('before')
+      return
+    }
+
+    const insertIndex = dragOverPosition === 'after' ? targetIndex + 1 : targetIndex
+    filtered.splice(insertIndex, 0, sourcePhase)
+
+    setPhases(filtered)
+    setDraggedPhaseId(null)
+    setDragOverPhaseId(null)
+    setDragOverPosition('before')
+  }
+
+  const handleListDragOver = (event) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    if (!draggedPhaseId || phases.length === 0) return
+
+    const lastPhase = phases[phases.length - 1]
+    if (dragOverPhaseId !== lastPhase.id || dragOverPosition !== 'after') {
+      setDragOverPhaseId(lastPhase.id)
+      setDragOverPosition('after')
+    }
+  }
+
+  const handleListDrop = (event) => {
+    event.preventDefault()
+    const sourceId = event.dataTransfer.getData('text/plain')
+    if (!sourceId) {
+      setDragOverPhaseId(null)
+      setDragOverPosition('before')
+      return
+    }
+
+    const sourcePhase = phases.find((p) => p.id === sourceId)
+    if (!sourcePhase) {
+      setDragOverPhaseId(null)
+      setDragOverPosition('before')
+      return
+    }
+
+    const filtered = phases.filter((p) => p.id !== sourceId)
+    filtered.push(sourcePhase)
+    setPhases(filtered)
+    setDraggedPhaseId(null)
+    setDragOverPhaseId(null)
+    setDragOverPosition('before')
+  }
+
+  const handleDragEnd = () => {
+    setDraggedPhaseId(null)
+    setDragOverPhaseId(null)
+    setDragOverPosition('before')
+    if (dragImageRef.current && dragImageRef.current.parentNode) {
+      dragImageRef.current.parentNode.removeChild(dragImageRef.current)
+      dragImageRef.current = null
+    }
+  }
+
+  const getRenderedPhases = () => {
+    if (!draggedPhaseId) return phases
+    const filtered = phases.filter((phase) => phase.id !== draggedPhaseId)
+    if (!dragOverPhaseId) return filtered
+    const targetIndex = filtered.findIndex((phase) => phase.id === dragOverPhaseId)
+    if (targetIndex === -1) return filtered
+    const insertIndex = dragOverPosition === 'after' ? targetIndex + 1 : targetIndex
+    const result = [...filtered]
+    result.splice(insertIndex, 0, { id: '__placeholder__', isPlaceholder: true, position: dragOverPosition })
+    return result
   }
 
   const selectPipeline = (pipeline) => {
@@ -377,98 +500,101 @@ const PipelineSettings = ({ onPipelineCreated }) => {
                   {phases.length === 0 ? (
                     <div className="ps-empty">No phases configured for this pipeline.</div>
                   ) : (
-                    <div className="ps-phase-list">
-                      {phases.map((phase, idx) => (
-                        <div key={phase.id} className={`ps-phase-item${phase.isNew ? ' pending' : ''}`}>
-                          {editingPhaseId === phase.id ? (
-                            <div className="ps-phase-edit">
-                              <div className="ps-phase-edit-row">
-                                <input
-                                  type="text"
-                                  className="ps-input-sm"
-                                  value={editingPhaseData.name || ''}
-                                  onChange={(e) => setEditingPhaseData((prev) => ({ ...prev, name: e.target.value }))}
-                                  placeholder="Phase name"
-                                />
-                                <label className="ps-color-picker" data-tooltip="Color">
+                    <div className="ps-phase-list" onDragOver={handleListDragOver} onDrop={handleListDrop}>
+                      {getRenderedPhases().map((phase) => {
+                        if (phase.isPlaceholder) {
+                          return (
+                            <div
+                              key="placeholder"
+                              className={`ps-phase-placeholder ${phase.position}`}
+                            />
+                          )
+                        }
+
+                        return (
+                          <div
+                            key={phase.id}
+                            className={`ps-phase-item${phase.isNew ? ' pending' : ''}${dragOverPhaseId === phase.id ? ` drag-over ${dragOverPosition}` : ''}`}
+                            draggable
+                            onDragStart={(event) => handleDragStart(event, phase.id)}
+                            onDragOver={(event) => handleDragOver(event, phase.id)}
+                            onDragEnter={(event) => handleDragOver(event, phase.id)}
+                            onDrop={(event) => handleDrop(event, phase.id)}
+                            onDragEnd={handleDragEnd}
+                          >
+                            {editingPhaseId === phase.id ? (
+                              <div className="ps-phase-edit">
+                                <div className="ps-phase-edit-row">
                                   <input
-                                    type="color"
-                                    value={editingPhaseData.color || phase.color}
-                                    onChange={(e) => setEditingPhaseData((prev) => ({ ...prev, color: e.target.value }))}
+                                    type="text"
+                                    className="ps-input-sm"
+                                    value={editingPhaseData.name || ''}
+                                    onChange={(e) => setEditingPhaseData((prev) => ({ ...prev, name: e.target.value }))}
+                                    placeholder="Phase name"
                                   />
-                                  <span className="ps-color-swatch" style={{ background: editingPhaseData.color || phase.color }} />
-                                </label>
-                                <label className="ps-check-label">
-                                  <input
-                                    type="checkbox"
-                                    checked={editingPhaseData.is_terminal || false}
-                                    onChange={(e) => setEditingPhaseData((prev) => ({ ...prev, is_terminal: e.target.checked }))}
-                                  />
-                                  Terminal
-                                </label>
-                              </div>
-                              <div className="ps-phase-edit-actions">
-                                <Button type="button" size="sm" onClick={handleEditPhaseSave}>
-                                  <Check size={13} />
-                                  Save
-                                </Button>
-                                <Button type="button" variant="ghost" size="sm" onClick={() => { setEditingPhaseId(null); setEditingPhaseData({}) }}>
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="ps-phase-row">
-                              <div className="ps-phase-info">
-                                <div className="ps-phase-visual">
-                                  <span className="ps-phase-dot" style={{ background: phase.color }} />
-                                  <span className="ps-phase-name">{phase.name}</span>
+                                  <label className="ps-color-picker" data-tooltip="Color">
+                                    <input
+                                      type="color"
+                                      value={editingPhaseData.color || phase.color}
+                                      onChange={(e) => setEditingPhaseData((prev) => ({ ...prev, color: e.target.value }))}
+                                    />
+                                    <span className="ps-color-swatch" style={{ background: editingPhaseData.color || phase.color }} />
+                                  </label>
+                                  <label className="ps-check-label">
+                                    <input
+                                      type="checkbox"
+                                      checked={editingPhaseData.is_terminal || false}
+                                      onChange={(e) => setEditingPhaseData((prev) => ({ ...prev, is_terminal: e.target.checked }))}
+                                    />
+                                    Terminal
+                                  </label>
                                 </div>
-                                <div className="ps-phase-badges">
-                                  {phase.isNew && <span className="ps-badge-sm warning">Pending</span>}
-                                  {phase.is_terminal && <span className="ps-badge-sm info">Terminal</span>}
+                                <div className="ps-phase-edit-actions">
+                                  <Button type="button" size="sm" onClick={handleEditPhaseSave}>
+                                    <Check size={13} />
+                                    Save
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => { setEditingPhaseId(null); setEditingPhaseData({}) }}>
+                                    Cancel
+                                  </Button>
                                 </div>
                               </div>
-                              <div className="ps-phase-controls">
-                                <button
-                                  type="button"
-                                  className="ps-icon-btn"
-                                  onClick={() => handleMovePhase(phase.id, 'up')}
-                                  disabled={idx === 0}
-                                  title="Move up"
-                                >
-                                  <ArrowUp size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="ps-icon-btn"
-                                  onClick={() => handleMovePhase(phase.id, 'down')}
-                                  disabled={idx === phases.length - 1}
-                                  title="Move down"
-                                >
-                                  <ArrowDown size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="ps-icon-btn"
-                                  onClick={() => handleEditPhaseStart(phase)}
-                                  title="Edit"
-                                >
-                                  <Edit3 size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="ps-icon-btn danger"
-                                  onClick={() => handleDeletePhase(phase.id)}
-                                  title="Delete"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
+                            ) : (
+                              <div className="ps-phase-row">
+                                <div className="ps-phase-info">
+                                  <div className="ps-phase-visual">
+                                    <GripVertical size={16} className="ps-drag-handle" />
+                                    <span className="ps-phase-dot" style={{ background: phase.color }} />
+                                    <span className="ps-phase-name">{phase.name}</span>
+                                  </div>
+                                  <div className="ps-phase-badges">
+                                    {phase.isNew && <span className="ps-badge-sm warning">Pending</span>}
+                                    {phase.is_terminal && <span className="ps-badge-sm info">Terminal</span>}
+                                  </div>
+                                </div>
+                                <div className="ps-phase-controls">
+                                  <button
+                                    type="button"
+                                    className="ps-icon-btn"
+                                    onClick={() => handleEditPhaseStart(phase)}
+                                    title="Edit"
+                                  >
+                                    <Edit3 size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="ps-icon-btn danger"
+                                    onClick={() => handleDeletePhase(phase.id)}
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
 

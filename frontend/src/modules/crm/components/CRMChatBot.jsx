@@ -412,13 +412,9 @@ const CRMChatBot = () => {
                     <div className="crm-chatbot-avatar">
                       <Sparkles size={12} />
                     </div>
-                    <div className="crm-chatbot-bubble">
-                      <div className="chatbot-thinking-loader">
-                        <div className="chatbot-thinking-matrix" aria-hidden="true" />
-                        <span className="chatbot-thinking-text">AI is analyzing your CRM data...</span>
-                      </div>
+                    <div className="crm-chatbot-bubble chatbot-thinking-bubble">
+                      <div className="chatbot-thinking-loader" aria-label="Thinking" />
                     </div>
-
                   </div>
                 )}
                 <div ref={messagesEndRef} />
@@ -437,16 +433,12 @@ const CRMChatBot = () => {
                   disabled={isLoading}
                 />
                 <button
-                  className={`crm-chatbot-send-btn ${isLoading ? 'loading' : ''}`}
+                  className="crm-chatbot-send-btn"
                   onClick={sendMessage}
                   disabled={!inputValue.trim() || isLoading}
                   aria-label="Send message"
                 >
-                  {isLoading ? (
-                    <div className="chatbot-send-spinner" />
-                  ) : (
-                    <Send size={16} />
-                  )}
+                  <Send size={16} />
                 </button>
               </div>
             </>

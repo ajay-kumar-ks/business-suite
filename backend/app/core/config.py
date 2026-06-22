@@ -14,11 +14,11 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://user:password@localhost/business_suite_db"
     DATABASE_NAME: str = "business_suite_db"
     API_HOST: str = "https://us-west-2.api.thenile.dev/v2/databases/019ed429-f542-7277-a13f-29f08d50a550"
+    GEMINI_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     EVENT_BUS_URL: str = "memory://local"
     ENVIRONMENT: str = "development"
-    GEMINI_API_KEY: str = ""
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
 
     model_config = ConfigDict(env_file=DOTENV_PATH, extra="ignore")

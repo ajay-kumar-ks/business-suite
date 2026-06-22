@@ -52,7 +52,6 @@ class InvoiceRead(BaseModel):
 
 
 class CustomerPaymentCreate(BaseModel):
-    invoice_id: int
     payment_date: datetime | None = None
     amount: float = Field(gt=0)
     reference: str | None = None

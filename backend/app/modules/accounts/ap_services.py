@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 from app.core.event_bus import event_bus
 from app.modules.accounts.models import JournalEntry, JournalLine
+from app.core.database import commit_or_rollback
 
 
 def create_bill_journal(db: Session, bill) -> JournalEntry:
@@ -42,7 +43,7 @@ def create_bill_journal(db: Session, bill) -> JournalEntry:
     )
     db.add(credit_line)
 
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(journal)
 
     event_bus.publish(
@@ -95,7 +96,7 @@ def create_vendor_payment_journal(db: Session, payment, bill) -> JournalEntry:
     )
     db.add(credit_line)
 
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(journal)
 
     event_bus.publish(

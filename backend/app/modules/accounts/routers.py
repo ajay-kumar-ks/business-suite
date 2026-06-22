@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.database import get_db, commit_or_rollback
 from app.core.event_bus import event_bus
 from app.modules.accounts.models import ChartOfAccount, JournalEntry, JournalLine, LedgerEntry
 from app.modules.accounts.schemas import (
@@ -77,7 +77,7 @@ def create_coa_entry(
         is_active=data.is_active,
     )
     db.add(account)
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(account)
     return account
 
@@ -124,7 +124,7 @@ def create_journal_entry(
 
     validate_journal_lines(lines)
 
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(journal)
     journal.lines = lines
     return journal
@@ -164,7 +164,7 @@ def submit_journal_entry(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only draft journals can be submitted.")
     journal.status = "submitted"
     journal.submitted_at = datetime.utcnow()
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(journal)
     _load_journal_lines(db, journal)
     return journal
@@ -186,7 +186,7 @@ def approve_journal_entry(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only submitted journals can be approved.")
     journal.status = "approved"
     journal.approved_at = datetime.utcnow()
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(journal)
     _load_journal_lines(db, journal)
     return journal
@@ -245,12 +245,12 @@ def create_expense(
         status="draft",
     )
     db.add(expense)
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(expense)
 
     journal = create_expense_journal(db, expense)
     expense.journal_id = journal.id
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(expense)
 
     event_bus.publish(
@@ -285,12 +285,12 @@ def create_income(
         status="draft",
     )
     db.add(income)
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(income)
 
     journal = create_income_journal(db, income)
     income.journal_id = journal.id
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(income)
 
     event_bus.publish(
@@ -327,7 +327,7 @@ def create_customer(
         is_active=data.is_active,
     )
     db.add(customer)
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(customer)
     return customer
 
@@ -353,12 +353,12 @@ def create_invoice(
         description=data.description,
     )
     db.add(invoice)
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(invoice)
 
     journal = create_invoice_journal(db, invoice)
     invoice.journal_id = journal.id
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(invoice)
 
     return invoice
@@ -385,7 +385,7 @@ def create_customer_payment(
         reference=data.reference,
     )
     db.add(payment)
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(payment)
     journal = create_payment_journal(db, payment, invoice)
     payment.journal_id = journal.id
@@ -394,7 +394,7 @@ def create_customer_payment(
     if invoice.paid_amount >= invoice.amount:
         invoice.status = "paid"
 
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(payment)
 
     return payment
@@ -416,7 +416,7 @@ def create_vendor(
         is_active=data.is_active,
     )
     db.add(vendor)
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(vendor)
     return vendor
 
@@ -442,11 +442,11 @@ def create_bill(
         description=data.description,
     )
     db.add(bill)
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(bill)
     journal = create_bill_journal(db, bill)
     bill.journal_id = journal.id
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(bill)
 
     return bill
@@ -473,7 +473,7 @@ def create_vendor_payment(
         reference=data.reference,
     )
     db.add(payment)
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(payment)
     journal = create_vendor_payment_journal(db, payment, bill)
     payment.journal_id = journal.id
@@ -482,7 +482,7 @@ def create_vendor_payment(
     if bill.paid_amount >= bill.amount:
         bill.status = "paid"
 
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(payment)
 
     return payment
@@ -505,7 +505,7 @@ def create_budget(
         end_date=data.end_date,
     )
     db.add(budget)
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(budget)
     event_bus.publish(
         "budget.created",
@@ -542,7 +542,7 @@ def create_budget_line(
         consumed_percentage=Decimal("0"),
     )
     db.add(budget_line)
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(budget_line)
 
     calculate_budget_consumption(db, budget_line)

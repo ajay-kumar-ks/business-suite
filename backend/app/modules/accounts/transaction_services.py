@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.event_bus import event_bus
 from app.modules.accounts.models import ChartOfAccount, JournalEntry, JournalLine
 from app.modules.accounts.transaction_models import Expense, Income
+from app.core.database import commit_or_rollback
 
 
 def _get_cash_account_id(db: Session) -> int:
@@ -57,7 +58,7 @@ def create_expense_journal(db: Session, expense: Expense) -> JournalEntry:
     )
     db.add(credit_line)
 
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(journal)
     return journal
 
@@ -97,6 +98,6 @@ def create_income_journal(db: Session, income: Income) -> JournalEntry:
     )
     db.add(credit_line)
 
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(journal)
     return journal

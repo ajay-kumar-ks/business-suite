@@ -4,6 +4,7 @@ from typing import List
 from sqlalchemy.orm import Session
 from app.core.event_bus import event_bus
 from app.modules.accounts.models import ChartOfAccount, JournalEntry, JournalLine, LedgerEntry
+from app.core.database import commit_or_rollback
 
 DEFAULT_COA_ENTRIES = [
     {"account_code": "1000", "account_name": "Cash", "account_type": "Asset"},
@@ -37,7 +38,7 @@ def seed_default_chart_of_accounts(db: Session) -> None:
 
     if entries:
         db.add_all(entries)
-        db.commit()
+        commit_or_rollback(db)
 
 
 
@@ -87,7 +88,7 @@ def post_journal_entry(db: Session, journal_entry: JournalEntry) -> JournalEntry
 
     journal_entry.status = "posted"
     journal_entry.posted_at = datetime.utcnow()
-    db.commit()
+    commit_or_rollback(db)
     db.refresh(journal_entry)
 
     event_bus.publish(

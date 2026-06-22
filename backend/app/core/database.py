@@ -21,17 +21,31 @@ if settings.ENVIRONMENT == 'development':
     @event.listens_for(engine, 'connect')
     def _set_nile_tenant(dbapi_connection, connection_record):
         try:
-            cur = dbapi_connection.cursor()
-            try:
-                cur.execute("SELECT set_config('nile.tenant_id', '1', false)")
-            except Exception:
-                cur.execute("SET nile.tenant_id = 1")
-            cur.close()
+            with dbapi_connection.cursor() as cur:
+                try:
+                    cur.execute("ROLLBACK")
+                except Exception:
+                    pass
+                try:
+                    cur.execute("SELECT set_config('nile.tenant_id', '1', false)")
+                except Exception:
+                    cur.execute("SET nile.tenant_id = 1")
         except Exception:
             # ignore if DB doesn't support Nile or SET fails
-            pass
+            try:
+                dbapi_connection.rollback()
+            except Exception:
+                pass
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def commit_or_rollback(db: Session):
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 
 def get_db() -> Session:

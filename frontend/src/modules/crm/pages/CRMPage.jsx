@@ -8,6 +8,7 @@ import LeadsPage from './LeadsPage'
 import ClientsPage from './ClientsPage'
 import CRMAnalyticsDashboard from '../components/CRMAnalyticsDashboard'
 import CRMChatBot from '../components/CRMChatBot'
+import { crmAPI } from '../../../services/api'
 import '../../../styles/ModulePage.css'
 import '../styles/CRMPageLayout.css'
 import '../styles/LeadsView.css'
@@ -23,8 +24,8 @@ const CRMPage = () => {
 
   const handleSelectContact = async (contactId) => {
     try {
-      const response = await fetch(`/api/crm/contacts/${contactId}`)
-      const contact = await response.json()
+      const response = await crmAPI.getContact(contactId)
+      const contact = response.data
       setSelectedContact(contact)
       setContactActivities(contact.activities || [])
     } catch (error) {

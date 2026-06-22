@@ -264,6 +264,43 @@
   border: 1px solid var(--border);
   border-bottom-left-radius: 4px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chatbot-thinking-bubble {
+  padding: 6px 8px;
+}
+
+.crm-chatbot-bubble.chatbot-thinking-bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+.chatbot-thinking-loader {
+  width: 20px;
+  height: 16px;
+  color: var(--text);
+  background: linear-gradient(transparent calc(1*100%/6), currentColor 0 calc(3*100%/6), transparent 0),
+              linear-gradient(transparent calc(2*100%/6), currentColor 0 calc(4*100%/6), transparent 0),
+              linear-gradient(transparent calc(3*100%/6), currentColor 0 calc(5*100%/6), transparent 0);
+  background-size: 3px 360%;
+  background-repeat: no-repeat;
+  animation: chatbot-matrix 0.9s infinite linear;
+  border-radius: 6px;
+}
+
+@keyframes chatbot-matrix {
+  0% {
+    background-position: 0% 100%, 50% 100%, 100% 100%;
+  }
+
+  100% {
+    background-position: 0% 0%, 50% 0%, 100% 0%;
+  }
 }
 
 .crm-chatbot-message.user .crm-chatbot-bubble {
@@ -387,51 +424,12 @@
 }
 
 /* ── AI Thinking Loader ── */
-.chatbot-thinking-loader {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
-}
-
-/* ── AI Thinking Loader (Matrix style) ── */
-/* Inspired by: Uiverse.io by Shoh2008 */
-.chatbot-thinking-matrix {
-  width: 45px;
-  height: 40px;
-  background: linear-gradient(#0000 calc(1*100%/6),#fff 0 calc(3*100%/6),#0000 0),
-    linear-gradient(#0000 calc(2*100%/6),#fff 0 calc(4*100%/6),#0000 0),
-    linear-gradient(#0000 calc(3*100%/6),#fff 0 calc(5*100%/6),#0000 0);
-  background-size: 10px 400%;
-  background-repeat: no-repeat;
-  animation: chatbot-matrix 1s infinite linear;
-
-  /* fit theme */
-  filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.35));
-  opacity: 0.95;
-}
-
-/* Tint to match primary color */
-.chatbot-thinking-matrix {
-  /* Use currentColor by overriding the gradient colors via mask approach */
-  color: var(--primary);
-}
-
-@keyframes chatbot-matrix {
-  0% {
-    background-position: 0% 100%, 50% 100%, 100% 100%
-  }
-
-  100% {
-    background-position: 0% 0%, 50% 0%, 100% 0%
-  }
-}
-
 .chatbot-thinking-text {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-secondary);
+  margin: 0;
   font-style: italic;
-  animation: chatbot-think-pulse 2s ease-in-out infinite;
+  opacity: 0.9;
 }
 
 @keyframes chatbot-think-pulse {
@@ -441,14 +439,6 @@
 
 
 /* ── Send Button Spinner ── */
-.chatbot-send-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: chatbot-spin 0.6s linear infinite;
-}
 
 @keyframes chatbot-spin {
   to { transform: rotate(360deg); }
@@ -516,14 +506,15 @@
 }
 
 .crm-chatbot-send-btn:disabled {
-  opacity: 0.4;
+  background: var(--surface);
+  color: var(--text-secondary);
+  opacity: 0.85;
   cursor: not-allowed;
+  border: 1px solid var(--border);
 }
 
-.crm-chatbot-send-btn.loading {
-  background: var(--primary);
-  opacity: 0.8;
-  cursor: not-allowed;
+.crm-chatbot-send-btn:disabled svg {
+  stroke: var(--text-secondary);
 }
 
 /* ── Responsive ── */

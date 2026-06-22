@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import '../../../styles/ModulePage.css'
-import { accountsAPI } from '../../../services/api'
+import { accountsAPI, getAPIErrorMessage } from '../../../services/api'
 import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
 import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
@@ -30,7 +30,7 @@ const JournalsPage = () => {
       const response = await accountsAPI.listJournals()
       setJournals(response.data)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load journals')
+      setError(getAPIErrorMessage(err, 'Failed to load journals'))
     }
   }, [])
 
@@ -76,7 +76,7 @@ const JournalsPage = () => {
       setForm({ reference: '', description: '', lines: [{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }] })
       fetchJournals()
     } catch (err) {
-      setError(err.response?.data?.detail || 'Unable to create journal')
+      setError(getAPIErrorMessage(err, 'Unable to create journal'))
       setSuccess('')
     }
   }
@@ -91,7 +91,7 @@ const JournalsPage = () => {
       setError('')
       fetchJournals()
     } catch (err) {
-      setError(err.response?.data?.detail || `Failed to ${action} journal`)
+      setError(getAPIErrorMessage(err, `Failed to ${action} journal`))
       setSuccess('')
     } finally {
       setLoadingAction(null)
@@ -126,7 +126,7 @@ const JournalsPage = () => {
                 <select
                   className="ui-input-field"
                   value={line.account_id}
-                  onChange={(e) => handleLineChange(index, 'account_id', Number(e.target.value))}
+                  onChange={(e) => handleLineChange(index, 'account_id', e.target.value === '' ? '' : Number(e.target.value))}
                 >
                   <option value="">Select account</option>
                   {accounts.map((acct) => (

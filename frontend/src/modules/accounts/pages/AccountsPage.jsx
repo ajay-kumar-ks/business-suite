@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import '../../../styles/ModulePage.css'
 import '../styles/AccountsPage.css'
-import { accountsAPI } from '../../../services/api'
+import { accountsAPI, getAPIErrorMessage } from '../../../services/api'
 import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
 
 const AccountsPage = () => {
@@ -78,7 +78,7 @@ const AccountsPage = () => {
           })
         }
       } catch (err) {
-        setError(err.response?.data?.detail || 'Failed to load account overview')
+        setError(getAPIErrorMessage(err, 'Failed to load account overview'))
       }
     }
 

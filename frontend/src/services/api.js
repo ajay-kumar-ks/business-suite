@@ -34,9 +34,43 @@ api.interceptors.response.use(
         !error.config?.url?.startsWith('/accounts/tenants')) {
       localStorage.removeItem('tenant_id')
     }
+    if (error.response?.data?.detail) {
+      error.response.data.detail = formatErrorDetail(error.response.data.detail)
+    }
     return Promise.reject(error)
   }
 )
+
+const formatErrorDetail = (detail) => {
+  if (detail == null) return ''
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === 'string') return item
+        if (item?.msg) {
+          const location = Array.isArray(item.loc) ? item.loc.join('.') : item.loc
+          return location ? `${location}: ${item.msg}` : item.msg
+        }
+        if (typeof item === 'object') return JSON.stringify(item)
+        return String(item)
+      })
+      .join(' | ')
+  }
+  if (typeof detail === 'object') {
+    return Object.entries(detail)
+      .map(([key, value]) => `${key}: ${formatErrorDetail(value)}`)
+      .join(' | ')
+  }
+  return String(detail)
+}
+
+export const getAPIErrorMessage = (error, fallback = 'An unexpected error occurred') => {
+  const detail = error?.response?.data?.detail
+  if (detail) return formatErrorDetail(detail)
+  const message = error?.response?.data?.message || error?.message
+  return message ? String(message) : fallback
+}
 
 export const authAPI = {
   login: (username, password) =>

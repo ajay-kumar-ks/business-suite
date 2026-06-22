@@ -10,7 +10,6 @@ from app.core.event_bus import event_bus
 from app.core.event_handlers import register_event_handlers
 from app.core.database import engine
 from app.core.base import Base
-from app.core.tenant import TenantMiddleware
 from app.modules.auth.routers import router as auth_router
 from app.modules.hr.routers import router as hr_router
 from app.modules.accounts.routers import router as accounts_router
@@ -33,7 +32,7 @@ app.add_middleware(
 )
 
 # Then add other middleware
-app.add_middleware(TenantMiddleware)
+
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(tasks_router, prefix="/tasks", tags=["tasks"])
@@ -121,6 +120,7 @@ async def startup_event():
 
         Base.metadata.create_all(bind=engine)
         print("[OK] Database tables created")
+
     except Exception as e:
         print(f"[WARN] Database connection warning: {str(e)[:100]}")
         print("[OK] Server started (database connection failed - check your DATABASE_URL credentials in .env)")

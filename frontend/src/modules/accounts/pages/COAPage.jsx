@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import '../../../styles/ModulePage.css'
 import '../../../modules/accounts/styles/AccountsPage.css'
-import { accountsAPI } from '../../../services/api'
+import { accountsAPI, getAPIErrorMessage } from '../../../services/api'
 import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
 import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
@@ -27,7 +27,7 @@ const COAPage = () => {
       const response = await accountsAPI.listCOA()
       setAccounts(response.data)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load accounts')
+      setError(getAPIErrorMessage(err, 'Failed to load accounts'))
     }
   }
 
@@ -44,7 +44,7 @@ const COAPage = () => {
       setForm({ account_code: '', account_name: '', account_type: 'Asset' })
       fetchAccounts()
     } catch (err) {
-      setError(err.response?.data?.detail || 'Unable to create account')
+      setError(getAPIErrorMessage(err, 'Unable to create account'))
       setSuccess('')
     }
   }

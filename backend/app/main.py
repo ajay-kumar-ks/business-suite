@@ -262,24 +262,14 @@ async def _run_database_migrations():
 
     # Start overdue task scheduler
     asyncio.create_task(run_overdue_scheduler())
-                    with engine.begin() as conn:
-                        conn.execute(text("ALTER TABLE candidates ALTER COLUMN current_stage TYPE VARCHAR(100) USING current_stage::text"))
-                        conn.execute(text("ALTER TABLE candidates ALTER COLUMN current_stage SET DEFAULT 'Applied'"))
-                        conn.execute(text("UPDATE candidates SET current_stage = 'Applied' WHERE current_stage = 'APPLIED'"))
-                        conn.execute(text("UPDATE candidates SET current_stage = 'Screening' WHERE current_stage = 'SCREENING'"))
-                        conn.execute(text("UPDATE candidates SET current_stage = 'Interview' WHERE current_stage = 'INTERVIEW'"))
-                        conn.execute(text("UPDATE candidates SET current_stage = 'Technical Round' WHERE current_stage = 'TECHNICAL_ROUND'"))
-                        conn.execute(text("UPDATE candidates SET current_stage = 'HR Round' WHERE current_stage = 'HR_ROUND'"))
-                        conn.execute(text("UPDATE candidates SET current_stage = 'Selected' WHERE current_stage = 'SELECTED'"))
-                        conn.execute(text("UPDATE candidates SET current_stage = 'Rejected' WHERE current_stage = 'REJECTED'"))
-                        conn.execute(text("UPDATE candidates SET current_stage = 'Onboarded' WHERE current_stage = 'ONBOARDED'"))
-                        print('✓ Migrated candidates.current_stage from ENUM to VARCHAR')
-                        
-    except Exception as e:
-        print(f"[WARN] Background migration error: {str(e)[:100]}")
 
+    # NOTE: Removed accidental indented block that caused IndentationError.
+    # Any additional background migration logic should live inside _run_database_migrations().
 
+    
 @app.on_event("shutdown")
 async def shutdown_event():
     event_bus.disconnect()
+
+
 

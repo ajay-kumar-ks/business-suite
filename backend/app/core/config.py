@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://user:password@localhost/business_suite_db"
     DATABASE_NAME: str = "business_suite_db"
     
-    OPENROUTER_API_KEY: str = ""
+    ACCOUNTS_OPENROUTER_API_KEY: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     EVENT_BUS_URL: str = "memory://local"
     ENVIRONMENT: str = "development"

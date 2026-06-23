@@ -117,6 +117,7 @@ export const accountsAPI = {
   getTrialBalance: () => api.get('/accounts/reports/trial-balance'),
   getProfitLoss: () => api.get('/accounts/reports/profit-loss'),
   getBalanceSheet: () => api.get('/accounts/reports/balance-sheet'),
+  getAIInsights: () => api.get('/accounts/ai/insights'),
 }
 
 export const crmAPI = {

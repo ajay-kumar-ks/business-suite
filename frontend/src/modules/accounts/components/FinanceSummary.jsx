@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { accountsAPI } from '../../../services/api'
+import { accountsAPI, getAPIErrorMessage } from '../../../services/api'
 import { DollarSign, TrendingUp, TrendingDown, PieChart } from 'lucide-react'
 import '../styles/AccountsPage.css'
 
@@ -37,7 +37,7 @@ const FinanceSummary = () => {
           trialBalance: tbRes.data,
         })
       } catch (err) {
-        setError('Unable to load financial summary')
+        setError(getAPIErrorMessage(err, 'Unable to load financial summary'))
       } finally {
         setLoading(false)
       }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import '../../../styles/ModulePage.css'
-import { accountsAPI } from '../../../services/api'
+import { accountsAPI, getAPIErrorMessage } from '../../../services/api'
 import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
 import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
@@ -54,7 +54,7 @@ const APPage = () => {
       setVendorForm({ name: '', email: '', phone: '', address: '' })
       loadData()
     } catch (err) {
-      showMessage(err.response?.data?.detail || 'Unable to create vendor', 'error')
+      showMessage(getAPIErrorMessage(err, 'Unable to create vendor'), 'error')
     }
   }
 
@@ -66,7 +66,7 @@ const APPage = () => {
       setBillForm({ vendor_id: '', bill_number: '', amount: 0, description: '' })
       loadData()
     } catch (err) {
-      showMessage(err.response?.data?.detail || 'Unable to create bill', 'error')
+      showMessage(getAPIErrorMessage(err, 'Unable to create bill'), 'error')
     }
   }
 
@@ -81,7 +81,7 @@ const APPage = () => {
       setPaymentForm({ amount: 0, reference: '' })
       loadData()
     } catch (err) {
-      showMessage(err.response?.data?.detail || 'Unable to create payment', 'error')
+      showMessage(getAPIErrorMessage(err, 'Unable to create payment'), 'error')
     }
   }
 
@@ -156,7 +156,7 @@ const APPage = () => {
               <div className="form-row">
                 <div>
                   <label className="ui-input-label">Vendor</label>
-                  <select className="ui-input-field" value={billForm.vendor_id} onChange={(e) => setBillForm({ ...billForm, vendor_id: Number(e.target.value) })}>
+                  <select className="ui-input-field" value={billForm.vendor_id} onChange={(e) => setBillForm({ ...billForm, vendor_id: e.target.value === '' ? '' : Number(e.target.value) })}>
                     <option value="">Select vendor</option>
                     {vendors.map((vendor) => (
                       <option key={vendor.id} value={vendor.id}>{vendor.name}</option>

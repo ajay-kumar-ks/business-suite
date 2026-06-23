@@ -5,10 +5,14 @@ Run these requests after starting the server:
     uvicorn app.main:app --reload
 """
 
+import os
 import requests
 import json
+from dotenv import load_dotenv
 
-BASE_URL = "http://localhost:8000/api"
+load_dotenv()
+
+BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api")
 
 # Headers for authenticated requests
 def get_auth_headers(token: str) -> dict:
@@ -63,4 +67,4 @@ if __name__ == "__main__":
             test_dashboard(token)
         test_module_health()
     except requests.exceptions.ConnectionError:
-        print("Error: Could not connect to server. Make sure it's running on http://localhost:8000")
+        print(f"Error: Could not connect to server. Make sure it's running on {BASE_URL}")

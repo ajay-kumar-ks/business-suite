@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { X, ArrowLeftRight, CheckCircle2, Trash2, Sparkles, Mail, Calendar, ArrowRightCircle } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Loader from '../../../components/ui/Loader'
+import api from '../../../services/api'
 import '../styles/LeadsView.css'
 
 const URGENCY_ICONS = {
@@ -30,14 +31,8 @@ const LeadDetailModal = ({
     setAiLoading(true)
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch('/api/crm/ai/next-action', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lead_id: lead.id }),
-        })
-        if (res.ok) {
-          setAiAction(await res.json())
-        }
+        const res = await api.post('/crm/ai/next-action', { lead_id: lead.id })
+        setAiAction(res.data)
       } catch {
         // Silently fail — AI suggestion is optional
       } finally {

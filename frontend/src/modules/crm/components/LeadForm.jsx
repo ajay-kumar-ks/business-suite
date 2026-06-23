@@ -4,6 +4,8 @@ import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import Loader from '../../../components/ui/Loader'
 import { hrAPI } from '../../hr/services/hrApi'
+import { crmAPI } from '../../../services/api'
+import api from '../../../services/api'
 import '../styles/LeadsView.css'
 
 const LeadForm = ({ contact = null, onSave, onCancel }) => {
@@ -62,22 +64,15 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
     }
     setAiLoading(true)
     try {
-      const res = await fetch('/api/crm/ai/suggest-assignee', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: formData.title,
-          value: formData.value ? Number(formData.value) : null,
-          source: formData.source || null,
-          notes: formData.notes || null,
-          pipeline_id: formData.pipeline_id,
-          contact_company: contact?.company || '',
-        }),
+      const res = await api.post('/crm/ai/suggest-assignee', {
+        title: formData.title,
+        value: formData.value ? Number(formData.value) : null,
+        source: formData.source || null,
+        notes: formData.notes || null,
+        pipeline_id: formData.pipeline_id,
+        contact_company: contact?.company || '',
       })
-      if (res.ok) {
-        const data = await res.json()
-        setAiSuggestions(data.suggestions || [])
-      }
+      setAiSuggestions(res.data.suggestions || [])
     } catch (e) {
       console.error('AI suggest error:', e)
       setAiSuggestions([])
@@ -114,10 +109,8 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
 
   const fetchPipelines = async () => {
     try {
-      const response = await fetch('/api/crm/pipelines/')
-      if (!response.ok) throw new Error('Failed to fetch pipelines')
-      const data = await response.json()
-      setPipelines(data)
+      const response = await crmAPI.listPipelines()
+      setPipelines(response.data)
     } catch (error) {
       console.error('Failed to fetch pipelines:', error)
     }
@@ -125,10 +118,8 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
 
   const fetchPhases = async (pipelineId) => {
     try {
-      const response = await fetch(`/api/crm/pipelines/${pipelineId}/phases`)
-      if (!response.ok) throw new Error('Failed to fetch phases')
-      const data = await response.json()
-      setPhases(data)
+      const response = await crmAPI.getPhases(pipelineId)
+      setPhases(response.data)
     } catch (error) {
       console.error('Failed to fetch phases:', error)
     }
@@ -210,25 +201,20 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
       const selectedEmp = employees.find(
         (emp) => String(emp.id) === String(formData.assignee_id)
       )
-      const response = await fetch('/api/crm/leads/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: formData.title,
-          contact_id: formData.contact_id || null,
-          pipeline_id: formData.pipeline_id || null,
-          phase_id: formData.phase_id || null,
-          value: formData.value ? Number(formData.value) : undefined,
-          expected_close_date: formData.expected_close_date || null,
-          assignee: selectedEmp
-            ? selectedEmp.user_name || selectedEmp.full_name || String(selectedEmp.id)
-            : null,
-          source: formData.source || null,
-          notes: formData.notes || null,
-        }),
+      const response = await crmAPI.createLead({
+        title: formData.title,
+        contact_id: formData.contact_id || null,
+        pipeline_id: formData.pipeline_id || null,
+        phase_id: formData.phase_id || null,
+        value: formData.value ? Number(formData.value) : undefined,
+        expected_close_date: formData.expected_close_date || null,
+        assignee: selectedEmp
+          ? selectedEmp.user_name || selectedEmp.full_name || String(selectedEmp.id)
+          : null,
+        source: formData.source || null,
+        notes: formData.notes || null,
       })
-      if (!response.ok) throw new Error('Failed to save lead')
-      const saved = await response.json()
+      const saved = response.data
       onSave(saved)
     } catch (error) {
       console.error(error)

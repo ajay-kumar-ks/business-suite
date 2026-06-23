@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageCircle, X, Send, Sparkles, Minimize2, Maximize2, User } from 'lucide-react'
+import api from '../../../services/api'
 import '../styles/CRMChatBot.css'
 
 const STORAGE_KEY = 'crm_chatbot_history'
@@ -275,24 +276,12 @@ const CRMChatBot = () => {
     setIsLoading(true)
 
     try {
-      const res = await fetch('/api/crm/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          history: messages.slice(-20).map((m) => ({ role: m.role, content: m.content })),
-        }),
+      const res = await api.post('/crm/ai/chat', {
+        message,
+        history: messages.slice(-20).map((m) => ({ role: m.role, content: m.content })),
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }])
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: "I'm sorry, I couldn't process your request. Please try again." },
-        ])
-      }
+      setMessages((prev) => [...prev, { role: 'assistant', content: res.data.reply }])
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -423,13 +412,9 @@ const CRMChatBot = () => {
                     <div className="crm-chatbot-avatar">
                       <Sparkles size={12} />
                     </div>
-                    <div className="crm-chatbot-bubble">
-                      <div className="chatbot-thinking-loader">
-                        <div className="chatbot-thinking-matrix" aria-hidden="true" />
-                        <span className="chatbot-thinking-text">AI is analyzing your CRM data...</span>
-                      </div>
+                    <div className="crm-chatbot-bubble chatbot-thinking-bubble">
+                      <div className="chatbot-thinking-loader" aria-label="Thinking" />
                     </div>
-
                   </div>
                 )}
                 <div ref={messagesEndRef} />
@@ -448,16 +433,12 @@ const CRMChatBot = () => {
                   disabled={isLoading}
                 />
                 <button
-                  className={`crm-chatbot-send-btn ${isLoading ? 'loading' : ''}`}
+                  className="crm-chatbot-send-btn"
                   onClick={sendMessage}
                   disabled={!inputValue.trim() || isLoading}
                   aria-label="Send message"
                 >
-                  {isLoading ? (
-                    <div className="chatbot-send-spinner" />
-                  ) : (
-                    <Send size={16} />
-                  )}
+                  <Send size={16} />
                 </button>
               </div>
             </>

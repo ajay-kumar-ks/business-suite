@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import '../../../styles/ModulePage.css'
-import { accountsAPI } from '../../../services/api'
+import { accountsAPI, getAPIErrorMessage } from '../../../services/api'
 import { useAccountsPermissions, isPageAllowed } from '../accountsPermissions'
 import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
@@ -38,7 +38,7 @@ const BudgetsPage = () => {
       const response = await accountsAPI.listBudgets()
       setBudgets(response.data)
     } catch (err) {
-      showMessage('Unable to load budgets', 'error')
+      showMessage(getAPIErrorMessage(err, 'Unable to load budgets'), 'error')
     }
   }, [])
 
@@ -64,7 +64,7 @@ const BudgetsPage = () => {
       setForm({ name: '', fiscal_year: new Date().getFullYear(), total_amount: 0, start_date: '', end_date: '', status: 'draft' })
       loadBudgets()
     } catch (err) {
-      showMessage(err.response?.data?.detail || 'Unable to create budget', 'error')
+      showMessage(getAPIErrorMessage(err, 'Unable to create budget'), 'error')
     }
   }
 
@@ -94,7 +94,7 @@ const BudgetsPage = () => {
       const response = await accountsAPI.listBudgetLines(budgetId)
       setBudgetLines(prev => ({ ...prev, [budgetId]: response.data }))
     } catch (err) {
-      showMessage(err.response?.data?.detail || 'Unable to add budget line', 'error')
+      showMessage(getAPIErrorMessage(err, 'Unable to add budget line'), 'error')
     } finally {
       setLoadingLines(prev => ({ ...prev, [budgetId]: false }))
     }
@@ -201,7 +201,7 @@ const BudgetsPage = () => {
                           <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'end' }}>
                             <div style={{ minWidth: '200px' }}>
                               <label className="ui-input-label">Account</label>
-                              <select className="ui-input-field" value={lineForm.account_id} onChange={(e) => setLineForm({ ...lineForm, account_id: Number(e.target.value) })}>
+                              <select className="ui-input-field" value={lineForm.account_id} onChange={(e) => setLineForm({ ...lineForm, account_id: e.target.value === '' ? '' : Number(e.target.value) })}>
                                 <option value="">Select account</option>
                                 {accounts.map((acct) => (
                                   <option key={acct.id} value={acct.id}>{acct.account_code} - {acct.account_name}</option>

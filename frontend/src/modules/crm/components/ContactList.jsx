@@ -3,6 +3,7 @@ import { Search, Plus, Filter, MoreVertical, Trash2, Archive, Edit, ArrowRight }
 import Button from '../../../components/ui/Button'
 import Select from '../../../components/ui/Select'
 import Loader from '../../../components/ui/Loader'
+import { crmAPI } from '../../../services/api'
 import '../styles/ContactList.css'
 
 const ContactList = ({ onSelectContact, onCreateContact, onConvertContact }) => {
@@ -25,13 +26,17 @@ const ContactList = ({ onSelectContact, onCreateContact, onConvertContact }) => 
     setLoading(true)
     try {
       const pageSize = 10
-      let url = `/api/crm/contacts/?status=${contactStatusFilter}&skip=${page * pageSize}&limit=${pageSize}`
-      if (searchTerm) url += `&search=${searchTerm}`
-      if (filterTags.length > 0) url += `&tags=${filterTags.join(',')}`
-      
-      const response = await fetch(url)
-      const data = await response.json()
-      const total = Number(response.headers.get('x-total-count') || '0')
+      const params = {
+        status: contactStatusFilter,
+        skip: page * pageSize,
+        limit: pageSize,
+      }
+      if (searchTerm) params.search = searchTerm
+      if (filterTags.length > 0) params.tags = filterTags.join(',')
+
+      const response = await crmAPI.listContacts(params)
+      const data = response.data
+      const total = Number(response.headers['x-total-count'] || '0')
       setTotalContacts(total)
       setContacts(data)
     } catch (error) {
@@ -64,7 +69,7 @@ const ContactList = ({ onSelectContact, onCreateContact, onConvertContact }) => 
   const handleDeleteContact = async (id) => {
     if (window.confirm('Are you sure you want to delete this contact?')) {
       try {
-          await fetch(`/api/crm/contacts/${id}`, { method: 'DELETE' })
+          await crmAPI.deleteContact(id)
         setContacts(contacts.filter(c => c.id !== id))
       } catch (error) {
         console.error('Failed to delete contact:', error)
@@ -74,7 +79,7 @@ const ContactList = ({ onSelectContact, onCreateContact, onConvertContact }) => 
 
   const handleArchiveContact = async (id) => {
     try {
-        await fetch(`/api/crm/contacts/${id}/archive`, { method: 'PATCH' })
+        await crmAPI.archiveContact(id)
       setContacts(contacts.filter(c => c.id !== id))
     } catch (error) {
       console.error('Failed to archive contact:', error)
@@ -83,11 +88,7 @@ const ContactList = ({ onSelectContact, onCreateContact, onConvertContact }) => 
 
   const handleRestoreContact = async (id) => {
     try {
-        await fetch(`/api/crm/contacts/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'active' }),
-      })
+        await crmAPI.updateContact(id, { status: 'active' })
       setContacts(contacts.filter(c => c.id !== id))
     } catch (error) {
       console.error('Failed to restore contact:', error)

@@ -4,12 +4,16 @@ Test script for CRM Leads Phase 2 functionality
 Tests pipeline, phase, and lead CRUD operations
 """
 
+import os
 import requests
 import json
 import uuid
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
-BASE_URL = "http://127.0.0.1:8001/api"
+load_dotenv()
+
+BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8001/api")
 
 def test_pipelines():
     """Test pipeline endpoints"""
@@ -192,7 +196,7 @@ def run_all_tests():
         
     except requests.exceptions.ConnectionError:
         print(f"\n❌ Error: Could not connect to backend at {BASE_URL}")
-        print("Make sure the backend server is running on http://127.0.0.1:8001")
+        print(f"Make sure the backend server is running on {BASE_URL}")
     except Exception as e:
         print(f"\n❌ Unexpected error: {e}")
 

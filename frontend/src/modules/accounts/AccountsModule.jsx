@@ -10,6 +10,7 @@ import ARPage from './pages/ARPage'
 import APPage from './pages/APPage'
 import BudgetsPage from './pages/BudgetsPage'
 import ReportsPage from './pages/ReportsPage'
+import AIInsightsPage from './pages/AIInsightsPage'
 import Loader from '../../components/ui/Loader'
 import '../../styles/AccountsTheme.css'
 import '../../styles/AccountsModule.css'
@@ -24,6 +25,7 @@ const pageComponents = {
   ap: APPage,
   budgets: BudgetsPage,
   reports: ReportsPage,
+  'ai-insights': AIInsightsPage,
 }
 
 const AccountsModuleContent = () => {

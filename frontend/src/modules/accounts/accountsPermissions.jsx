@@ -21,6 +21,7 @@ const ACCOUNT_PAGES = [
   { id: 'ap', label: 'Accounts Payable' },
   { id: 'budgets', label: 'Budgets' },
   { id: 'reports', label: 'Reports' },
+  { id: 'ai-insights', label: 'AI Insights' },
 ]
 
 const PAGE_ACCESS = {

@@ -10,7 +10,7 @@ from app.core.event_bus import event_bus
 from app.core.event_handlers import register_event_handlers
 from app.core.database import engine
 from app.core.base import Base
-from app.core.tenant import TenantMiddleware
+
 import logging
 import time
 from app.modules.auth.routers import router as auth_router
@@ -89,6 +89,33 @@ async def health_check():
 @app.on_event("startup")
 async def startup_event():
     try:
+        # Create tables immediately (fast)
+        Base.metadata.create_all(bind=engine)
+        print("[OK] Database tables created")
+        
+        # Run heavy migrations in background to avoid blocking startup
+        asyncio.create_task(_run_database_migrations())
+        
+    except Exception as e:
+        print(f"[WARN] Database connection warning: {str(e)[:100]}")
+        print("[OK] Server started (database connection failed - check your DATABASE_URL credentials in .env)")
+
+    register_event_handlers()
+    event_bus.connect()
+
+    # Register tasks module event handlers
+    register_handlers()
+
+    # Start overdue task scheduler
+    asyncio.create_task(run_overdue_scheduler())
+
+
+async def _run_database_migrations():
+    """Run expensive database migrations in background after startup completes"""
+    try:
+        import time
+        await asyncio.sleep(0.5)  # Brief delay to let app fully start
+        
         inspector = inspect(engine)
         if 'contacts' in inspector.get_table_names():
             columns = [col['name'] for col in inspector.get_columns('contacts')]
@@ -114,12 +141,9 @@ async def startup_event():
                         print(f'✓ Added candidates.{col_name}')
 
             # Migrate current_stage from ENUM to VARCHAR if still needed
-            # (We just try the ALTER; if it fails the column is already VARCHAR)
             stage_col = cols.get('current_stage')
             if stage_col:
                 type_str = str(stage_col.get('type', '')).lower()
-                # The PostgreSQL ENUM type is named 'recruitmentstage' — contains no 'enum' substring.
-                # Check if the column type is NullType (SQLAlchemy's marker for unrecognized types)
                 is_enum = isinstance(stage_col.get('type'), NullType) or 'enum' in type_str
                 if is_enum:
                     with engine.begin() as conn:
@@ -134,22 +158,9 @@ async def startup_event():
                         conn.execute(text("UPDATE candidates SET current_stage = 'Rejected' WHERE current_stage = 'REJECTED'"))
                         conn.execute(text("UPDATE candidates SET current_stage = 'Onboarded' WHERE current_stage = 'ONBOARDED'"))
                         print('✓ Migrated candidates.current_stage from ENUM to VARCHAR')
-
-        Base.metadata.create_all(bind=engine)
-        print("[OK] Database tables created")
-
+                        
     except Exception as e:
-        print(f"[WARN] Database connection warning: {str(e)[:100]}")
-        print("[OK] Server started (database connection failed - check your DATABASE_URL credentials in .env)")
-
-    register_event_handlers()
-    event_bus.connect()
-
-    # Register tasks module event handlers
-    register_handlers()
-
-    # Start overdue task scheduler
-    asyncio.create_task(run_overdue_scheduler())
+        print(f"[WARN] Background migration error: {str(e)[:100]}")
 
 
 @app.on_event("shutdown")

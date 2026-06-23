@@ -11,11 +11,6 @@ from app.modules.hr.crud import (
     create_employee,
     update_employee,
     delete_employee,
-    get_roles,
-    get_role,
-    create_role,
-    update_role,
-    delete_role,
     get_departments,
     get_department,
     create_department,
@@ -44,9 +39,6 @@ from app.modules.hr.schemas import (
     EmployeeUpdate,
     EmployeeResponse,
     EmployeeListResponse,
-    RoleCreate,
-    RoleUpdate,
-    RoleResponse,
     DepartmentCreate,
     DepartmentUpdate,
     DepartmentResponse,
@@ -62,7 +54,12 @@ from app.modules.hr.schemas import (
     MyLeaveCreate,
 )
 from app.modules.hr.services import format_employee_response, format_attendance_response, format_leave_response
-from app.modules.hr.db_models import EmployeeStatus, AttendanceStatus, LeaveType, LeaveStatus
+from app.modules.hr.db_models import (
+    EmployeeStatus, AttendanceStatus, LeaveType, LeaveStatus,
+    Employee, Department, Attendance, LeaveRequest,
+)
+from app.modules.recruitment.db_models import Candidate
+from sqlalchemy import func
 
 router = APIRouter()
 
@@ -337,58 +334,6 @@ async def api_delete_employee(
 
 
 # ──────────────────────────────────────────────
-# Role CRUD
-# ──────────────────────────────────────────────
-
-
-@router.get("/roles", response_model=list[RoleResponse])
-async def api_get_roles(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    return get_roles(db)
-
-
-@router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
-async def api_create_role(
-    data: RoleCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    return create_role(db, data)
-
-
-@router.put("/roles/{role_id}", response_model=RoleResponse)
-async def api_update_role(
-    role_id: int,
-    data: RoleUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    role = update_role(db, role_id, data)
-    if not role:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Role with id {role_id} not found",
-        )
-    return role
-
-
-@router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def api_delete_role(
-    role_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    deleted = delete_role(db, role_id)
-    if not deleted:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Role with id {role_id} not found",
-        )
-
-
-# ──────────────────────────────────────────────
 # Department CRUD
 # ──────────────────────────────────────────────
 
@@ -524,3 +469,126 @@ async def api_update_leave_status(
             detail=f"Leave request with id {leave_id} not found",
         )
     return format_leave_response(leave)
+
+
+# ──────────────────────────────────────────────
+# AI Insights
+# ──────────────────────────────────────────────
+
+
+@router.get("/ai-insights")
+async def api_hr_ai_insights(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Generate AI-powered HR insights from real HR data."""
+    try:
+        from app.services.hr_ai_service import generate_hr_insights
+
+        # ── Collect Workforce Data ──
+        total_employees = db.query(func.count(Employee.id)).scalar() or 0
+        total_departments = db.query(func.count(Department.id)).scalar() or 0
+        active_employees = db.query(func.count(Employee.id)).filter(
+            Employee.status == EmployeeStatus.ACTIVE
+        ).scalar() or 0
+        inactive_employees = db.query(func.count(Employee.id)).filter(
+            Employee.status == EmployeeStatus.INACTIVE
+        ).scalar() or 0
+
+        # Employees per department
+        dept_query = db.query(
+            Department.name, func.count(Employee.id)
+        ).outerjoin(
+            Employee, Employee.department_id == Department.id
+        ).group_by(Department.name).all()
+        employees_per_department = {name: count for name, count in dept_query}
+
+        # ── Collect Recruitment Data ──
+        total_candidates = db.query(func.count(Candidate.id)).scalar() or 0
+        candidates_in_progress = db.query(func.count(Candidate.id)).filter(
+            Candidate.status == "In Progress"
+        ).scalar() or 0
+        selected_candidates = db.query(func.count(Candidate.id)).filter(
+            Candidate.current_stage == "Selected"
+        ).scalar() or 0
+        onboarded_candidates = db.query(func.count(Candidate.id)).filter(
+            Candidate.current_stage == "Onboarded"
+        ).scalar() or 0
+        converted_employees = db.query(func.count(Candidate.id)).filter(
+            Candidate.converted_to_employee == True
+        ).scalar() or 0
+        rejected_candidates = db.query(func.count(Candidate.id)).filter(
+            Candidate.current_stage == "Rejected"
+        ).scalar() or 0
+
+        # ── Collect Attendance Data ──
+        total_attendance_records = db.query(func.count(Attendance.id)).scalar() or 0
+        present_employees = db.query(func.count(Attendance.id)).filter(
+            Attendance.status == AttendanceStatus.PRESENT
+        ).scalar() or 0
+        absent_employees = db.query(func.count(Attendance.id)).filter(
+            Attendance.status == AttendanceStatus.ABSENT
+        ).scalar() or 0
+        attendance_percentage = (
+            (present_employees / total_attendance_records * 100)
+            if total_attendance_records > 0 else 0
+        )
+
+        # ── Collect Leave Data ──
+        total_leave_requests = db.query(func.count(LeaveRequest.id)).scalar() or 0
+        approved_leaves = db.query(func.count(LeaveRequest.id)).filter(
+            LeaveRequest.status == LeaveStatus.APPROVED
+        ).scalar() or 0
+        pending_leaves = db.query(func.count(LeaveRequest.id)).filter(
+            LeaveRequest.status == LeaveStatus.PENDING
+        ).scalar() or 0
+        rejected_leaves = db.query(func.count(LeaveRequest.id)).filter(
+            LeaveRequest.status == LeaveStatus.REJECTED
+        ).scalar() or 0
+
+        # ── Build HR data dict ──
+        hr_data = {
+            "total_employees": total_employees,
+            "total_departments": total_departments,
+            "active_employees": active_employees,
+            "inactive_employees": inactive_employees,
+            "employees_per_department": employees_per_department,
+            "total_candidates": total_candidates,
+            "candidates_in_progress": candidates_in_progress,
+            "selected_candidates": selected_candidates,
+            "onboarded_candidates": onboarded_candidates,
+            "converted_employees": converted_employees,
+            "rejected_candidates": rejected_candidates,
+            "total_attendance_records": total_attendance_records,
+            "present_employees": present_employees,
+            "absent_employees": absent_employees,
+            "attendance_percentage": round(attendance_percentage, 1),
+            "total_leave_requests": total_leave_requests,
+            "approved_leaves": approved_leaves,
+            "pending_leaves": pending_leaves,
+            "rejected_leaves": rejected_leaves,
+        }
+
+        # ── Generate AI insights ──
+        insights = generate_hr_insights(hr_data)
+        return {
+            "success": True,
+            "data": hr_data,
+            "insights": insights,
+        }
+
+    except ImportError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI service module not available. Check your backend installation.",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"AI service configuration error: {e}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate AI insights: {str(e)[:200]}",
+        )

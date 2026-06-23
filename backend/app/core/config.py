@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     DATABASE_NAME: str = "business_suite_db"
     API_HOST: str = "https://us-west-2.api.thenile.dev/v2/databases/019ed429-f542-7277-a13f-29f08d50a550"
     OPENROUTER_API_KEY: str = ""
+    OPENROUTER_API_KEY2: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     EVENT_BUS_URL: str = "memory://local"
     ENVIRONMENT: str = "development"

@@ -57,7 +57,6 @@ const MyProfile = () => {
     { label: 'Phone', value: employee?.phone },
     { label: 'Joining Date', value: formatDate(employee?.joining_date) },
     { label: 'Username', value: user.username },
-    { label: 'Role', value: employee?.role_name },
     { label: 'Department', value: employee?.department_name },
     {
       label: 'Status',
@@ -83,8 +82,7 @@ const MyProfile = () => {
         </div>
         <div className="profile-header-info">
           <h2>{user.full_name || user.username}</h2>
-          <div className="profile-header-role">{employee?.role_name || 'Employee'}</div>
-          <div className="profile-header-dept">{employee?.department_name || ''}</div>
+          <div className="profile-header-dept">{employee?.department_name || 'Employee'}</div>
         </div>
       </div>
 

@@ -8,8 +8,6 @@ const EMPTY_FORM = {
   user_id: '',
   employee_code: '',
   phone: '',
-  department_id: '',
-  role_id: '',
   joining_date: '',
   salary: '',
   status: 'Active',
@@ -21,8 +19,6 @@ const EmployeeModal = ({
   onSave,
   initialData,
   users = [],
-  departments = [],
-  roles = [],
 }) => {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -36,8 +32,6 @@ const EmployeeModal = ({
           user_id: initialData.user_id?.toString() || '',
           employee_code: initialData.employee_code || '',
           phone: initialData.phone || '',
-          department_id: initialData.department_id?.toString() || '',
-          role_id: initialData.role_id?.toString() || '',
           joining_date: initialData.joining_date
             ? initialData.joining_date.split('T')[0]
             : '',
@@ -70,8 +64,6 @@ const EmployeeModal = ({
       user_id: parseInt(form.user_id, 10),
       employee_code: form.employee_code || undefined,
       phone: form.phone || undefined,
-      department_id: form.department_id ? parseInt(form.department_id, 10) : undefined,
-      role_id: form.role_id ? parseInt(form.role_id, 10) : undefined,
       joining_date: form.joining_date || undefined,
       salary: form.salary ? parseFloat(form.salary) : undefined,
       status: form.status,
@@ -128,40 +120,6 @@ const EmployeeModal = ({
                 onChange={handleChange('employee_code')}
                 placeholder="Auto-generated if empty"
               />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="department_id">Department</label>
-              <select
-                id="department_id"
-                value={form.department_id}
-                onChange={handleChange('department_id')}
-              >
-                <option value="">None</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="role_id">Role</label>
-              <select
-                id="role_id"
-                value={form.role_id}
-                onChange={handleChange('role_id')}
-              >
-                <option value="">None</option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
 

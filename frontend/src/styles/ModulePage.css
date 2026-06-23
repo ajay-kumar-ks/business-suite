@@ -6,6 +6,7 @@
   max-width: 100%;
   overflow-x: hidden;
   box-sizing: border-box;
+  min-width: 0;
 }
 
 .module-page h2 {

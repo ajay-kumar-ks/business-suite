@@ -44,7 +44,7 @@ export const recruitmentAPI = {
   moveStage: (id, targetStage) =>
     api.post(`/recruitment/candidates/${id}/move-stage`, { target_stage: targetStage }),
 
-  // ── Convert to Employee (from Onboarded) ──
+  // ── Convert to Employee ──
   convertToEmployee: (id, data) =>
-    api.post(`/recruitment/candidates/${id}/convert-to-employee`, data),
+    api.post(`/recruitment/candidates/${id}/convert`, data),
 }

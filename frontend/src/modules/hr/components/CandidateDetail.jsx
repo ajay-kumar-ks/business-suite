@@ -1,5 +1,5 @@
 import React from 'react'
-import { X, Mail, Phone, Briefcase, Clock, User, ArrowDown } from 'lucide-react'
+import { X, Mail, Phone, Building2, Clock, User, ArrowDown } from 'lucide-react'
 
 const ALL_STAGES = [
   'Applied',
@@ -55,6 +55,20 @@ const CandidateDetail = ({ candidate, onClose }) => {
             >
               {candidate.current_stage}
             </span>
+            {candidate.converted_to_employee && (
+              <span
+                className="status-badge"
+                style={{
+                  backgroundColor: '#3b82f6',
+                  fontSize: '0.78rem',
+                  marginTop: 8,
+                  marginLeft: 6,
+                  display: 'inline-block',
+                }}
+              >
+                Converted
+              </span>
+            )}
           </div>
 
           {/* Contact Details */}
@@ -70,8 +84,8 @@ const CandidateDetail = ({ candidate, onClose }) => {
               </div>
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.88rem', color: 'var(--text, #1e293b)' }}>
-              <Briefcase size={16} style={{ color: '#64748b', flexShrink: 0 }} />
-              <span>{candidate.position_applied}</span>
+              <Building2 size={16} style={{ color: '#64748b', flexShrink: 0 }} />
+              <span>{candidate.department_name || 'No Department'}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.88rem', color: 'var(--text, #1e293b)' }}>
               <Clock size={16} style={{ color: '#64748b', flexShrink: 0 }} />
@@ -93,20 +107,17 @@ const CandidateDetail = ({ candidate, onClose }) => {
               Stage Timeline
             </h5>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-              {ALL_STAGES.map((stage, idx) => {
-                const reached = idx <= currentStageIndex
-                const isCurrent = idx === currentStageIndex
+              {(candidate.pipeline_stages || ALL_STAGES).map((stage, idx) => {
+                const pipelineStages = candidate.pipeline_stages || ALL_STAGES
+                const currentIdx = pipelineStages.indexOf(candidate.current_stage)
+                const reached = idx <= currentIdx
+                const isCurrent = idx === currentIdx
                 const isRejected = stage === 'Rejected'
                 const isOnboarded = stage === 'Onboarded'
 
-                // Skip showing Rejected/Onboarded unless they are the current stage
-                if ((isRejected || isOnboarded) && !isCurrent && currentStageIndex < idx) return null
-
-                // Skip showing rejected-only stages after rejected
-                if (candidate.current_stage === 'Rejected' && idx > currentStageIndex && !isOnboarded) return null
-
-                // Skip showing stages after Onboarded
-                if (candidate.current_stage === 'Onboarded' && idx > currentStageIndex) return null
+                if ((isRejected || isOnboarded) && !isCurrent && currentIdx < idx) return null
+                if (candidate.current_stage === 'Rejected' && idx > currentIdx && !isOnboarded) return null
+                if (candidate.current_stage === 'Onboarded' && idx > currentIdx) return null
 
                 return (
                   <div key={stage} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -129,7 +140,7 @@ const CandidateDetail = ({ candidate, onClose }) => {
                           <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#fff' }} />
                         )}
                       </div>
-                      {idx < ALL_STAGES.length - 1 && (
+                      {idx < pipelineStages.length - 1 && (
                         <div
                           style={{
                             width: 2,

@@ -44,6 +44,15 @@ export const AuthProvider = ({ children }) => {
       const { access_token } = response.data
       localStorage.setItem('access_token', access_token)
       setIsAuthenticated(true)
+
+      // Fetch user details right after login so role info is available immediately
+      try {
+        const dashRes = await authAPI.getDashboard()
+        setUser(dashRes.data.user)
+      } catch {
+        // dashboard fetch is best-effort here
+      }
+
       return true
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed')

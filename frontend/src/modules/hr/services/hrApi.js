@@ -24,19 +24,6 @@ export const hrAPI = {
   deleteEmployee: (id) =>
     api.delete(`/hr/employees/${id}`),
 
-  // ── Roles ──
-  getRoles: () =>
-    api.get('/hr/roles'),
-
-  createRole: (data) =>
-    api.post('/hr/roles', data),
-
-  updateRole: (id, data) =>
-    api.put(`/hr/roles/${id}`, data),
-
-  deleteRole: (id) =>
-    api.delete(`/hr/roles/${id}`),
-
   // ── Departments ──
   getDepartments: () =>
     api.get('/hr/departments'),

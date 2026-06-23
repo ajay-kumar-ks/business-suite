@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     DATABASE_URL: str = "postgresql://user:password@localhost/business_suite_db"
     DATABASE_NAME: str = "business_suite_db"
+    API_HOST: str = "https://us-west-2.api.thenile.dev/v2/databases/019ed429-f542-7277-a13f-29f08d50a550"
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_API_KEY2: str = ""
     
     ACCOUNTS_OPENROUTER_API_KEY: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"

@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import Sidebar from '../modules/dashboard/components/Sidebar'
 import Navbar from '../modules/dashboard/components/Navbar'
 import '../styles/ModulePage.css'
+import '../styles/Dashboard.css'
 
 const PageShell = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false)

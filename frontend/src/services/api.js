@@ -177,6 +177,12 @@ export const crmAPI = {
   getDueFollowups: (params = {}) => api.get('/crm/contacts/notifications/followups', { params }),
   // Activities
   listActivities: (params = {}) => api.get('/crm/activities', { params }),
+
+  // Lead / Client Logs
+  getLeadLogs: (id, params = {}) => api.get(`/crm/leads/${id}/logs`, { params }),
+  createLeadLog: (id, data) => api.post(`/crm/leads/${id}/logs`, data),
+  getClientLogs: (id, params = {}) => api.get(`/crm/clients/${id}/logs`, { params }),
+  createClientLog: (id, data) => api.post(`/crm/clients/${id}/logs`, data),
 }
 
 export const tasksAPI = {

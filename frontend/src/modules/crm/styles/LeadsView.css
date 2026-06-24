@@ -4,6 +4,16 @@
   gap: 18px;
 }
 
+/* Make the page take the full viewport and prevent the whole page from scrolling
+   — only the kanban phases area should scroll vertically. */
+.leads-page {
+  /* use 100% so the container fits the parent (.dashboard-content) height
+     and avoids creating a separate viewport that causes double-scrolling */
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .leads-header {
   display: flex;
   justify-content: space-between;
@@ -104,6 +114,21 @@
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 20px;
+}
+
+/* Keep filters/header from stretching; ensure kanban panel can take remaining space */
+.leads-header,
+.leads-filters,
+.lead-form-panel {
+  flex: 0 0 auto;
+}
+
+/* Ensure the kanban pipeline fills remaining space and acts as the horizontal scroll viewport */
+.leads-page > .kanban-pipeline {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .lead-form-title {
@@ -545,6 +570,7 @@
   padding-bottom: 12px;
   overflow: hidden;
   position: relative;
+  min-height: 0;
 }
 
 .kanban-loader-overlay {
@@ -581,7 +607,15 @@
   border-radius: 16px;
   padding: 16px;
   width: 100%;
-  overflow: hidden;
+  /* pipeline should be the horizontal scroll viewport */
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
 }
 
 .kanban-pipeline-header {
@@ -590,6 +624,10 @@
   align-items: center;
   gap: 12px;
   margin-bottom: 14px;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--sidebar);
 }
 
 .kanban-pipeline-header h3 {
@@ -601,34 +639,35 @@
   display: flex;
   flex-direction: row;
   gap: 14px;
-  overflow: scroll;
-  padding-bottom: 8px;
+  /* keep all columns on a single row and let the pipeline scroll horizontally */
+  flex-wrap: nowrap;
   width: max-content;
-  max-width: 75vw;
+  min-width: 100%;
+  padding: 0 0 8px;
   scroll-behavior: smooth;
+  flex: 0 0 auto;
 }
 
-/* Themed scrollbar for kanban phases (horizontal) */
-.kanban-phases {
-  /* Firefox */
+/* Themed scrollbar for kanban pipeline (horizontal scroll viewport) */
+.kanban-pipeline {
   scrollbar-width: thin;
   scrollbar-color: var(--primary) transparent;
 }
 
 /* WebKit browsers */
-.kanban-phases::-webkit-scrollbar {
+.kanban-pipeline::-webkit-scrollbar {
   height: 10px;
 }
-.kanban-phases::-webkit-scrollbar-track {
+.kanban-pipeline::-webkit-scrollbar-track {
   background: transparent;
   border-radius: 999px;
 }
-.kanban-phases::-webkit-scrollbar-thumb {
+.kanban-pipeline::-webkit-scrollbar-thumb {
   background: linear-gradient(90deg, var(--primary), var(--hover));
   border-radius: 999px;
   border: 2px solid var(--sidebar);
 }
-.kanban-phases::-webkit-scrollbar-thumb:hover {
+.kanban-pipeline::-webkit-scrollbar-thumb:hover {
   background: var(--primary);
 }
 
@@ -637,12 +676,17 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 12px;
+  box-sizing: border-box;
   min-height: 220px;
-  width: 220px;
+  max-height: none;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  flex-shrink: 0;
+  /* fixed/min width so columns do not shrink and horizontal scroll is needed */
+  flex: 0 0 320px;
+  min-width: 320px;
+  height: auto;
+  overflow: visible;
 }
 
 /* Orphaned Leads Column — appears when leads have no phase */
@@ -1076,6 +1120,9 @@
   flex-direction: column;
   gap: 10px;
   align-items: stretch;
+  min-height: 0;
+  overflow-y: visible;
+  flex: 1 1 auto;
 }
 
 .kanban-card {
@@ -1428,7 +1475,6 @@
   gap: 16px;
   margin-bottom: 20px;
 }
-
 .lead-detail-status {
   color: var(--text-secondary, #6b7280);
   margin-top: 4px;
@@ -1450,15 +1496,145 @@
   border-radius: 12px;
 }
 
-.lead-detail-row .label {
-  color: var(--text-secondary, #6b7280);
+.lead-detail-modal {
+  background: var(--sidebar);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  width: min(900px, 100%);
+  padding: 24px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.15);
+  box-sizing: border-box;
+  max-height: 90vh;
+  overflow: auto;
 }
 
-.lead-detail-block {
-  background: var(--background);
-  border-radius: 16px;
-  padding: 16px;
+.lead-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
   margin-bottom: 20px;
+}
+
+.lead-detail-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.lead-detail-tab {
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.lead-detail-tab.active {
+  background: var(--surface);
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+/* Custom scrollbars for modal and panels */
+.lead-detail-modal::-webkit-scrollbar,
+.lead-detail-tab-panel::-webkit-scrollbar,
+.lead-detail-block::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.lead-detail-modal::-webkit-scrollbar-track,
+.lead-detail-tab-panel::-webkit-scrollbar-track,
+.lead-detail-block::-webkit-scrollbar-track {
+  background: transparent;
+}
+.lead-detail-modal::-webkit-scrollbar-thumb,
+.lead-detail-tab-panel::-webkit-scrollbar-thumb,
+.lead-detail-block::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--primary), var(--hover));
+  border-radius: 999px;
+  border: 2px solid var(--sidebar);
+}
+
+.lead-detail-tab-panel {
+  margin-bottom: 20px;
+  /* ensure panels can scroll when content is long */
+  max-height: calc(90vh - 260px);
+  overflow: auto;
+}
+.lead-detail-block {
+  /* allow individual blocks to scroll if very tall */
+  max-height: 60vh;
+  overflow: auto;
+}
+.log-list {
+  display: grid;
+  gap: 14px;
+}
+
+.log-entry {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  background: var(--sidebar);
+}
+
+.log-entry-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.log-entry-type {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.log-entry-time {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.log-entry-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.log-entry-description,
+.log-entry-remarks,
+.log-entry-meta {
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.remark-add {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.remark-add textarea {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--text);
+}
+
+.log-loading,
+.error-text,
+.text-muted {
+  color: var(--text-secondary);
 }
 
 .lead-timeline {

@@ -680,6 +680,7 @@
   padding-right: 0;
   overflow: visible;
   box-sizing: border-box;
+  align-items: start;
 }
 
 /* Prevent charts from overflowing / adding right-side whitespace */
@@ -711,6 +712,11 @@
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  min-height: 260px;
+  max-height: 320px;
+  overflow: hidden;
 }
 
 .chart-card h4 {
@@ -719,6 +725,7 @@
   color: var(--text, #1e293b);
   margin-bottom: 16px;
   margin-top: 0;
+  flex: 0 0 auto;
 }
 
 .chart-container {
@@ -726,7 +733,16 @@
   height: 200px;
   max-height: 200px;
   width: 100%;
-  overflow: hidden !important;
+  min-height: 200px;
+  max-height: 200px;
+  overflow: hidden;
+  flex: 1 1 auto;
+}
+
+.chart-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100%;
 }
 
 /* ══════════════════════════════════════════════

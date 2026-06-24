@@ -43,16 +43,16 @@ export const AuthProvider = ({ children }) => {
       const response = await authAPI.login(username, password)
       const { access_token } = response.data
       localStorage.setItem('access_token', access_token)
-      setIsAuthenticated(true)
-
-      // Fetch user details right after login so role info is available immediately
+      // fetch and set the current user immediately so UI updates without a refresh
       try {
-        const dashRes = await authAPI.getDashboard()
-        setUser(dashRes.data.user)
-      } catch {
-        // dashboard fetch is best-effort here
+        const dashboardResponse = await authAPI.getDashboard()
+        setUser(dashboardResponse.data.user)
+        setIsAuthenticated(true)
+      } catch (err) {
+        // If fetching user fails, keep the token but mark authenticated
+        // initializeUser on mount will attempt again; components should handle null `user` safely
+        setIsAuthenticated(true)
       }
-
       return true
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed')

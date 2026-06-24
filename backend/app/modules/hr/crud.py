@@ -7,9 +7,8 @@ from app.modules.auth.db_models import User
 from app.modules.auth.utils import get_password_hash
 from app.modules.hr.schemas import EmployeeCreate, EmployeeUpdate, AttendanceCreate, LeaveCreate, LeaveStatusUpdate, UserCreate
 
-
 def _publish_salary_event(employee: Employee) -> None:
-    """Publish salary.processed event so Accounts can create journal/ledger entry."""
+    """Publish salary.processed event so Accounts can create proper accrual journal entry."""
     if employee.salary is None:
         return
     from datetime import datetime
@@ -28,6 +27,7 @@ def _publish_salary_event(employee: Employee) -> None:
     except Exception as exc:
         # Log but don't fail the employee creation/update
         print(f"[hr/crud] Failed to publish salary.processed for employee {employee.id}: {exc}")
+
 
 
 def get_employees(
@@ -122,7 +122,7 @@ def create_employee(db: Session, data: EmployeeCreate) -> Employee:
     db.commit()
     db.refresh(employee)
 
-    # Publish event so Accounts can create journal/ledger entry.
+    # Publish event so Accounts can create journal/ledger entry via the correct flow.
     _publish_salary_event(employee)
 
     return employee

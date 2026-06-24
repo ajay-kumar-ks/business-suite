@@ -148,6 +148,22 @@ class MyLeaveCreate(BaseModel):
     reason: Optional[str] = None
 
 
+# ── HR Chatbot Schemas ──
+
+class ChatbotMessage(BaseModel):
+    role: str = "user"  # user, assistant
+    content: str
+
+
+class ChatbotRequest(BaseModel):
+    message: str
+    history: list[ChatbotMessage] = []
+
+
+class ChatbotResponse(BaseModel):
+    reply: str
+
+
 class LeaveStatusUpdate(BaseModel):
     status: LeaveStatus
 

@@ -52,12 +52,15 @@ from app.modules.hr.schemas import (
     UserUpdate,
     UserResponse,
     MyLeaveCreate,
+    ChatbotRequest,
+    ChatbotResponse,
 )
 from app.modules.hr.services import format_employee_response, format_attendance_response, format_leave_response
 from app.modules.hr.db_models import (
     EmployeeStatus, AttendanceStatus, LeaveType, LeaveStatus,
     Employee, Department, Attendance, LeaveRequest,
 )
+from app.modules.auth.db_models import User as UserDB
 from app.modules.recruitment.db_models import Candidate
 from sqlalchemy import func
 
@@ -218,6 +221,13 @@ async def api_update_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
+    # Prevent self-demotion: a user cannot change their own is_admin flag
+    if user_id == current_user.id and data.is_admin is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot change your own admin privileges. Ask another admin to modify this.",
+        )
+
     user = update_hr_user(db, user_id, data)
     if not user:
         raise HTTPException(
@@ -592,3 +602,90 @@ async def api_hr_ai_insights(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate AI insights: {str(e)[:200]}",
         )
+
+
+# ──────────────────────────────────────────────
+# HR Chatbot (conversational AI)
+# ──────────────────────────────────────────────
+
+
+@router.post("/ai/chat")
+async def api_hr_chatbot(
+    data: ChatbotRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """
+    HR Chatbot: Answers user questions about HR data.
+    Uses AI with full HR context to provide intelligent responses.
+    Only answers questions related to HR content.
+    """
+    # Fetch all HR data
+    employees = db.query(Employee).all()
+    departments = db.query(Department).all()
+    attendance_records = db.query(Attendance).order_by(Attendance.date.desc()).limit(100).all()
+    leaves = db.query(LeaveRequest).order_by(LeaveRequest.created_at.desc()).limit(100).all()
+    candidates = db.query(Candidate).all()
+    users = db.query(UserDB).all()
+
+    # Convert to dicts for the AI service
+    from app.modules.hr.services import format_employee_response, format_attendance_response, format_leave_response
+
+    employees_data = []
+    for emp in employees:
+        d = format_employee_response(emp)
+        employees_data.append(d)
+
+    departments_data = []
+    for dept in departments:
+        d = {
+            "id": dept.id,
+            "name": dept.name,
+            "description": dept.description,
+        }
+        departments_data.append(d)
+
+    attendance_data = [format_attendance_response(r) for r in attendance_records]
+
+    leaves_data = [format_leave_response(l) for l in leaves]
+
+    candidates_data = []
+    for c in candidates:
+        d = {
+            "id": c.id,
+            "full_name": c.full_name,
+            "email": c.email,
+            "department_name": c.department.name if c.department else None,
+            "current_stage": c.current_stage,
+            "status": c.status,
+            "experience_years": c.experience_years,
+        }
+        candidates_data.append(d)
+
+    users_data = []
+    for u in users:
+        d = {
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "full_name": u.full_name,
+            "is_admin": u.is_admin,
+        }
+        users_data.append(d)
+
+    from app.modules.hr.hr_chatbot_service import hr_chatbot as ai_chat
+
+    history = [{"role": m.role, "content": m.content} for m in data.history]
+
+    reply = ai_chat(
+        message=data.message,
+        history=history,
+        employees=employees_data,
+        departments=departments_data,
+        attendance_records=attendance_data,
+        leaves=leaves_data,
+        candidates=candidates_data,
+        users=users_data,
+    )
+
+    return ChatbotResponse(reply=reply)

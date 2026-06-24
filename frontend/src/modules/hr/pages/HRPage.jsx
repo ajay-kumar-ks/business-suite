@@ -45,9 +45,11 @@ import { hrAPI } from '../services/hrApi'
 import { recruitmentAPI } from '../services/recruitmentApi'
 import { hrAiAPI } from '../services/hrAiApi'
 import AIInsights from '../components/AIInsights'
+import HRChatBot from '../components/HRChatBot'
 import Button from '../../../components/ui/Button'
 import { useTheme } from '../../../context/ThemeContext'
 import '../styles/Recruitment.css'
+import '../styles/HRChatBot.css'
 
 // ── Register Chart.js components ──
 ChartJS.register(
@@ -966,6 +968,9 @@ const HRPage = () => {
           </div>
         </div>
       )}
+
+      {/* HR Chatbot — floating assistant */}
+      <HRChatBot />
     </div>
   )
 }

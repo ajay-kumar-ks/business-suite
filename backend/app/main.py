@@ -23,6 +23,7 @@ from app.modules.tasks.upload import router as upload_router
 from app.modules.tasks.scheduler import run_overdue_scheduler
 from app.modules.tasks.event_handlers import register_handlers
 from app.modules.recruitment.routers import router as recruitment_router
+from app.modules.accounts.salary_event_handlers import register_salary_event_handlers
 
 app = FastAPI(title="Business Suite Backend", version="0.1.0")
 
@@ -105,6 +106,7 @@ async def startup_event():
         print("[OK] Server started (database connection failed - check your DATABASE_URL credentials in .env)")
 
     register_event_handlers()
+    register_salary_event_handlers()
     event_bus.connect()
 
     # Register tasks module event handlers
@@ -255,6 +257,7 @@ async def _run_database_migrations():
             print("[OK] Server started (database tables may be incomplete)")
 
     register_event_handlers()
+    register_salary_event_handlers()
     event_bus.connect()
 
     # Register tasks module event handlers

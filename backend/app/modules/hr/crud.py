@@ -8,6 +8,28 @@ from app.modules.auth.utils import get_password_hash
 from app.modules.hr.schemas import EmployeeCreate, EmployeeUpdate, AttendanceCreate, LeaveCreate, LeaveStatusUpdate, UserCreate
 
 
+def _publish_salary_event(employee: Employee) -> None:
+    """Publish salary.processed event so Accounts can create journal/ledger entry."""
+    if employee.salary is None:
+        return
+    from datetime import datetime
+    from app.core.event_bus import event_bus
+    try:
+        event_bus.publish(
+            "salary.processed",
+            {
+                "employee_id": employee.id,
+                "employee_code": employee.employee_code,
+                "amount": float(employee.salary),
+                "reference": f"SAL-{employee.employee_code}-{employee.id}",
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        )
+    except Exception as exc:
+        # Log but don't fail the employee creation/update
+        print(f"[hr/crud] Failed to publish salary.processed for employee {employee.id}: {exc}")
+
+
 def get_employees(
     db: Session,
     skip: int = 0,
@@ -67,6 +89,8 @@ def create_employee(db: Session, data: EmployeeCreate) -> Employee:
         )
 
     # Check if user is already linked to an employee
+
+
     existing = get_employee_by_user_id(db, data.user_id)
     if existing:
         raise HTTPException(
@@ -97,6 +121,10 @@ def create_employee(db: Session, data: EmployeeCreate) -> Employee:
     db.add(employee)
     db.commit()
     db.refresh(employee)
+
+    # Publish event so Accounts can create journal/ledger entry.
+    _publish_salary_event(employee)
+
     return employee
 
 
@@ -136,6 +164,11 @@ def update_employee(db: Session, employee_id: int, data: EmployeeUpdate) -> Empl
 
     db.commit()
     db.refresh(employee)
+
+    # If salary changed, publish event so Accounts can create journal/ledger entry.
+    if "salary" in update_data:
+        _publish_salary_event(employee)
+
     return employee
 
 

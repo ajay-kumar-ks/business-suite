@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import Button from '../../../components/ui/Button'
+import { useAuth } from '../../../context/AuthContext'
 import '../styles/HRPage.css'
 
 const EMPTY_FORM = {
@@ -12,10 +13,12 @@ const EMPTY_FORM = {
 }
 
 const UserModal = ({ isOpen, onClose, onSave, initialData }) => {
+  const { user: currentUser } = useAuth()
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const isEditing = !!initialData
+  const isOwnProfile = isEditing && currentUser && initialData.id === currentUser.id
 
   useEffect(() => {
     if (isOpen) {
@@ -160,9 +163,15 @@ const UserModal = ({ isOpen, onClose, onSave, initialData }) => {
                   type="checkbox"
                   checked={form.is_admin}
                   onChange={handleChange('is_admin')}
+                  disabled={isOwnProfile}
                 />
                 <span>Admin privileges</span>
               </label>
+              {isOwnProfile && (
+                <p className="field-hint" style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: 4 }}>
+                  You cannot change your own admin status. Ask another admin to modify this.
+                </p>
+              )}
             </div>
           </div>
 

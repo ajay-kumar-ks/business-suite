@@ -34,7 +34,6 @@ const EmployeeTable = ({ employees = [], loading, onEdit, onDelete, onView }) =>
             <th>Employee Code</th>
             <th>Name</th>
             <th>Department</th>
-            <th>Role</th>
             <th>Phone</th>
             <th>Status</th>
             <th>Actions</th>
@@ -46,7 +45,6 @@ const EmployeeTable = ({ employees = [], loading, onEdit, onDelete, onView }) =>
               <td className="code-cell">{emp.employee_code}</td>
               <td className="name-cell">{emp.user_name || `User #${emp.user_id}`}</td>
               <td>{emp.department_name || '—'}</td>
-              <td>{emp.role_name || '—'}</td>
               <td>{emp.phone || '—'}</td>
               <td>
                 <span

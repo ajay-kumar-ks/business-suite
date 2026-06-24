@@ -1,13 +1,11 @@
 import React, { useState, useRef, useMemo } from 'react'
 import {
-  Briefcase,
   Clock,
   Calendar,
   FileText,
-  ArrowRight,
   UserPlus,
   Target,
-  CheckCircle2,
+  Building2,
 } from 'lucide-react'
 
 const DEFAULT_STAGE_COLORS = {
@@ -42,51 +40,70 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-const RecruitmentKanban = ({ candidates = [], onMoveStage, onViewDetails, onConvertToEmployee, onRefresh }) => {
-  const [selectedCandidate, setSelectedCandidate] = useState(null)
+const RecruitmentKanban = ({
+  candidates = [],
+  departments = [],
+  onMoveStage,
+  onViewDetails,
+  onConvertToEmployee,
+  onRefresh,
+}) => {
+  const [selectedDepartment, setSelectedDepartment] = useState('all')
   const [dragOverColumn, setDragOverColumn] = useState(null)
   const dragCandidateRef = useRef(null)
 
-  // Extract all unique pipeline stages across all candidates
-  const allStages = useMemo(() => {
-    const ordered = []
-    const seen = new Set()
+  // Filter candidates by selected department
+  const filteredCandidates = useMemo(() => {
+    if (selectedDepartment === 'all') return candidates
+    return candidates.filter((c) => c.department_id?.toString() === selectedDepartment)
+  }, [candidates, selectedDepartment])
 
-    // Collect stages from candidates' pipeline templates (ordered)
-    candidates.forEach((c) => {
-      if (c.pipeline_stages && Array.isArray(c.pipeline_stages)) {
-        c.pipeline_stages.forEach((s) => {
-          if (!seen.has(s)) {
-            seen.add(s)
-            ordered.push(s)
-          }
-        })
-      }
-    })
-
-    // Ensure every candidate's current_stage has a column (backward compat)
-    candidates.forEach((c) => {
-      if (c.current_stage && !seen.has(c.current_stage)) {
-        seen.add(c.current_stage)
-        ordered.push(c.current_stage)
-      }
-    })
-
-    // Always include Rejected
-    if (!seen.has('Rejected')) {
-      ordered.push('Rejected')
+  // Get pipeline stages for the selected department
+  const pipelineStages = useMemo(() => {
+    if (selectedDepartment === 'all') {
+      // When showing all, merge all stages from all candidates
+      const ordered = []
+      const seen = new Set()
+      filteredCandidates.forEach((c) => {
+        if (c.pipeline_stages && Array.isArray(c.pipeline_stages)) {
+          c.pipeline_stages.forEach((s) => {
+            if (!seen.has(s)) { seen.add(s); ordered.push(s) }
+          })
+        }
+      })
+      filteredCandidates.forEach((c) => {
+        if (c.current_stage && !seen.has(c.current_stage)) {
+          seen.add(c.current_stage)
+          ordered.push(c.current_stage)
+        }
+      })
+      if (!seen.has('Rejected')) ordered.push('Rejected')
+      return ordered
     }
 
-    return ordered
-  }, [candidates])
+    // Find the department's pipeline from candidates
+    const deptCandidates = candidates.filter(
+      (c) => c.department_id?.toString() === selectedDepartment
+    )
+    const stages = deptCandidates.find((c) => c.pipeline_stages)?.pipeline_stages
+    if (stages) {
+      const result = [...stages]
+      if (!result.includes('Rejected')) result.push('Rejected')
+      return result
+    }
+
+    // Default pipeline
+    return ['Applied', 'Screening', 'Interview', 'HR Interview', 'Selected', 'Onboarded', 'Rejected']
+  }, [filteredCandidates, candidates, selectedDepartment])
 
   const getCandidatesByStage = (stage) => {
-    return candidates.filter((c) => c.current_stage === stage)
+    return filteredCandidates.filter((c) => c.current_stage === stage)
   }
 
   const handleDragStart = (e, candidate) => {
     dragCandidateRef.current = candidate
-    e.dataTransfer.setData('candidateId', candidate.id.toString())
+    // Use standard text/plain for better browser compatibility
+    e.dataTransfer.setData('text/plain', candidate.id.toString())
     e.dataTransfer.effectAllowed = 'move'
     e.target.classList.add('dragging')
   }
@@ -99,27 +116,18 @@ const RecruitmentKanban = ({ candidates = [], onMoveStage, onViewDetails, onConv
 
   const handleDrop = async (e, targetStage) => {
     e.preventDefault()
+    e.stopPropagation()
     setDragOverColumn(null)
-    const candidateId = parseInt(e.dataTransfer.getData('candidateId'), 10)
-    if (!candidateId) return
 
-    const candidate = candidates.find((c) => c.id === candidateId)
+    // Use ref as primary source (more reliable than dataTransfer across browsers)
+    const candidate = dragCandidateRef.current
     if (!candidate) return
 
-    // Don't allow dropping on the same stage
     if (candidate.current_stage === targetStage) return
-
-    // Don't allow dropping if candidate is in a terminal stage
-    if (candidate.current_stage === 'Rejected' || candidate.current_stage === 'Onboarded' || candidate.converted_to_employee) return
-
-    // Don't allow dropping onto Rejected if candidate is already past or terminal
-    if (targetStage === 'Rejected' || targetStage === 'Onboarded') {
-      if (candidate.converted_to_employee) return
-    }
+    if (['Rejected', 'Onboarded'].includes(candidate.current_stage) || candidate.converted_to_employee) return
 
     try {
-      await onMoveStage(candidateId, targetStage)
-      if (onRefresh) onRefresh()
+      await onMoveStage(candidate.id, targetStage)
     } catch (err) {
       console.error('Failed to move candidate:', err)
     }
@@ -133,24 +141,6 @@ const RecruitmentKanban = ({ candidates = [], onMoveStage, onViewDetails, onConv
 
   const handleDragLeave = () => {
     setDragOverColumn(null)
-  }
-
-  const getNextForwardStage = (candidate) => {
-    const stages = candidate.pipeline_stages || []
-    const idx = stages.indexOf(candidate.current_stage)
-    if (idx < 0 || idx >= stages.length - 1) return null
-    return stages[idx + 1]
-  }
-
-  const handleAdvance = async (candidate) => {
-    const nextStage = getNextForwardStage(candidate)
-    if (!nextStage) return
-    try {
-      await onMoveStage(candidate.id, nextStage)
-      if (onRefresh) onRefresh()
-    } catch (err) {
-      console.error('Failed to advance candidate:', err)
-    }
   }
 
   const isTerminalStage = (stage) => {
@@ -179,7 +169,6 @@ const RecruitmentKanban = ({ candidates = [], onMoveStage, onViewDetails, onConv
         </div>
         <div className="kanban-column-body">
           {stageCandidates.map((candidate) => {
-            const nextStage = getNextForwardStage(candidate)
             return (
               <div
                 key={candidate.id}
@@ -187,22 +176,19 @@ const RecruitmentKanban = ({ candidates = [], onMoveStage, onViewDetails, onConv
                 draggable={!isTerminalStage(stage) && !candidate.converted_to_employee}
                 onDragStart={(e) => handleDragStart(e, candidate)}
                 onDragEnd={handleDragEnd}
-                onClick={() => {
-                  setSelectedCandidate(candidate)
-                  onViewDetails?.(candidate)
-                }}
+                onClick={() => onViewDetails?.(candidate)}
               >
                 <div className="kanban-card-name">
                   {candidate.full_name}
                   {candidate.converted_to_employee && (
-                    <span style={{ marginLeft: 4, color: '#3b82f6', fontSize: '0.65rem', fontWeight: 600 }}>
+                    <span className="kanban-converted-badge">
                       ✓ Converted
                     </span>
                   )}
                 </div>
                 <div className="kanban-card-position">
-                  <Briefcase size={11} />
-                  <span>{candidate.position_applied}</span>
+                  <Building2 size={11} />
+                  <span>{candidate.department_name || 'No Department'}</span>
                 </div>
                 <div className="kanban-card-exp">
                   <Clock size={11} />
@@ -232,9 +218,8 @@ const RecruitmentKanban = ({ candidates = [], onMoveStage, onViewDetails, onConv
                     </span>
                   )}
                 </div>
-                <div className="kanban-card-actions">
-                  {/* Convert to Employee: only for Onboarded candidates not yet converted */}
-                  {stage === 'Onboarded' && !candidate.converted_to_employee && (
+                {stage === 'Onboarded' && !candidate.converted_to_employee && (
+                  <div className="kanban-card-actions">
                     <button
                       className="kanban-convert-btn"
                       onClick={(e) => {
@@ -246,36 +231,15 @@ const RecruitmentKanban = ({ candidates = [], onMoveStage, onViewDetails, onConv
                       <UserPlus size={11} />
                       Convert
                     </button>
-                  )}
-                  {/* Show converted badge instead */}
-                  {stage === 'Onboarded' && candidate.converted_to_employee && (
-                    <span style={{ fontSize: '0.6rem', color: '#3b82f6', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
-                      <CheckCircle2 size={10} />
-                      Converted
-                    </span>
-                  )}
-                  {/* Advance button: for active, non-terminal stages that aren't Rejected/Onboarded */}
-                  {!isTerminalStage(stage) && !candidate.converted_to_employee && nextStage && (
-                    <button
-                      className="kanban-advance-btn"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleAdvance(candidate)
-                      }}
-                      title={`Move to ${nextStage}`}
-                    >
-                      <ArrowRight size={11} />
-                      {nextStage}
-                    </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )
           })}
           {stageCandidates.length === 0 && (
             <div className="kanban-empty">
               <Target size={18} className="kanban-empty-icon" />
-              <span className="kanban-empty-text">No candidates in this stage</span>
+              <span className="kanban-empty-text">No candidates</span>
             </div>
           )}
         </div>
@@ -285,8 +249,29 @@ const RecruitmentKanban = ({ candidates = [], onMoveStage, onViewDetails, onConv
 
   return (
     <div className="kanban-wrapper">
-      <div className="kanban-board">
-        {allStages.map((stage, idx) => renderColumn(stage, idx))}
+      {/* Department Selector */}
+      <div className="kanban-controls">
+        <Building2 size={18} className="kanban-controls-icon" />
+        <select
+          className="kanban-dept-select"
+          value={selectedDepartment}
+          onChange={(e) => setSelectedDepartment(e.target.value)}
+        >
+          <option value="all">All Departments</option>
+          {departments.map((d) => (
+            <option key={d.id} value={d.id}>{d.name}</option>
+          ))}
+        </select>
+        <span className="count-badge">
+          {filteredCandidates.length} candidate{filteredCandidates.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* Kanban Board — wrapped in scroll container so only stages scroll horizontally */}
+      <div className="kanban-board-scroll">
+        <div className="kanban-board">
+          {pipelineStages.map((stage, idx) => renderColumn(stage, idx))}
+        </div>
       </div>
     </div>
   )

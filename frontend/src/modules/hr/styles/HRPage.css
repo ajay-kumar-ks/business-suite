@@ -688,7 +688,7 @@
   min-width: 0;
 }
 
-.chart-container {
+.charts-section .chart-container {
   overflow: hidden;
 }
 
@@ -728,18 +728,17 @@
   flex: 0 0 auto;
 }
 
-.chart-container {
+.charts-section .chart-container {
   position: relative;
   height: 200px;
   max-height: 200px;
   width: 100%;
   min-height: 200px;
-  max-height: 200px;
   overflow: hidden;
   flex: 1 1 auto;
 }
 
-.chart-container canvas {
+.charts-section .chart-container canvas {
   width: 100% !important;
   height: 100% !important;
   max-height: 100%;

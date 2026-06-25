@@ -6,6 +6,7 @@ import ActivityTimeline from '../components/ActivityTimeline'
 import ActivitiesPage from './ActivitiesPage'
 import LeadsPage from './LeadsPage'
 import ClientsPage from './ClientsPage'
+import PaymentsPage from './PaymentsPage'
 import CRMAnalyticsDashboard from '../components/CRMAnalyticsDashboard'
 import CRMChatBot from '../components/CRMChatBot'
 import { crmAPI } from '../../../services/api'
@@ -14,6 +15,7 @@ import '../styles/CRMPageLayout.css'
 import '../styles/LeadsView.css'
 import '../styles/CRMAnalyticsDashboard.css'
 import '../styles/CRMChatBot.css'
+import '../styles/PaymentsPage.css'
 
 const CRMPage = () => {
   const [activeView, setActiveView] = useState('contacts')
@@ -218,6 +220,10 @@ const CRMPage = () => {
 
       {activeView === 'activities' && (
         <ActivitiesPage />
+      )}
+
+      {activeView === 'payments' && (
+        <PaymentsPage />
       )}
 
       {/* CRM Chatbot — only appears when CRM is open */}

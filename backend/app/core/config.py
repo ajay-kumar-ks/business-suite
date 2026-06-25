@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     EVENT_BUS_URL: str = "memory://local"
     ENVIRONMENT: str = "development"
+    RAZORPAY_KEY_ID: str = "rzp_test_T5O7M81YGrowq2"
+    RAZORPAY_KEY_SECRET: str = "E7H9HK1GZNMknGHeb9E0h1PX"
+
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
 
     model_config = ConfigDict(env_file=DOTENV_PATH, extra="ignore")

@@ -24,7 +24,6 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('access_token')
-      window.location.href = '/login'
     }
     // If an accounts endpoint fails with a server error, the cached tenant_id
     // may be stale (e.g. tenant was deleted from the database). Clear it so

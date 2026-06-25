@@ -517,6 +517,9 @@ async def update_lead(
             lead.extra_data['current_remark_updated_by'] = current_user_name
             lead.extra_data['current_remark_updated_at'] = datetime.utcnow().isoformat()
             flag_modified(lead, 'extra_data')
+            lead.extra_data = lead.extra_data or {}
+            lead.extra_data['current_remark_updated_by'] = 'system'
+            lead.extra_data['current_remark_updated_at'] = datetime.utcnow().isoformat()
             db.add(lead)
             db.commit()
             db.refresh(lead)
@@ -546,6 +549,7 @@ async def update_lead(
         db.add(lead)
         db.commit()
         db.refresh(lead)
+    # assignee change notification removed — LogEntryCreateSchema was never implemented
 
     return lead
 

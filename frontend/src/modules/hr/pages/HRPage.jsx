@@ -444,23 +444,17 @@ const HRPage = () => {
   //  CHART DATA (memoized)
   // ════════════════════════════════════════════════
 
- const attendanceTrendData = useMemo(() => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth()
-
-  // ── Attendance Trend ──
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const weekLabels = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
+  // ── Attendance Trend helpers (hoisted so JSX can use them too) ──
   const today = new Date()
   const currentYear = today.getFullYear()
   const currentMonth = today.getMonth()
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const weekLabels = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
 
-  const attendanceTrendLabels = () => {
+  const getAttendanceTrendLabels = useCallback(() => {
     if (attendanceTrendPeriod === 'monthly') {
       if (attendanceTrendMonthlyMode === 'datewise') {
-        const start = new Date(currentYear, currentMonth, 1)
         const end = new Date(currentYear, currentMonth + 1, 0)
         return Array.from({ length: end.getDate() }, (_, i) => `${i + 1}`)
       }
@@ -468,10 +462,11 @@ const HRPage = () => {
     }
     if (attendanceTrendPeriod === 'yearly') return monthNames
     return dayNames
-  }
+  }, [attendanceTrendPeriod, attendanceTrendMonthlyMode, currentYear, currentMonth, weekLabels, monthNames, dayNames])
 
-  const attendanceTrendCounts = () => {
-    const labels = attendanceTrendLabels()
+  const attendanceTrendData = useMemo(() => {
+    const labels = getAttendanceTrendLabels()
+
     const present = Array(labels.length).fill(0)
     const absent = Array(labels.length).fill(0)
 
@@ -500,33 +495,28 @@ const HRPage = () => {
       else if (rec.status === 'Absent') absent[index]++
     })
 
-    return { present, absent }
-  }
-
-  const trendCounts = attendanceTrendCounts()
-
-  return {
-    labels: attendanceTrendLabels(),
-    datasets: [
-      {
-        label: 'Present',
-        data: trendCounts.present,
-        borderColor: '#22c55e',
-        backgroundColor: 'rgba(34, 197, 94, 0.1)',
-        fill: true,
-        tension: 0.4,
-      },
-      {
-        label: 'Absent',
-        data: trendCounts.absent,
-        borderColor: '#ef4444',
-        backgroundColor: 'rgba(239, 68, 68, 0.05)',
-        fill: true,
-        tension: 0.4,
-      },
-    ],
-  }
-}, [attendanceRecords])
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Present',
+          data: present,
+          borderColor: '#22c55e',
+          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+          fill: true,
+          tension: 0.4,
+        },
+        {
+          label: 'Absent',
+          data: absent,
+          borderColor: '#ef4444',
+          backgroundColor: 'rgba(239, 68, 68, 0.05)',
+          fill: true,
+          tension: 0.4,
+        },
+      ],
+    }
+  }, [attendanceRecords, attendanceTrendPeriod, attendanceTrendMonthlyMode, getAttendanceTrendLabels, currentYear, currentMonth])
   // ── Department Distribution ──
   const departmentChartData = useMemo(() => {
     const deptLabels = departments.length ? departments.map((d) => d.name) : ['Engineering', 'Marketing', 'Sales', 'Operations']
@@ -725,24 +715,24 @@ const HRPage = () => {
                   style={{
                     minWidth:
                       attendanceTrendPeriod === 'monthly' && attendanceTrendMonthlyMode === 'datewise'
-                        ? `${attendanceTrendLabels().length * 30}px`
+                        ? `${getAttendanceTrendLabels().length * 30}px`
                         : '100%',
                   }}
                 >
-                  <Line key={`line-${themeTick}-${attendanceTrendPeriod}`} data={attendanceTrendData} options={chartOptions(true)} />
+                  <Line key={`line-${themeTick}-${attendanceTrendPeriod}`} data={attendanceTrendData} options={lineOptions} />
                 </div>
               </div>
             </div>
             <div className="chart-card">
               <h4>Department Distribution</h4>
               <div className="chart-container">
-                <Doughnut key={`dept-${themeTick}`} data={departmentChartData} options={doughnutOptions(true)} />
+                <Doughnut key={`dept-${themeTick}`} data={departmentChartData} options={doughnutChartOptions} />
               </div>
             </div>
             <div className="chart-card">
               <h4>Leave Requests</h4>
               <div className="chart-container">
-                <Doughnut key={`leave-${themeTick}`} data={leaveChartData} options={doughnutOptions(true)} />
+                <Doughnut key={`leave-${themeTick}`} data={leaveChartData} options={doughnutChartOptions} />
               </div>
             </div>
           </div>
@@ -792,11 +782,11 @@ const HRPage = () => {
                       style={{
                         minWidth:
                           attendanceTrendPeriod === 'monthly' && attendanceTrendMonthlyMode === 'datewise'
-                            ? `${attendanceTrendLabels().length * 30}px`
+                            ? `${getAttendanceTrendLabels().length * 30}px`
                             : '100%',
                       }}
                     >
-                      <Line key={`modal-line-${attendanceTrendPeriod}-${themeTick}`} data={attendanceTrendData} options={chartOptions(true)} />
+                      <Line key={`modal-line-${attendanceTrendPeriod}-${themeTick}`} data={attendanceTrendData} options={lineOptions} />
                     </div>
                   </div>
                 </div>

@@ -15,14 +15,14 @@ import { TaskNotificationProvider } from './context/TaskNotificationContext'
 import './App.css'
 
 function App() {
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, loading, user } = useAuth()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  if (!mounted) return <Loader fullScreen={true} />
+  if (!mounted || loading) return <Loader fullScreen={true} />
 
   return (
     <div className="app">

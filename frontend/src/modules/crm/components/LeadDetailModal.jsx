@@ -67,7 +67,7 @@ const LeadDetailModal = ({
     setLogsLoading(true)
     setLogsError(null)
     try {
-      const res = await crmAPI.getLeadLogs(lead.id)
+      const res = await api.get(`/crm/leads/${lead.id}/logs`)
       if (Array.isArray(res.data)) {
         setLeadLogs(res.data)
       } else {
@@ -88,7 +88,7 @@ const LeadDetailModal = ({
 
     setSavingRemark(true)
     try {
-      const response = await crmAPI.updateLead(lead.id, {
+      const response = await api.put(`/crm/leads/${lead.id}`, {
         extra_data: {
           ...lead.extra_data,
           current_remark: trimmed,
@@ -236,6 +236,7 @@ const LeadDetailModal = ({
                     <div className="timeline-message">{event.message || event.type}</div>
                     <div className="timeline-meta">{new Date(event.timestamp).toLocaleString()}</div>
                   </div>
+                </div>
               ))}
             </div>
           )}
@@ -391,8 +392,6 @@ const LeadDetailModal = ({
                   </div>
                 )}
               </div>
-                </div>
-              ))}
             </div>
           )}
         </div>

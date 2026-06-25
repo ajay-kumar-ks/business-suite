@@ -5,21 +5,18 @@ export const AuthContext = createContext()
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    !!localStorage.getItem('access_token'),
-  )
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
     const initializeUser = async () => {
       const token = localStorage.getItem('access_token')
       if (!token) {
-        setIsAuthenticated(false)
+        setLoading(false)
         return
       }
 
-      setLoading(true)
       try {
         const dashboardResponse = await authAPI.getDashboard()
         setUser(dashboardResponse.data.user)

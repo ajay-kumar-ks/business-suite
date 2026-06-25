@@ -439,3 +439,15 @@
     min-width: 150px;
   }
 }
+
+/* Hide sidebar when a global modal is open to prevent it showing behind overlays */
+body.modal-open .sidebar {
+  transform: translateX(-120%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Hide mobile sidebar backdrop when modal is open */
+body.modal-open .sidebar-backdrop {
+  display: none !important;
+}

@@ -65,8 +65,46 @@ pipelines_router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
 
 @pipelines_router.get("/", response_model=List[PipelineSchema])
-async def list_pipelines(db: Session = Depends(get_db)):
-    return db.query(Pipeline).all()
+async def list_pipelines(
+    department_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List pipelines visible to the requesting user. If `department_id` is provided
+    it will be used to filter pipelines. Otherwise non-admin users will have
+    their department inferred from their HR employee profile and only pipelines
+    assigned to that department will be returned. Admins see all pipelines.
+    """
+    # Admins should see all pipelines unless a specific department filter is requested
+    if getattr(current_user, 'is_admin', False) and department_id is None:
+        return db.query(Pipeline).all()
+
+    # Derive department from current user's employee record when not supplied
+    effective_dept = department_id
+    if effective_dept is None:
+        try:
+            # import here to avoid circular imports at module import time
+            from app.modules.hr.crud import get_employee_by_user_id
+            employee = get_employee_by_user_id(db, current_user.id)
+            effective_dept = getattr(employee, 'department_id', None) if employee else None
+        except Exception:
+            effective_dept = None
+
+    # If no effective department, return empty set for non-admin users
+    if effective_dept is None:
+        return []
+
+    # Find pipelines that include this department in their assignment config
+    assignments = db.query(PipelineAssignment).all()
+    allowed_pipeline_ids = {
+        assignment.pipeline_id
+        for assignment in assignments
+        if any(dept.get("department_id") == effective_dept for dept in assignment.departments_config)
+    }
+    if not allowed_pipeline_ids:
+        return []
+    return db.query(Pipeline).filter(Pipeline.id.in_(allowed_pipeline_ids)).all()
 
 
 @pipelines_router.post("/", response_model=PipelineSchema, status_code=201)
@@ -541,12 +579,54 @@ async def update_lead(
     update_data = lead_data.dict(exclude_unset=True)
     old_assignee = lead.assignee
     new_assignee = update_data.get('assignee', old_assignee)
+    old_extra_data = lead.extra_data or {}
+    old_remark = old_extra_data.get('current_remark')
 
     for key, value in update_data.items():
         setattr(lead, key, value)
     db.add(lead)
     db.commit()
     db.refresh(lead)
+
+    if 'extra_data' in update_data:
+        new_extra_data = update_data.get('extra_data') or {}
+        new_remark = new_extra_data.get('current_remark')
+        if new_remark is not None and old_remark != new_remark:
+            try:
+                current_user_name = getattr(current_user, 'full_name', None) or getattr(current_user, 'username', None) or str(getattr(current_user, 'id', ''))
+                if old_remark is None:
+                    log_payload = LogEntryCreateSchema(
+                        log_type='remark',
+                        title='Remark added',
+                        description='Initial remark added',
+                        remarks=new_remark,
+                        created_by=current_user_name,
+                        meta_data={
+                            'current_remark': new_remark,
+                        },
+                    )
+                else:
+                    log_payload = LogEntryCreateSchema(
+                        log_type='remark',
+                        title='Remark updated',
+                        description=f'Remark updated by {current_user_name}',
+                        remarks=old_remark,
+                        created_by=current_user_name,
+                        meta_data={
+                            'old_remark': old_remark,
+                            'new_remark': new_remark,
+                        },
+                    )
+                _create_log_entry(db, 'lead', lead.id, log_payload)
+
+                lead.extra_data = lead.extra_data or {}
+                lead.extra_data['current_remark_updated_by'] = current_user_name
+                lead.extra_data['current_remark_updated_at'] = datetime.utcnow().isoformat()
+                db.add(lead)
+                db.commit()
+                db.refresh(lead)
+            except Exception:
+                pass
 
     if 'assignee' in update_data and old_assignee != new_assignee:
         try:
@@ -1237,6 +1317,115 @@ async def list_contacts(
     return contacts
 
 
+# ============= ACTIVITIES ENDPOINTS =============
+
+@router.get("/activities", response_model=List[ActivitySchema])
+async def list_activities(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=500),
+    db: Session = Depends(get_db)
+):
+    """List recent activities across contacts"""
+    query = db.query(Activity).order_by(Activity.created_at.desc())
+    activities = query.offset(skip).limit(limit).all()
+    return activities
+
+
+@router.post("/{contact_id}/activities", response_model=ActivitySchema, status_code=201)
+async def add_activity(
+    contact_id: str,
+    activity_data: ActivityCreateSchema,
+    db: Session = Depends(get_db)
+):
+    """Add activity to contact (call, email, meeting, note)"""
+    
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    activity = Activity(
+        id=str(uuid.uuid4()),
+        contact_id=contact_id,
+        activity_type=activity_data.activity_type,
+        title=activity_data.title,
+        description=activity_data.description,
+        follow_up_date=activity_data.follow_up_date,
+        meta_data=activity_data.meta_data or {},
+    )
+    
+    db.add(activity)
+    db.commit()
+    db.refresh(activity)
+    return activity
+
+
+@router.get("/{contact_id}/activities", response_model=List[ActivitySchema])
+async def get_activities(contact_id: str, db: Session = Depends(get_db)):
+    """Get activity timeline for contact"""
+    
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    activities = db.query(Activity).filter(Activity.contact_id == contact_id).order_by(Activity.created_at.desc()).all()
+    return activities
+
+
+@router.get("/notifications/followups")
+async def get_due_followups(limit: int = 10, db: Session = Depends(get_db)):
+    """Return due follow-up activities (follow_up_date <= now)."""
+    now = datetime.utcnow()
+    base_q = db.query(Activity).filter(Activity.follow_up_date != None, Activity.follow_up_date <= now)
+    total = base_q.count()
+    items = base_q.order_by(Activity.follow_up_date.asc()).limit(limit).all()
+
+    results = []
+    for a in items:
+        results.append({
+            "id": a.id,
+            "contact_id": a.contact_id,
+            "title": a.title,
+            "follow_up_date": a.follow_up_date.isoformat() if a.follow_up_date else None,
+            "activity_type": a.activity_type,
+        })
+
+    return {"count": total, "items": results}
+
+
+# ============= TAGS ENDPOINTS =============
+
+@router.get("/tags", response_model=List[TagSchema])
+async def list_tags(db: Session = Depends(get_db)):
+    """List all available tags"""
+    tags = db.query(Tag).all()
+    return tags
+
+
+@router.post("/tags", response_model=TagSchema, status_code=201)
+async def create_tag(tag_data: TagBaseSchema, db: Session = Depends(get_db)):
+    """Create a new tag"""
+    
+    existing = db.query(Tag).filter(Tag.name == tag_data.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Tag already exists")
+    
+    tag = Tag(
+        id=str(uuid.uuid4()),
+        name=tag_data.name,
+        color=tag_data.color or "#6366f1"
+    )
+    db.add(tag)
+    db.commit()
+    db.refresh(tag)
+    return tag
+
+
+# Health check
+@router.get("/health")
+async def health():
+    return {"status": "CRM module ready"}
+
+
 @router.get("/{contact_id}", response_model=ContactDetailSchema)
 async def get_contact(contact_id: str, db: Session = Depends(get_db)):
     """Get contact details with activity timeline"""
@@ -1397,111 +1586,4 @@ async def bulk_action(action_data: BulkActionSchema, db: Session = Depends(get_d
     return {"success": True, "count": len(contacts)}
 
 
-# ============= ACTIVITIES ENDPOINTS =============
-
-@router.post("/{contact_id}/activities", response_model=ActivitySchema, status_code=201)
-async def add_activity(
-    contact_id: str,
-    activity_data: ActivityCreateSchema,
-    db: Session = Depends(get_db)
-):
-    """Add activity to contact (call, email, meeting, note)"""
-    
-    contact = db.query(Contact).filter(Contact.id == contact_id).first()
-    if not contact:
-        raise HTTPException(status_code=404, detail="Contact not found")
-    
-    activity = Activity(
-        id=str(uuid.uuid4()),
-        contact_id=contact_id,
-        activity_type=activity_data.activity_type,
-        title=activity_data.title,
-        description=activity_data.description,
-        follow_up_date=activity_data.follow_up_date,
-        meta_data=activity_data.meta_data or {},
-    )
-    
-    db.add(activity)
-    db.commit()
-    db.refresh(activity)
-    return activity
-
-
-@router.get("/{contact_id}/activities", response_model=List[ActivitySchema])
-async def get_activities(contact_id: str, db: Session = Depends(get_db)):
-    """Get activity timeline for contact"""
-    
-    contact = db.query(Contact).filter(Contact.id == contact_id).first()
-    if not contact:
-        raise HTTPException(status_code=404, detail="Contact not found")
-    
-    activities = db.query(Activity).filter(Activity.contact_id == contact_id).order_by(Activity.created_at.desc()).all()
-    return activities
-
-
-@router.get("/activities", response_model=List[ActivitySchema])
-async def list_activities(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(25, ge=1, le=500),
-    db: Session = Depends(get_db)
-):
-    """List recent activities across contacts"""
-    query = db.query(Activity).order_by(Activity.created_at.desc())
-    activities = query.offset(skip).limit(limit).all()
-    return activities
-
-
-@router.get("/notifications/followups")
-async def get_due_followups(limit: int = 10, db: Session = Depends(get_db)):
-    """Return due follow-up activities (follow_up_date <= now)."""
-    now = datetime.utcnow()
-    base_q = db.query(Activity).filter(Activity.follow_up_date != None, Activity.follow_up_date <= now)
-    total = base_q.count()
-    items = base_q.order_by(Activity.follow_up_date.asc()).limit(limit).all()
-
-    results = []
-    for a in items:
-        results.append({
-            "id": a.id,
-            "contact_id": a.contact_id,
-            "title": a.title,
-            "follow_up_date": a.follow_up_date.isoformat() if a.follow_up_date else None,
-            "activity_type": a.activity_type,
-        })
-
-    return {"count": total, "items": results}
-
-
-# ============= TAGS ENDPOINTS =============
-
-@router.get("/tags", response_model=List[TagSchema])
-async def list_tags(db: Session = Depends(get_db)):
-    """List all available tags"""
-    tags = db.query(Tag).all()
-    return tags
-
-
-@router.post("/tags", response_model=TagSchema, status_code=201)
-async def create_tag(tag_data: TagBaseSchema, db: Session = Depends(get_db)):
-    """Create a new tag"""
-    
-    existing = db.query(Tag).filter(Tag.name == tag_data.name).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Tag already exists")
-    
-    tag = Tag(
-        id=str(uuid.uuid4()),
-        name=tag_data.name,
-        color=tag_data.color or "#6366f1"
-    )
-    db.add(tag)
-    db.commit()
-    db.refresh(tag)
-    return tag
-
-
-# Health check
-@router.get("/health")
-async def health():
-    return {"status": "CRM module ready"}
 

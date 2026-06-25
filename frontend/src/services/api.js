@@ -153,7 +153,7 @@ export const crmAPI = {
   addProjectToClient: (id, data) => api.post(`/crm/clients/${id}/add-project`, data),
   
   // Pipelines
-  listPipelines: () => api.get('/crm/pipelines'),
+  listPipelines: (params = {}) => api.get('/crm/pipelines', { params }),
   getPipeline: (id) => api.get(`/crm/pipelines/${id}`),
   createPipeline: (data) => api.post('/crm/pipelines', data),
   updatePipeline: (id, data) => api.patch(`/crm/pipelines/${id}`, data),
@@ -176,7 +176,8 @@ export const crmAPI = {
   // Notifications
   getDueFollowups: (params = {}) => api.get('/crm/contacts/notifications/followups', { params }),
   // Activities
-  listActivities: (params = {}) => api.get('/crm/activities', { params }),
+  // Note: activities endpoints are under the contacts router, so include '/contacts'
+  listActivities: (params = {}) => api.get('/crm/contacts/activities', { params }),
 
   // Lead / Client Logs
   getLeadLogs: (id, params = {}) => api.get(`/crm/leads/${id}/logs`, { params }),

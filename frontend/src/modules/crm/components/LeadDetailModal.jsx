@@ -30,6 +30,9 @@ const LeadDetailModal = ({
   const [logsError, setLogsError] = useState(null)
   const [newRemark, setNewRemark] = useState('')
   const [savingRemark, setSavingRemark] = useState(false)
+  const [editingRemark, setEditingRemark] = useState(false)
+  const [lastUpdatedBy, setLastUpdatedBy] = useState('')
+  const [lastUpdatedAt, setLastUpdatedAt] = useState('')
 
   useEffect(() => {
     if (!lead?.id) return
@@ -52,7 +55,10 @@ const LeadDetailModal = ({
     if (!lead?.id) return
     setActiveTab('details')
     setLogsError(null)
-    setNewRemark('')
+    setEditingRemark(false)
+    setNewRemark(lead.extra_data?.current_remark || '')
+    setLastUpdatedBy(lead.extra_data?.current_remark_updated_by || '')
+    setLastUpdatedAt(lead.extra_data?.current_remark_updated_at || '')
     fetchLeadLogs()
   }, [lead?.id])
 
@@ -78,25 +84,37 @@ const LeadDetailModal = ({
 
   const handleSaveRemark = async () => {
     const trimmed = newRemark.trim()
-    if (!trimmed || !lead?.id) return
+    if (!lead?.id) return
 
     setSavingRemark(true)
     try {
-      const res = await crmAPI.createLeadLog(lead.id, {
-        log_type: 'remark',
-        title: 'Remark added',
-        description: trimmed,
-        remarks: trimmed,
-        created_by: 'User',
+      const response = await crmAPI.updateLead(lead.id, {
+        extra_data: {
+          ...lead.extra_data,
+          current_remark: trimmed,
+        },
       })
-      setLeadLogs((prev) => [res.data, ...prev])
-      setNewRemark('')
+      const updatedLead = response.data
+      setNewRemark(updatedLead.extra_data?.current_remark || '')
+      setLastUpdatedBy(updatedLead.extra_data?.current_remark_updated_by || '')
+      setLastUpdatedAt(updatedLead.extra_data?.current_remark_updated_at || '')
+      await fetchLeadLogs()
+      setEditingRemark(false)
       setActiveTab('remarks')
     } catch (error) {
       console.error('Failed to save remark:', error)
     } finally {
       setSavingRemark(false)
     }
+  }
+
+  const handleEditRemark = () => {
+    setEditingRemark(true)
+  }
+
+  const handleCancelEditRemark = () => {
+    setEditingRemark(false)
+    setNewRemark(lead.extra_data?.current_remark || '')
   }
 
   const remarkHistory = leadLogs.filter((entry) => entry.log_type === 'remark')
@@ -343,41 +361,67 @@ const LeadDetailModal = ({
 
           {activeTab === 'remarks' && (
             <div className="lead-detail-block">
-              <h4>Remark History</h4>
-              <div className="remark-add">
-                <textarea
-                  value={newRemark}
-                  onChange={(event) => setNewRemark(event.target.value)}
-                  placeholder="Add a new remark..."
-                  rows={4}
-                />
-                <Button
-                  variant="primary"
-                  onClick={handleSaveRemark}
-                  disabled={savingRemark || !newRemark.trim()}
-                >
-                  {savingRemark ? 'Saving…' : 'Save Remark'}
-                </Button>
-              </div>
-              {remarkHistory.length === 0 ? (
-                <p className="text-muted">No remarks have been added yet.</p>
-              ) : (
-                <div className="log-list">
-                  {remarkHistory.map((entry) => (
-                    <div key={entry.id} className="log-entry">
-                      <div className="log-entry-header">
-                        <span className="log-entry-type">{entry.log_type}</span>
-                        <span className="log-entry-time">{new Date(entry.created_at).toLocaleString()}</span>
-                      </div>
-                      <div className="log-entry-title">{entry.title || 'Remark'}</div>
-                      <div className="log-entry-description">{entry.remarks || entry.description}</div>
-                      {entry.created_by && (
-                        <div className="log-entry-meta">Created by {entry.created_by}</div>
+              <div className="remark-card">
+                <div className="remark-card-header">
+                  <div>
+                    <h4>Remark</h4>
+                    <p className="remark-card-subtitle">
+                      This panel shows the current remark. Previous remarks are stored in the log history.
+                    </p>
+                  </div>
+                  {lead.extra_data?.current_remark && !editingRemark && (
+                    <Button variant="secondary" onClick={handleEditRemark}>
+                      Edit remark
+                    </Button>
+                  )}
+                </div>
+
+                {editingRemark || !lead.extra_data?.current_remark ? (
+                  <>
+                    <div className="remark-add">
+                      <textarea
+                        value={newRemark}
+                        onChange={(event) => setNewRemark(event.target.value)}
+                        placeholder="Add or update lead remark..."
+                        rows={4}
+                      />
+                    </div>
+                    <div className="remark-actions">
+                      <Button
+                        variant="primary"
+                        onClick={handleSaveRemark}
+                        disabled={savingRemark || newRemark.trim() === lead.extra_data?.current_remark?.trim()}
+                      >
+                        {savingRemark ? 'Saving…' : lead.extra_data?.current_remark ? 'Save remark' : 'Add remark'}
+                      </Button>
+                      {lead.extra_data?.current_remark && (
+                        <Button variant="secondary" onClick={handleCancelEditRemark} disabled={savingRemark}>
+                          Cancel
+                        </Button>
                       )}
                     </div>
-                  ))}
-                </div>
-              )}
+                  </>
+                ) : (
+                  <div className="remark-view">
+                    <div className="remark-text">
+                      {lead.extra_data?.current_remark || 'No remark has been added yet.'}
+                    </div>
+                  </div>
+                )}
+
+                {(lastUpdatedBy || lastUpdatedAt) && (
+                  <div className="remark-last-updated">
+                    {lastUpdatedBy && (
+                      <span>
+                        Last updated by <strong>{lastUpdatedBy}</strong>
+                      </span>
+                    )}
+                    {lastUpdatedAt && (
+                      <span>{new Date(lastUpdatedAt).toLocaleString()}</span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

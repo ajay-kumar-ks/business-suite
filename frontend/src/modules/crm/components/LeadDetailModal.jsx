@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { X, ArrowLeftRight, CheckCircle2, Trash2, Sparkles, Mail, Calendar, ArrowRightCircle } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Loader from '../../../components/ui/Loader'
-import api from '../../../services/api'
+import api, { crmAPI } from '../../../services/api'
 import '../styles/LeadsView.css'
 
 const URGENCY_ICONS = {
@@ -234,11 +234,11 @@ const LeadDetailModal = ({
                   <div className="timeline-dot" />
                   <div>
                     <div className="timeline-message">{event.message || event.type}</div>
-                    <div className="timeline-meta">{new Date(event.timestamp).toLocaleString()}</div>
+                    <div className="timeline-meta">{event.timestamp ? new Date(event.timestamp).toLocaleString() : ''}</div>
                   </div>
-                )}
-              </div>
-            </>
+                </div>
+              ))}
+            </div>
           )}
 
           {activeTab === 'logs' && (
@@ -392,8 +392,6 @@ const LeadDetailModal = ({
                   </div>
                 )}
               </div>
-                </div>
-              ))}
             </div>
           )}
         </div>

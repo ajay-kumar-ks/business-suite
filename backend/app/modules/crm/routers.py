@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import List, Optional
 
 from app.core.database import get_db
+from app.modules.auth.models import User
+from app.modules.auth.routers import get_current_user
 from .db_models import Contact, Tag, Activity, Lead, Pipeline, Phase, Client, PipelineAssignment
 from .schemas import (
     ContactCreateSchema,

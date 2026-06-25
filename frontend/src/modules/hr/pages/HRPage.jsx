@@ -444,6 +444,11 @@ const HRPage = () => {
   //  CHART DATA (memoized)
   // ════════════════════════════════════════════════
 
+ const attendanceTrendData = useMemo(() => {
+  // derive labels for current selection
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const weekLabels = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
   // ── Attendance Trend helpers (hoisted so JSX can use them too) ──
   const today = new Date()
   const currentYear = today.getFullYear()
@@ -715,7 +720,7 @@ const HRPage = () => {
                   style={{
                     minWidth:
                       attendanceTrendPeriod === 'monthly' && attendanceTrendMonthlyMode === 'datewise'
-                        ? `${getAttendanceTrendLabels().length * 30}px`
+                        ? `${(attendanceTrendData.labels || []).length * 30}px`
                         : '100%',
                   }}
                 >
@@ -782,7 +787,7 @@ const HRPage = () => {
                       style={{
                         minWidth:
                           attendanceTrendPeriod === 'monthly' && attendanceTrendMonthlyMode === 'datewise'
-                            ? `${getAttendanceTrendLabels().length * 30}px`
+                            ? `${(attendanceTrendData.labels || []).length * 30}px`
                             : '100%',
                       }}
                     >

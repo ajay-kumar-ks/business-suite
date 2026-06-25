@@ -48,7 +48,7 @@ const PageShell = ({ children }) => {
       <div className={`main-content ${collapsed ? 'collapsed' : ''}`}>
         <Navbar collapsed={collapsed} setCollapsed={setCollapsed} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
-        <div className={`dashboard-content ${activeModule}`}>
+        <div className="dashboard-content">
           {children}
         </div>
       </div>

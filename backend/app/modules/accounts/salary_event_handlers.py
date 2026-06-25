@@ -11,6 +11,10 @@ from app.modules.accounts.models import ChartOfAccount, JournalEntry, JournalLin
 from app.modules.accounts.services import post_journal_entry
 
 
+_SALARY_EXPENSE_CODE = "5000"
+_SALARY_PAYABLE_CODE = "2100"
+
+
 def _get_account_id_by_code(db: Session, account_code: str) -> int:
     row = db.query(ChartOfAccount.id).filter(ChartOfAccount.account_code == account_code).first()
     if not row:
@@ -18,32 +22,21 @@ def _get_account_id_by_code(db: Session, account_code: str) -> int:
     return row[0]
 
 
-def _build_salary_journal_lines(*, expense_account_id: int, cash_account_id: int, amount: Decimal) -> list[JournalLine]:
-    return [
-        JournalLine(
-            journal_id=0,  # temporary; will be replaced after JournalEntry flush
-            account_id=expense_account_id,
-            memo="Payroll expense",
-            debit=amount,
-            credit=Decimal("0"),
-        ),
-        JournalLine(
-            journal_id=0,  # temporary; will be replaced after JournalEntry flush
-            account_id=cash_account_id,
-            memo="Cash payment for payroll",
-            debit=Decimal("0"),
-            credit=amount,
-        ),
-    ]
+def _resolve_cash_account(db: Session) -> int:
+    """Try Cash (1000) first, then fall back to Bank (1100)."""
+    for code in ("1000", "1100"):
+        try:
+            return _get_account_id_by_code(db, code)
+        except ValueError:
+            continue
+    raise ValueError("Neither Cash (1000) nor Bank (1100) account found in COA.")
 
 
 def handle_salary_processed(payload: dict) -> None:
-    """Convert HR salary event into an Accounts expense journal and post to ledger.
+    """Step 1 — Accrue salary expense: Dr Salary Expense, Cr Salary Payable.
 
-    Expected payload fields (from HR):
-      - employee_id (optional)
-      - employee_code/name (optional)
-      - amount (number)
+    Expected payload fields:
+      - amount (number, required)
       - reference (optional)
       - timestamp (optional)
     """
@@ -57,36 +50,100 @@ def handle_salary_processed(payload: dict) -> None:
         if amount <= 0:
             return
 
-        expense_account_id = _get_account_id_by_code(db, "5000")  # Expenses
-        # Try cash 1000 first, then bank 1100
-        cash_account_id = None
-        for code in ("1000", "1100"):
-            try:
-                cash_account_id = _get_account_id_by_code(db, code)
-                break
-            except ValueError:
-                continue
-        if cash_account_id is None:
-            raise ValueError("Neither Cash (1000) nor Bank (1100) account found in COA.")
+        expense_account_id = _get_account_id_by_code(db, _SALARY_EXPENSE_CODE)
+        payable_account_id = _get_account_id_by_code(db, _SALARY_PAYABLE_CODE)
 
         when = payload.get("timestamp")
         journal_date = datetime.fromisoformat(when) if when else datetime.utcnow()
 
-        journal_ref = payload.get("reference") or f"SAL-{payload.get('employee_id') or 'EMP'}-{int(journal_date.timestamp())}"
+        journal_ref = payload.get("reference") or f"ACCRUAL-SAL-{int(journal_date.timestamp())}"
 
         journal = JournalEntry(
             reference=journal_ref,
-            description="Payroll salary expense",
-            status="approved",  # will be posted immediately
+            description="Payroll salary accrual",
+            status="approved",
             date=journal_date,
         )
         db.add(journal)
-        db.flush()  # assigns journal.id
+        db.flush()
 
         expense_line = JournalLine(
             journal_id=journal.id,
             account_id=expense_account_id,
-            memo="Payroll expense",
+            memo="Payroll salary expense (accrual)",
+            debit=amount,
+            credit=Decimal("0"),
+        )
+        payable_line = JournalLine(
+            journal_id=journal.id,
+            account_id=payable_account_id,
+            memo="Salary payable (accrual)",
+            debit=Decimal("0"),
+            credit=amount,
+        )
+        db.add(expense_line)
+        db.add(payable_line)
+        db.flush()
+
+        post_journal_entry(db, journal)
+        db.commit()
+
+        # Publish salary.accrued so downstream (e.g., payment trigger) can act
+        event_bus.publish(
+            "salary.accrued",
+            {
+                "salary_event_reference": journal_ref,
+                "accrual_journal_id": journal.id,
+                "amount": float(amount),
+                "payable_account_id": payable_account_id,
+            },
+        )
+    except Exception as exc:
+        db.rollback()
+        print(f"[salary_event_handler] Error accruing salary: {exc}")
+    finally:
+        db.close()
+
+
+def handle_salary_paid(payload: dict) -> None:
+    """Step 2 — Pay the accrued salary: Dr Salary Payable, Cr Cash/Bank.
+
+    Expected payload fields:
+      - amount (number, required)
+      - reference (optional)
+      - timestamp (optional)
+    """
+    db: Session = SessionLocal()
+    try:
+        amount_raw = payload.get("amount")
+        if amount_raw is None:
+            return
+
+        amount = Decimal(str(amount_raw))
+        if amount <= 0:
+            return
+
+        payable_account_id = _get_account_id_by_code(db, _SALARY_PAYABLE_CODE)
+        cash_account_id = _resolve_cash_account(db)
+
+        when = payload.get("timestamp")
+        journal_date = datetime.fromisoformat(when) if when else datetime.utcnow()
+
+        journal_ref = payload.get("reference") or f"PAY-SAL-{int(journal_date.timestamp())}"
+
+        journal = JournalEntry(
+            reference=journal_ref,
+            description="Payroll salary payment",
+            status="approved",
+            date=journal_date,
+        )
+        db.add(journal)
+        db.flush()
+
+        payable_reversal_line = JournalLine(
+            journal_id=journal.id,
+            account_id=payable_account_id,
+            memo="Salary payable settlement",
             debit=amount,
             credit=Decimal("0"),
         )
@@ -97,11 +154,10 @@ def handle_salary_processed(payload: dict) -> None:
             debit=Decimal("0"),
             credit=amount,
         )
-        db.add(expense_line)
+        db.add(payable_reversal_line)
         db.add(cash_line)
         db.flush()
 
-        # Post (creates ledger entries)
         post_journal_entry(db, journal)
         db.commit()
 
@@ -109,19 +165,17 @@ def handle_salary_processed(payload: dict) -> None:
             "salary.paid",
             {
                 "salary_event_reference": journal_ref,
-                "journal_id": journal.id,
+                "payment_journal_id": journal.id,
                 "amount": float(amount),
-                "currency": payload.get("currency"),
             },
         )
     except Exception as exc:
-        # Do not crash the event bus; allow HR save to succeed.
         db.rollback()
-        print(f"[salary_event_handler] Error processing salary: {exc}")
+        print(f"[salary_event_handler] Error paying salary: {exc}")
     finally:
         db.close()
 
 
 def register_salary_event_handlers() -> None:
     event_bus.subscribe("salary.processed", handle_salary_processed)
-
+    event_bus.subscribe("salary.paid", handle_salary_paid)

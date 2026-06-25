@@ -120,6 +120,14 @@ export const accountsAPI = {
   getAIInsights: () => api.get('/accounts/ai/insights'),
 }
 
+export const paymentsAPI = {
+  createOrder: (data) => api.post('/payments/create-order', data),
+  verifyPayment: (data) => api.post('/payments/verify', data),
+  listPayments: (params = {}) => api.get('/payments/', { params }),
+  getPayment: (id) => api.get(`/payments/${id}`),
+  getRazorpayKey: () => api.get('/payments/key'),
+}
+
 export const crmAPI = {
   // Contacts
   listContacts: (params = {}) => api.get('/crm/contacts', { params }),
@@ -178,12 +186,6 @@ export const crmAPI = {
   getDueFollowups: (params = {}) => api.get('/crm/contacts/notifications/followups', { params }),
   // Activities
   listActivities: (params = {}) => api.get('/crm/activities', { params }),
-
-  // Lead / Client Logs
-  getLeadLogs: (id, params = {}) => api.get(`/crm/leads/${id}/logs`, { params }),
-  createLeadLog: (id, data) => api.post(`/crm/leads/${id}/logs`, data),
-  getClientLogs: (id, params = {}) => api.get(`/crm/clients/${id}/logs`, { params }),
-  createClientLog: (id, data) => api.post(`/crm/clients/${id}/logs`, data),
 }
 
 export const tasksAPI = {

@@ -23,6 +23,7 @@ from app.modules.tasks.upload import router as upload_router
 from app.modules.tasks.scheduler import run_overdue_scheduler
 from app.modules.tasks.event_handlers import register_handlers
 from app.modules.recruitment.routers import router as recruitment_router
+from app.modules.payments.routers import router as payments_router
 from app.modules.accounts.salary_event_handlers import register_salary_event_handlers
 
 app = FastAPI(title="Business Suite Backend", version="0.1.0")
@@ -79,6 +80,8 @@ app.include_router(recruitment_router, prefix="/api/recruitment", tags=["recruit
 app.include_router(upload_router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(crm_clients_router, prefix="/api/crm", tags=["crm"])
 app.include_router(crm_ai_router, prefix="/api/crm", tags=["crm"])
+app.include_router(payments_router, prefix="/payments", tags=["payments"])
+app.include_router(payments_router, prefix="/api/payments", tags=["payments"])
 
 # Serve uploaded files
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads")
@@ -107,6 +110,16 @@ async def startup_event():
 
     register_event_handlers()
     register_salary_event_handlers()
+
+    # Seed default chart of accounts if missing (e.g. Salary Payable 2100)
+    from app.core.database import SessionLocal as _SeedSession
+    from app.modules.accounts.services import seed_default_chart_of_accounts
+    _seed_db = _SeedSession()
+    try:
+        seed_default_chart_of_accounts(_seed_db)
+    finally:
+        _seed_db.close()
+
     event_bus.connect()
 
     # Register tasks module event handlers
@@ -258,6 +271,16 @@ async def _run_database_migrations():
 
     register_event_handlers()
     register_salary_event_handlers()
+
+    # Seed default chart of accounts if missing (e.g. Salary Payable 2100)
+    from app.core.database import SessionLocal as _SeedSession
+    from app.modules.accounts.services import seed_default_chart_of_accounts
+    _seed_db = _SeedSession()
+    try:
+        seed_default_chart_of_accounts(_seed_db)
+    finally:
+        _seed_db.close()
+
     event_bus.connect()
 
     # Register tasks module event handlers

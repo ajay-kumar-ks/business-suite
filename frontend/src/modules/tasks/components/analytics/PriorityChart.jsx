@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef, useEffect } from 'react'
 import { Pie } from 'react-chartjs-2'
 import { ArcElement, Tooltip, Legend } from 'chart.js'
 import { Chart as ChartJS } from 'chart.js'
@@ -14,6 +14,15 @@ const PRIORITY_COLORS = {
 }
 
 const PriorityChart = ({ data, loading }) => {
+  const chartRef = useRef(null)
+
+  useEffect(() => {
+    if (chartRef.current) {
+      const raf = requestAnimationFrame(() => chartRef.current.resize())
+      return () => cancelAnimationFrame(raf)
+    }
+  }, [data])
+
   if (loading) {
     return <div className="chart-skeleton" style={{ height: 280, borderRadius: '50%', width: 280, margin: '0 auto' }} />
   }
@@ -92,8 +101,8 @@ const PriorityChart = ({ data, loading }) => {
           <span>Priority Distribution</span>
         </div>
       </div>
-      <div className="chart-body chart-body-center">
-        <Pie data={chartData} options={options} />
+      <div className="chart-body">
+        <Pie ref={chartRef} data={chartData} options={options} />
       </div>
     </div>
   )

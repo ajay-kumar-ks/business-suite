@@ -1,0 +1,22 @@
+/* ── Payments Page ── */
+.payments-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+
+.payments-page input:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.payments-page table tbody tr:hover {
+  background: var(--hover);
+}
+
+@media (max-width: 640px) {
+  .payments-page .payment-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

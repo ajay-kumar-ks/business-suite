@@ -687,7 +687,7 @@
   min-width: 0;
 }
 
-.chart-container {
+.charts-section .chart-container {
   overflow: hidden;
 }
 
@@ -721,12 +721,20 @@
   margin-top: 0;
 }
 
-.chart-container {
+.charts-section .chart-container {
   position: relative;
   height: 200px;
   max-height: 200px;
   width: 100%;
-  overflow: hidden !important;
+  min-height: 200px;
+  overflow: hidden;
+  flex: 1 1 auto;
+}
+
+.charts-section .chart-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100%;
 }
 
 /* ══════════════════════════════════════════════

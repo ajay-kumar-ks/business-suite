@@ -1,5 +1,5 @@
 import React from 'react'
-import { BarChart3, Users, Target, Briefcase, Activity } from 'lucide-react'
+import { BarChart3, Users, Target, Briefcase, Activity, CreditCard } from 'lucide-react'
 
 const VIEW_TABS = [
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
@@ -7,6 +7,7 @@ const VIEW_TABS = [
   { id: 'leads', label: 'Leads', icon: Target },
   { id: 'clients', label: 'Clients', icon: Briefcase },
   { id: 'activities', label: 'Activities', icon: Activity },
+  { id: 'payments', label: 'Payments', icon: CreditCard },
 ]
 
 const CRMViewTabs = ({ activeView, setActiveView }) => {

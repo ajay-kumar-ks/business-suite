@@ -16,13 +16,17 @@ logger = logging.getLogger(__name__)
 # Client initialisation (lazy)
 # ──────────────────────────────────────────────
 
-_client = None
+_insights_client = None
+_jd_client = None
+
+_insights_client = None
+_jd_client = None
 
 
-def _get_client():
-    """Lazy-init the OpenAI client pointed at OpenRouter using API_KEY2."""
-    global _client
-    if _client is None:
+def _get_insights_client():
+    """Lazy-init the OpenAI client for HR insights using API_KEY2."""
+    global _insights_client
+    if _insights_client is None:
         from openai import OpenAI
         api_key = settings.OPENROUTER_API_KEY2
         if not api_key:
@@ -30,7 +34,7 @@ def _get_client():
                 "OPENROUTER_API_KEY2 is not configured. "
                 "Set it in your .env file."
             )
-        _client = OpenAI(
+        _insights_client = OpenAI(
             base_url=settings.OPENROUTER_BASE_URL,
             api_key=api_key,
             default_headers={
@@ -38,8 +42,34 @@ def _get_client():
                 "X-Title": "Business Suite - HR AI Insights",
             },
         )
-    return _client
+    return _insights_client
 
+
+def _get_jd_client():
+    """Lazy-init the OpenAI client for Job Description generation using API_KEY2."""
+    global _jd_client
+    if _jd_client is None:
+        from openai import OpenAI
+        api_key = settings.OPENROUTER_API_KEY2
+        if not api_key:
+            raise ValueError(
+                "OPENROUTER_API_KEY2 is not configured. "
+                "Set it in your .env file."
+            )
+        _jd_client = OpenAI(
+            base_url=settings.OPENROUTER_BASE_URL,
+            api_key=api_key,
+            default_headers={
+                "HTTP-Referer": "https://business-suite.local",
+                "X-Title": "Business Suite - AI Job Description Generator",
+            },
+        )
+    return _jd_client
+
+
+# ══════════════════════════════════════════════
+# HR INSIGHTS (Existing)
+# ══════════════════════════════════════════════
 
 # ──────────────────────────────────────────────
 # System prompt
@@ -178,7 +208,7 @@ def generate_hr_insights(hr_data: dict) -> dict:
         risks, recommendations.
     """
     try:
-        client = _get_client()
+        client = _get_insights_client()
         context = build_hr_context(hr_data)
 
         response = client.chat.completions.create(
@@ -225,3 +255,104 @@ def generate_hr_insights(hr_data: dict) -> dict:
             "risks": [],
             "recommendations": [],
         }
+
+
+# ══════════════════════════════════════════════
+# AI JOB DESCRIPTION GENERATOR
+# ══════════════════════════════════════════════
+
+JD_SYSTEM_PROMPT = """\
+You are an expert HR professional specializing in creating ATS-friendly job descriptions.
+
+Generate a professional, comprehensive job description based on the provided inputs.
+
+Requirements:
+* Professional HR language
+* ATS-friendly formatting
+* Clear bullet points
+* No company-specific information
+* Do NOT invent salary, location, employment type, benefits or company details
+* Return clean formatted text only — no JSON, no markdown code blocks.
+"""
+
+
+def build_jd_prompt(data: dict) -> str:
+    """Build the prompt for job description generation."""
+    dept = data.get("department", "")
+    title = data.get("job_title", "")
+    exp = data.get("experience", "")
+    skills = data.get("skills", "")
+    extra = data.get("additional_requirements", "")
+
+    prompt = f"""Generate a professional ATS-friendly job description.
+
+Inputs:
+
+Department: {dept}
+
+Job Title: {title}
+
+Experience Required: {exp}
+
+Required Skills:
+{skills}
+
+Additional Requirements:
+{extra}
+
+Generate the following sections:
+
+1. Job Summary
+
+2. Key Responsibilities
+
+3. Required Skills
+
+4. Qualifications
+
+5. Preferred Skills
+
+Requirements:
+
+* Professional HR language
+* ATS-friendly formatting
+* Clear bullet points
+* No company-specific information
+* Do NOT invent salary, location, employment type, benefits or company details
+* Return clean formatted text only."""
+    return prompt
+
+
+def generate_job_description(data: dict) -> str:
+    """Generate a professional ATS-friendly job description using AI.
+
+    Args:
+        data: Dictionary with keys: department, job_title, experience,
+              skills, additional_requirements.
+
+    Returns:
+        Generated job description text.
+    """
+    try:
+        client = _get_jd_client()
+        prompt = build_jd_prompt(data)
+
+        response = client.chat.completions.create(
+            model="openai/gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": JD_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=2000,
+        )
+
+        raw = response.choices[0].message.content or ""
+        return raw.strip()
+
+    except ValueError as e:
+        logger.error("Job description AI service configuration error: %s", e)
+        raise ValueError(str(e))
+    except Exception as e:
+        logger.exception("Job description generation request failed")
+        raise RuntimeError(f"Failed to generate job description: {str(e)[:200]}")

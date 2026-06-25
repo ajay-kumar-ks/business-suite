@@ -164,6 +164,21 @@ class ChatbotResponse(BaseModel):
     reply: str
 
 
+# ── AI Job Description Generator ──
+
+class JobDescriptionRequest(BaseModel):
+    department: str
+    job_title: str
+    experience: str
+    skills: str
+    additional_requirements: str = ""
+
+
+class JobDescriptionResponse(BaseModel):
+    success: bool
+    job_description: str
+
+
 class LeaveStatusUpdate(BaseModel):
     status: LeaveStatus
 

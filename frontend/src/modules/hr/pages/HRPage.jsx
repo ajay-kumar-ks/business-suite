@@ -504,39 +504,9 @@ const HRPage = () => {
   }
 
   const trendCounts = attendanceTrendCounts()
-  const attendanceTrendData = {
-    labels: attendanceTrendLabels(),
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-
-  const labels = Array.from(
-    { length: daysInMonth },
-    (_, i) => `${i + 1}`
-  )
-
-  const presentByDay = Array(daysInMonth).fill(0)
-  const absentByDay = Array(daysInMonth).fill(0)
-
-  attendanceRecords.forEach((rec) => {
-    if (!rec.date) return
-
-    const date = new Date(rec.date)
-
-    if (
-      date.getMonth() === month &&
-      date.getFullYear() === year
-    ) {
-      const day = date.getDate() - 1
-
-      if (rec.status === 'Present')
-        presentByDay[day]++
-
-      if (rec.status === 'Absent')
-        absentByDay[day]++
-    }
-  })
 
   return {
-    labels,
+    labels: attendanceTrendLabels(),
     datasets: [
       {
         label: 'Present',

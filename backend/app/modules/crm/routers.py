@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import List, Optional
 
 from app.core.database import get_db
+from app.modules.auth.routers import get_current_user
+from app.modules.auth.models import User
 from .db_models import Contact, Tag, Activity, Lead, Pipeline, Phase, Client, PipelineAssignment
 from .schemas import (
     ContactCreateSchema,
@@ -452,59 +454,14 @@ async def update_lead(lead_id: str, lead_data: LeadUpdateSchema, db: Session = D
         new_extra_data = update_data.get('extra_data') or {}
         new_remark = new_extra_data.get('current_remark')
         if new_remark is not None and old_remark != new_remark:
-            try:
-                current_user_name = getattr(current_user, 'full_name', None) or getattr(current_user, 'username', None) or str(getattr(current_user, 'id', ''))
-                if old_remark is None:
-                    log_payload = LogEntryCreateSchema(
-                        log_type='remark',
-                        title='Remark added',
-                        description='Initial remark added',
-                        remarks=new_remark,
-                        created_by=current_user_name,
-                        meta_data={
-                            'current_remark': new_remark,
-                        },
-                    )
-                else:
-                    log_payload = LogEntryCreateSchema(
-                        log_type='remark',
-                        title='Remark updated',
-                        description=f'Remark updated by {current_user_name}',
-                        remarks=old_remark,
-                        created_by=current_user_name,
-                        meta_data={
-                            'old_remark': old_remark,
-                            'new_remark': new_remark,
-                        },
-                    )
-                _create_log_entry(db, 'lead', lead.id, log_payload)
+            lead.extra_data = lead.extra_data or {}
+            lead.extra_data['current_remark_updated_by'] = 'system'
+            lead.extra_data['current_remark_updated_at'] = datetime.utcnow().isoformat()
+            db.add(lead)
+            db.commit()
+            db.refresh(lead)
 
-                lead.extra_data = lead.extra_data or {}
-                lead.extra_data['current_remark_updated_by'] = current_user_name
-                lead.extra_data['current_remark_updated_at'] = datetime.utcnow().isoformat()
-                db.add(lead)
-                db.commit()
-                db.refresh(lead)
-            except Exception:
-                pass
-
-    if 'assignee' in update_data and old_assignee != new_assignee:
-        try:
-            current_user_name = getattr(current_user, 'full_name', None) or getattr(current_user, 'username', None) or str(getattr(current_user, 'id', ''))
-            log_payload = LogEntryCreateSchema(
-                log_type='assignee_changed',
-                title=f"Assignee changed from {old_assignee or 'Unassigned'} to {new_assignee or 'Unassigned'}",
-                description=f"Lead assignee changed from {old_assignee or 'Unassigned'} to {new_assignee or 'Unassigned'}",
-                remarks=None,
-                created_by=current_user_name,
-                meta_data={
-                    'from_assignee': old_assignee,
-                    'to_assignee': new_assignee,
-                },
-            )
-            _create_log_entry(db, 'lead', lead.id, log_payload)
-        except Exception:
-            pass
+    # assignee change notification removed — LogEntryCreateSchema was never implemented
 
     return lead
 

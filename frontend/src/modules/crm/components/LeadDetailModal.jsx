@@ -236,9 +236,8 @@ const LeadDetailModal = ({
                     <div className="timeline-message">{event.message || event.type}</div>
                     <div className="timeline-meta">{new Date(event.timestamp).toLocaleString()}</div>
                   </div>
-                )}
-              </div>
-            </>
+              ))}
+            </div>
           )}
 
           {activeTab === 'logs' && (

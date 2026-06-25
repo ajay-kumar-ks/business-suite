@@ -50,7 +50,7 @@ const AIInsights = ({ onGenerate, variant = 'card' }) => {
             <h3 style={{ margin: '0 0 8px', fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>
               AI HR Insights
             </h3>
-            <p style={{ margin: '0 0 24px', fontSize: '0.9rem', color: '#64748b', maxWidth: 480, margin: '0 auto 24px' }}>
+            <p style={{ margin: '0 auto 24px', fontSize: '0.9rem', color: '#64748b', maxWidth: 480 }}>
               Generate intelligent analysis of your workforce, recruitment, attendance, and leave data using AI.
             </p>
             <button

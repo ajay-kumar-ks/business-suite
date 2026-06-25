@@ -165,46 +165,53 @@
 }
 
 /* ── Charts Grid ── */
-.analytics-charts-grid {
+.tasks-analytics-page .analytics-charts-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-auto-rows: minmax(380px, auto);
   gap: 16px;
+  width: 100%;
 }
 
-.analytics-chart-cell {
-  min-height: 320px;
+.tasks-analytics-page .analytics-chart-cell {
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 
-.chart-cell-wide {
+.tasks-analytics-page .chart-cell-wide {
   grid-column: 1 / -1;
 }
 
-.chart-cell-full {
+.tasks-analytics-page .chart-cell-full {
   grid-column: 1 / -1;
 }
 
 @media (max-width: 900px) {
-  .analytics-charts-grid {
+  .tasks-analytics-page .analytics-charts-grid {
     grid-template-columns: 1fr;
   }
 }
 
 /* ── Chart Containers ── */
-.chart-container {
+.tasks-analytics-page .chart-container {
   background: var(--sidebar);
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
-  height: 100%;
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
 }
 
-.chart-container-wide {
-  min-height: 350px;
+.tasks-analytics-page .chart-container-wide {
+  min-height: 650px;
 }
 
-.chart-header {
+.tasks-analytics-page .chart-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -214,7 +221,7 @@
   gap: 8px;
 }
 
-.chart-title {
+.tasks-analytics-page .chart-title {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -223,21 +230,23 @@
   color: var(--text);
 }
 
-.chart-body {
+.tasks-analytics-page .chart-body {
   flex: 1;
-  padding: 16px 18px;
   position: relative;
-  min-height: 250px;
+  min-height: 300px;
+  padding: 0;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
 }
 
-.chart-body-center {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.tasks-analytics-page .chart-body canvas {
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* ── Period Toggle ── */
-.chart-period-toggle {
+.tasks-analytics-page .chart-period-toggle {
   display: flex;
   gap: 4px;
   background: var(--bg);
@@ -246,7 +255,7 @@
   border: 1px solid var(--border);
 }
 
-.period-btn {
+.tasks-analytics-page .period-btn {
   padding: 4px 12px;
   border-radius: 6px;
   border: none;
@@ -259,17 +268,17 @@
   font-family: inherit;
 }
 
-.period-btn:hover {
+.tasks-analytics-page .period-btn:hover {
   background: var(--hover);
 }
 
-.period-btn.active {
+.tasks-analytics-page .period-btn.active {
   background: var(--primary);
   color: #fff;
 }
 
 /* ── Chart Empty / Loading ── */
-.chart-empty {
+.tasks-analytics-page .chart-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -286,7 +295,7 @@
   min-height: 250px;
 }
 
-.chart-skeleton {
+.tasks-analytics-page .chart-skeleton {
   background: var(--sidebar);
   border: 1px solid var(--border);
   border-radius: 12px;

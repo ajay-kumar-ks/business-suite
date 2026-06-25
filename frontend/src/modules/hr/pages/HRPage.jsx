@@ -12,6 +12,7 @@ import {
   Trash2,
   Settings,
   Brain,
+  FileText,
 } from 'lucide-react'
 import {
   Chart as ChartJS,
@@ -45,6 +46,7 @@ import { hrAPI } from '../services/hrApi'
 import { recruitmentAPI } from '../services/recruitmentApi'
 import { hrAiAPI } from '../services/hrAiApi'
 import AIInsights from '../components/AIInsights'
+import AIJobDescription from '../components/AIJobDescription'
 import HRChatBot from '../components/HRChatBot'
 import Button from '../../../components/ui/Button'
 import { useTheme } from '../../../context/ThemeContext'
@@ -72,6 +74,7 @@ const TABS = [
   { id: 'attendance', label: 'Attendance', icon: UserCheck },
   { id: 'leaves', label: 'Leaves', icon: Clock },
   { id: 'ai-insights', label: 'AI Insights', icon: Brain },
+  { id: 'ai-job-description', label: 'AI Job Description', icon: FileText },
 ]
 
 const CARD_CONFIG = [
@@ -967,6 +970,11 @@ const HRPage = () => {
             />
           </div>
         </div>
+      )}
+
+      {/* ── AI Job Description Tab ── */}
+      {activeTab === 'ai-job-description' && (
+        <AIJobDescription />
       )}
 
       {/* HR Chatbot — floating assistant */}

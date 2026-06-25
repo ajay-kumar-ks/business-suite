@@ -54,6 +54,8 @@ from app.modules.hr.schemas import (
     MyLeaveCreate,
     ChatbotRequest,
     ChatbotResponse,
+    JobDescriptionRequest,
+    JobDescriptionResponse,
 )
 from app.modules.hr.services import format_employee_response, format_attendance_response, format_leave_response
 from app.modules.hr.db_models import (
@@ -479,6 +481,38 @@ async def api_update_leave_status(
             detail=f"Leave request with id {leave_id} not found",
         )
     return format_leave_response(leave)
+
+
+# ──────────────────────────────────────────────
+# AI Job Description Generator
+# ──────────────────────────────────────────────
+
+
+@router.post("/ai/job-description", response_model=JobDescriptionResponse)
+async def api_generate_job_description(
+    data: JobDescriptionRequest,
+    current_user: User = Depends(require_admin),
+):
+    """Generate a professional ATS-friendly job description using AI."""
+    try:
+        from app.services.hr_ai_service import generate_job_description
+
+        jd_text = generate_job_description(data.model_dump())
+        return JobDescriptionResponse(
+            success=True,
+            job_description=jd_text,
+        )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"AI service configuration error: {e}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate job description: {str(e)[:200]}",
+        )
 
 
 # ──────────────────────────────────────────────

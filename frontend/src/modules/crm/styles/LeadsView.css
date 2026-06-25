@@ -1455,6 +1455,144 @@
 }
 
 .lead-detail-block {
+  /* allow individual blocks to scroll if very tall */
+  max-height: 60vh;
+  overflow: auto;
+}
+.log-list {
+  display: grid;
+  gap: 14px;
+}
+
+.log-entry {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  background: var(--sidebar);
+}
+
+.log-entry-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.log-entry-type {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.log-entry-time {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.log-entry-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.log-entry-description,
+.log-entry-remarks,
+.log-entry-meta {
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.remark-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--sidebar);
+}
+
+.remark-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.remark-card-header h4 {
+  margin: 0;
+}
+
+.remark-card-subtitle {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.remark-add {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.remark-add textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--text);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.remark-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.remark-view {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--background);
+  border: 1px solid var(--border);
+}
+
+.remark-text {
+  color: var(--text);
+  font-size: 0.98rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.remark-last-updated {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+}
+
+.remark-last-updated span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.log-loading,
+.error-text,
+.text-muted {
+  color: var(--text-secondary);
   background: var(--background);
   border-radius: 16px;
   padding: 16px;

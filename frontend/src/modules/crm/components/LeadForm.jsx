@@ -31,6 +31,8 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
   const [aiLoading, setAiLoading] = useState(false)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
+  const [userDepartmentId, setUserDepartmentId] = useState(undefined)
+  const [profileLoading, setProfileLoading] = useState(true)
   const employeeDropdownRef = useRef(null)
   const pipelineDropdownRef = useRef(null)
   const phaseDropdownRef = useRef(null)
@@ -43,9 +45,15 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
         title: `${contact.name} Opportunity`,
       }))
     }
-    fetchPipelines()
     fetchEmployees()
+    fetchMyProfile()
   }, [contact])
+
+  useEffect(() => {
+    if (userDepartmentId !== undefined) {
+      fetchPipelines()
+    }
+  }, [userDepartmentId])
 
   useEffect(() => {
     if (formData.pipeline_id) {
@@ -107,12 +115,32 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  const fetchMyProfile = async () => {
+    try {
+      setProfileLoading(true)
+      const response = await hrAPI.getMyProfile()
+      const employee = response.data?.employee
+      setUserDepartmentId(employee?.department_id ?? null)
+    } catch (error) {
+      console.error('Failed to fetch user profile:', error)
+      setUserDepartmentId(null)
+    } finally {
+      setProfileLoading(false)
+    }
+  }
+
   const fetchPipelines = async () => {
     try {
-      const response = await crmAPI.listPipelines()
+      if (userDepartmentId === null) {
+        setPipelines([])
+        return
+      }
+      const params = userDepartmentId ? { department_id: userDepartmentId } : {}
+      const response = await crmAPI.listPipelines(params)
       setPipelines(response.data)
     } catch (error) {
       console.error('Failed to fetch pipelines:', error)
+      setPipelines([])
     }
   }
 
@@ -261,7 +289,11 @@ const LeadForm = ({ contact = null, onSave, onCancel }) => {
             {pipelineDropdownOpen && (
               <div className="custom-select-menu">
                 {pipelines.length === 0 ? (
-                  <div className="custom-select-empty">No pipelines available</div>
+                  <div className="custom-select-empty">
+                    {profileLoading ? 'Loading pipelines...' : userDepartmentId === null
+                      ? 'No pipelines assigned to your department. Contact your administrator.'
+                      : 'No pipelines available'}
+                  </div>
                 ) : (
                   pipelines.map((pipeline) => (
                     <button

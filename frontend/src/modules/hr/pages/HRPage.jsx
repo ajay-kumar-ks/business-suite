@@ -11,6 +11,7 @@ import {
   Pencil,
   Trash2,
   Settings,
+  Maximize2,
   Brain,
 } from 'lucide-react'
 import {
@@ -113,6 +114,29 @@ const HRPage = () => {
   const [convertModalOpen, setConvertModalOpen] = useState(false)
   const [candidateToConvert, setCandidateToConvert] = useState(null)
   const [pipelineManagerOpen, setPipelineManagerOpen] = useState(false)
+
+  // ── Chart theme re-render key ──
+  const [themeTick, setThemeTick] = useState(0)
+  const [attendanceTrendPeriod, setAttendanceTrendPeriod] = useState('weekly')
+  const [attendanceTrendMonthlyMode, setAttendanceTrendMonthlyMode] = useState('weekwise')
+  const [attendanceTrendModalOpen, setAttendanceTrendModalOpen] = useState(false)
+
+  useEffect(() => {
+    if (attendanceTrendModalOpen) {
+      document.body.classList.add('modal-open')
+    } else {
+      document.body.classList.remove('modal-open')
+    }
+    return () => {
+      document.body.classList.remove('modal-open')
+    }
+  }, [attendanceTrendModalOpen])
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => setThemeTick((t) => t + 1))
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [])
   const [pipelineTemplates, setPipelineTemplates] = useState([])
 
   // ── Fetch dashboard ──
@@ -422,6 +446,63 @@ const HRPage = () => {
   const year = now.getFullYear()
   const month = now.getMonth()
 
+  // ── Attendance Trend ──
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const weekLabels = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
+  const today = new Date()
+  const currentYear = today.getFullYear()
+  const currentMonth = today.getMonth()
+
+  const attendanceTrendLabels = () => {
+    if (attendanceTrendPeriod === 'monthly') {
+      if (attendanceTrendMonthlyMode === 'datewise') {
+        const start = new Date(currentYear, currentMonth, 1)
+        const end = new Date(currentYear, currentMonth + 1, 0)
+        return Array.from({ length: end.getDate() }, (_, i) => `${i + 1}`)
+      }
+      return weekLabels
+    }
+    if (attendanceTrendPeriod === 'yearly') return monthNames
+    return dayNames
+  }
+
+  const attendanceTrendCounts = () => {
+    const labels = attendanceTrendLabels()
+    const present = Array(labels.length).fill(0)
+    const absent = Array(labels.length).fill(0)
+
+    attendanceRecords.forEach((rec) => {
+      if (!rec.date) return
+      const date = new Date(rec.date)
+      if (Number.isNaN(date.getTime())) return
+
+      let index = -1
+      if (attendanceTrendPeriod === 'weekly') {
+        index = date.getDay()
+      } else if (attendanceTrendPeriod === 'monthly') {
+        if (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth) return
+        if (attendanceTrendMonthlyMode === 'datewise') {
+          index = date.getDate() - 1
+        } else {
+          index = Math.min(4, Math.floor((date.getDate() - 1) / 7))
+        }
+      } else {
+        if (date.getFullYear() !== currentYear) return
+        index = date.getMonth()
+      }
+
+      if (index < 0 || index >= labels.length) return
+      if (rec.status === 'Present') present[index]++
+      else if (rec.status === 'Absent') absent[index]++
+    })
+
+    return { present, absent }
+  }
+
+  const trendCounts = attendanceTrendCounts()
+  const attendanceTrendData = {
+    labels: attendanceTrendLabels(),
   const daysInMonth = new Date(year, month + 1, 0).getDate()
 
   const labels = Array.from(
@@ -456,7 +537,7 @@ const HRPage = () => {
     datasets: [
       {
         label: 'Present',
-        data: presentByDay,
+        data: trendCounts.present,
         borderColor: '#22c55e',
         backgroundColor: 'rgba(34, 197, 94, 0.1)',
         fill: true,
@@ -464,7 +545,7 @@ const HRPage = () => {
       },
       {
         label: 'Absent',
-        data: absentByDay,
+        data: trendCounts.absent,
         borderColor: '#ef4444',
         backgroundColor: 'rgba(239, 68, 68, 0.05)',
         fill: true,
@@ -620,30 +701,136 @@ const HRPage = () => {
 
       {/* ── Charts Section ── */}
       {dashboard && (attendanceRecords.length > 0 || departments.length > 0 || leaves.length > 0) && (
+        <>
           <div className="charts-section">
-          <div className="chart-card">
-            <h4>Attendance Trend</h4>
-            <div className="chart-container">
-              <div className="attendance-chart-scroll">
-                <div className="attendance-chart-inner">
-                  <Line data={attendanceTrendData} options={lineOptions} />
+            <div className="chart-card">
+              <div className="chart-card-header">
+                <h4>Attendance Trend</h4>
+                <div className="chart-header-row">
+                  <div className="trend-tabs">
+                    {['weekly', 'monthly', 'yearly'].map((period) => (
+                      <div key={period} className={`trend-tab ${attendanceTrendPeriod === period ? 'active' : ''}`}>
+                        <button
+                          type="button"
+                          className={`trend-tab-button ${attendanceTrendPeriod === period ? 'active' : ''}`}
+                          onClick={() => setAttendanceTrendPeriod(period)}
+                        >
+                          {period.charAt(0).toUpperCase() + period.slice(1)}
+                        </button>
+                        {period === 'monthly' && (
+                          <div className="monthly-dropdown">
+                            {['weekwise', 'datewise'].map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                className={`dropdown-item ${attendanceTrendMonthlyMode === mode ? 'active' : ''}`}
+                                onClick={() => setAttendanceTrendMonthlyMode(mode)}
+                              >
+                                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="chart-header-actions">
+                    <button
+                      type="button"
+                      className="chart-expand-button small"
+                      onClick={() => setAttendanceTrendModalOpen(true)}
+                      aria-label="Open full screen"
+                    >
+                      <Maximize2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="chart-scroll-wrapper">
+                <div
+                  className="chart-container"
+                  style={{
+                    minWidth:
+                      attendanceTrendPeriod === 'monthly' && attendanceTrendMonthlyMode === 'datewise'
+                        ? `${attendanceTrendLabels().length * 30}px`
+                        : '100%',
+                  }}
+                >
+                  <Line key={`line-${themeTick}-${attendanceTrendPeriod}`} data={attendanceTrendData} options={chartOptions(true)} />
                 </div>
               </div>
             </div>
-          </div>
-          <div className="chart-card">
-            <h4>Department Distribution</h4>
-            <div className="chart-container">
-              <Doughnut data={departmentChartData} options={doughnutChartOptions} />
+            <div className="chart-card">
+              <h4>Department Distribution</h4>
+              <div className="chart-container">
+                <Doughnut key={`dept-${themeTick}`} data={departmentChartData} options={doughnutOptions(true)} />
+              </div>
+            </div>
+            <div className="chart-card">
+              <h4>Leave Requests</h4>
+              <div className="chart-container">
+                <Doughnut key={`leave-${themeTick}`} data={leaveChartData} options={doughnutOptions(true)} />
+              </div>
             </div>
           </div>
-          <div className="chart-card">
-            <h4>Leave Requests</h4>
-            <div className="chart-container">
-              <Doughnut data={leaveChartData} options={doughnutChartOptions} />
+
+          {attendanceTrendModalOpen && (
+            <div className="modal-overlay" role="dialog" aria-modal="true">
+              <div className="modal-content chart-modal-content">
+                <div className="modal-header">
+                  <h3>Attendance Trend ({attendanceTrendPeriod.charAt(0).toUpperCase() + attendanceTrendPeriod.slice(1)})</h3>
+                  <button className="modal-close" type="button" onClick={() => setAttendanceTrendModalOpen(false)}>
+                    ×
+                  </button>
+                </div>
+                <div className="modal-form">
+                  <div className="chart-card-actions modal-actions-row">
+                    <div className="trend-tabs modal-tabs">
+                      {['weekly', 'monthly', 'yearly'].map((period) => (
+                        <div key={`modal-${period}`} className={`trend-tab ${attendanceTrendPeriod === period ? 'active' : ''}`}>
+                          <button
+                            type="button"
+                            className={`trend-tab-button ${attendanceTrendPeriod === period ? 'active' : ''}`}
+                            onClick={() => setAttendanceTrendPeriod(period)}
+                          >
+                            {period.charAt(0).toUpperCase() + period.slice(1)}
+                          </button>
+                          {period === 'monthly' && (
+                            <div className="monthly-dropdown">
+                              {['weekwise', 'datewise'].map((mode) => (
+                                <button
+                                  key={`modal-monthly-${mode}`}
+                                  type="button"
+                                  className={`dropdown-item ${attendanceTrendMonthlyMode === mode ? 'active' : ''}`}
+                                  onClick={() => setAttendanceTrendMonthlyMode(mode)}
+                                >
+                                  {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="chart-scroll-wrapper">
+                    <div
+                      className="chart-container chart-modal-chart"
+                      style={{
+                        minWidth:
+                          attendanceTrendPeriod === 'monthly' && attendanceTrendMonthlyMode === 'datewise'
+                            ? `${attendanceTrendLabels().length * 30}px`
+                            : '100%',
+                      }}
+                    >
+                      <Line key={`modal-line-${attendanceTrendPeriod}-${themeTick}`} data={attendanceTrendData} options={chartOptions(true)} />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          )}
+        </>
       )}
 
       {/* ── Pill Tabs ── */}

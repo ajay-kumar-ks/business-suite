@@ -107,6 +107,16 @@ async def startup_event():
 
     register_event_handlers()
     register_salary_event_handlers()
+
+    # Seed default chart of accounts if missing (e.g. Salary Payable 2100)
+    from app.core.database import SessionLocal as _SeedSession
+    from app.modules.accounts.services import seed_default_chart_of_accounts
+    _seed_db = _SeedSession()
+    try:
+        seed_default_chart_of_accounts(_seed_db)
+    finally:
+        _seed_db.close()
+
     event_bus.connect()
 
     # Register tasks module event handlers
@@ -258,6 +268,16 @@ async def _run_database_migrations():
 
     register_event_handlers()
     register_salary_event_handlers()
+
+    # Seed default chart of accounts if missing (e.g. Salary Payable 2100)
+    from app.core.database import SessionLocal as _SeedSession
+    from app.modules.accounts.services import seed_default_chart_of_accounts
+    _seed_db = _SeedSession()
+    try:
+        seed_default_chart_of_accounts(_seed_db)
+    finally:
+        _seed_db.close()
+
     event_bus.connect()
 
     # Register tasks module event handlers

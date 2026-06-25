@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import Sidebar from '../modules/dashboard/components/Sidebar'
 import Navbar from '../modules/dashboard/components/Navbar'
 import '../styles/ModulePage.css'
+import '../styles/Dashboard.css'
 
 const PageShell = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false)
@@ -47,7 +48,7 @@ const PageShell = ({ children }) => {
       <div className={`main-content ${collapsed ? 'collapsed' : ''}`}>
         <Navbar collapsed={collapsed} setCollapsed={setCollapsed} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
-        <div className={`dashboard-content ${activeModule}`}>
+        <div className="dashboard-content">
           {children}
         </div>
       </div>

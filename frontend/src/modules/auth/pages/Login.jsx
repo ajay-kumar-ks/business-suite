@@ -24,7 +24,7 @@ const Login = ({ onLoginSuccess }) => {
     const success = await login(username, password)
     if (success) {
       if (onLoginSuccess) onLoginSuccess()
-      else navigate('/dashboard')
+      else navigate('/hr')
     } else {
       setError('Invalid username or password')
     }

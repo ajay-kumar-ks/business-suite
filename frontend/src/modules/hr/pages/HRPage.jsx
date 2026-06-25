@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Users,
   Building2,
@@ -12,6 +12,7 @@ import {
   Trash2,
   Settings,
   Maximize2,
+  Brain,
 } from 'lucide-react'
 import {
   Chart as ChartJS,
@@ -30,7 +31,6 @@ import '../../../styles/ModulePage.css'
 import '../styles/HRPage.css'
 import EmployeeTable from '../components/EmployeeTable'
 import EmployeeModal from '../components/EmployeeModal'
-import RoleTable from '../components/RoleTable'
 import DepartmentTable from '../components/DepartmentTable'
 import AttendanceTable from '../components/AttendanceTable'
 import LeaveTable from '../components/LeaveTable'
@@ -44,8 +44,13 @@ import ConvertToEmployeeModal from '../components/ConvertToEmployeeModal'
 import PipelineManager from '../components/PipelineManager'
 import { hrAPI } from '../services/hrApi'
 import { recruitmentAPI } from '../services/recruitmentApi'
+import { hrAiAPI } from '../services/hrAiApi'
+import AIInsights from '../components/AIInsights'
+import HRChatBot from '../components/HRChatBot'
 import Button from '../../../components/ui/Button'
+import { useTheme } from '../../../context/ThemeContext'
 import '../styles/Recruitment.css'
+import '../styles/HRChatBot.css'
 
 // ── Register Chart.js components ──
 ChartJS.register(
@@ -62,12 +67,12 @@ ChartJS.register(
 
 const TABS = [
   { id: 'users', label: 'Users', icon: Users },
-  { id: 'roles', label: 'Roles', icon: Users },
   { id: 'departments', label: 'Departments', icon: Building2 },
   { id: 'employees', label: 'Employees', icon: Users },
   { id: 'recruitment', label: 'Recruitment', icon: UserPlus },
   { id: 'attendance', label: 'Attendance', icon: UserCheck },
   { id: 'leaves', label: 'Leaves', icon: Clock },
+  { id: 'ai-insights', label: 'AI Insights', icon: Brain },
 ]
 
 const CARD_CONFIG = [
@@ -78,19 +83,11 @@ const CARD_CONFIG = [
   { key: 'pending_leaves', label: 'Pending Leaves', icon: Clock, color: '#f59e0b', bg: '#fffbeb' },
 ]
 
-// ── Dark mode chart defaults ──
-const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark'
-
-const chartTextColor = () => (isDark() ? '#94a3b8' : '#64748b')
-const chartGridColor = () => (isDark() ? '#1e293b' : '#f1f5f9')
-
 const HRPage = () => {
   const [activeTab, setActiveTab] = useState('users')
 
   const [employees, setEmployees] = useState([])
   const [employeesLoading, setEmployeesLoading] = useState(true)
-  const [roles, setRoles] = useState([])
-  const [rolesLoading, setRolesLoading] = useState(true)
   const [departments, setDepartments] = useState([])
   const [departmentsLoading, setDepartmentsLoading] = useState(true)
   const [attendanceRecords, setAttendanceRecords] = useState([])
@@ -140,6 +137,7 @@ const HRPage = () => {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
     return () => observer.disconnect()
   }, [])
+  const [pipelineTemplates, setPipelineTemplates] = useState([])
 
   // ── Fetch dashboard ──
   const fetchDashboard = useCallback(async () => {
@@ -161,19 +159,6 @@ const HRPage = () => {
       console.error('Failed to fetch employees:', err)
     } finally {
       setEmployeesLoading(false)
-    }
-  }, [])
-
-  // ── Fetch roles ──
-  const fetchRoles = useCallback(async () => {
-    setRolesLoading(true)
-    try {
-      const res = await hrAPI.getRoles()
-      setRoles(res.data || [])
-    } catch (err) {
-      console.error('Failed to fetch roles:', err)
-    } finally {
-      setRolesLoading(false)
     }
   }, [])
 
@@ -254,9 +239,17 @@ const HRPage = () => {
     }
   }, [])
 
+  const fetchPipelineTemplates = useCallback(async () => {
+    try {
+      const res = await recruitmentAPI.getPipelineTemplates()
+      setPipelineTemplates(res.data || [])
+    } catch (err) {
+      console.error('Failed to fetch pipeline templates:', err)
+    }
+  }, [])
+
   useEffect(() => {
     fetchUsers()
-    fetchRoles()
     fetchDepartments()
     fetchEmployees()
     fetchAttendance()
@@ -264,7 +257,8 @@ const HRPage = () => {
     fetchDashboard()
     fetchCandidates()
     fetchRecruitmentStats()
-  }, [fetchUsers, fetchRoles, fetchDepartments, fetchEmployees, fetchAttendance, fetchLeaves, fetchDashboard, fetchCandidates, fetchRecruitmentStats])
+    fetchPipelineTemplates()
+  }, [fetchUsers, fetchDepartments, fetchEmployees, fetchAttendance, fetchLeaves, fetchDashboard, fetchCandidates, fetchRecruitmentStats, fetchPipelineTemplates])
 
   // ── Employee handlers ──
   const handleAddEmployee = () => {
@@ -293,7 +287,6 @@ const HRPage = () => {
       `Employee: ${employee.employee_code}\n` +
         `Name: ${employee.user_name}\n` +
         `Department: ${employee.department_name || 'N/A'}\n` +
-        `Role: ${employee.role_name || 'N/A'}\n` +
         `Phone: ${employee.phone || 'N/A'}\n` +
         `Status: ${employee.status}\n` +
         `Joined: ${employee.joining_date || 'N/A'}\n` +
@@ -385,30 +378,42 @@ const HRPage = () => {
   }
 
   const handleMoveStage = async (candidateId, targetStage) => {
-    await recruitmentAPI.moveStage(candidateId, targetStage)
+    // Optimistic update: move card instantly in local state
+    const newStatus =
+      targetStage === 'Rejected' ? 'rejected'
+      : targetStage === 'Onboarded' ? 'onboarded'
+      : undefined
+
+    setCandidates((prev) =>
+      prev.map((c) =>
+        c.id === candidateId
+          ? { ...c, current_stage: targetStage, ...(newStatus && { status: newStatus }) }
+          : c
+      )
+    )
+    // Fire API in background — no await, instant UI update
+    recruitmentAPI.moveStage(candidateId, targetStage).catch(() => {
+      // If API fails, refetch to revert
+      fetchCandidates()
+    })
+    // Silently refresh stats in background
+    fetchRecruitmentStats()
   }
 
-  const handleConvertToEmployee = (candidate) => {
+  const handleConvertToEmployee = async (candidate) => {
     setCandidateToConvert(candidate)
     setConvertModalOpen(true)
   }
 
-  const handleDoConvert = async (candidateId, data) => {
-    const res = await recruitmentAPI.convertToEmployee(candidateId, data)
-    const emp = res.data.employee
-    alert(
-      `Candidate converted to employee successfully!\n\n` +
-      `Employee Code: ${emp.employee_code}\n` +
-      `Name: ${emp.full_name || candidateToConvert?.full_name}\n\n` +
-      `A user account was NOT created. Go to User Management to create login credentials for this employee.`
-    )
+  const handleConverted = () => {
     fetchCandidates()
     fetchRecruitmentStats()
     fetchEmployees()
+    setConvertModalOpen(false)
+    setCandidateToConvert(null)
   }
 
   const handlePipelinesSaved = () => {
-    fetchRoles()
   }
 
   const handleCandidateModalClose = () => {
@@ -416,12 +421,30 @@ const HRPage = () => {
     setEditingCandidate(null)
   }
 
+  const { theme } = useTheme()
+  const isDarkMode = theme === 'dark'
+
   // ════════════════════════════════════════════════
-  //  CHART DATA
+  //  CHART COLORS (reactively derived from theme)
   // ════════════════════════════════════════════════
 
-  const tc = chartTextColor()
-  const gc = chartGridColor()
+  const chartColors = useMemo(() => ({
+    text: isDarkMode ? '#94a3b8' : '#64748b',
+    grid: isDarkMode ? '#1e293b' : '#f1f5f9',
+    tooltipBg: isDarkMode ? '#1e293b' : '#ffffff',
+    tooltipTitle: isDarkMode ? '#e2e8f0' : '#1e293b',
+    tooltipBody: isDarkMode ? '#cbd5e1' : '#475569',
+    tooltipBorder: isDarkMode ? '#334155' : '#e2e8f0',
+  }), [isDarkMode])
+
+  // ════════════════════════════════════════════════
+  //  CHART DATA (memoized)
+  // ════════════════════════════════════════════════
+
+ const attendanceTrendData = useMemo(() => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
 
   // ── Attendance Trend ──
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -480,6 +503,37 @@ const HRPage = () => {
   const trendCounts = attendanceTrendCounts()
   const attendanceTrendData = {
     labels: attendanceTrendLabels(),
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+
+  const labels = Array.from(
+    { length: daysInMonth },
+    (_, i) => `${i + 1}`
+  )
+
+  const presentByDay = Array(daysInMonth).fill(0)
+  const absentByDay = Array(daysInMonth).fill(0)
+
+  attendanceRecords.forEach((rec) => {
+    if (!rec.date) return
+
+    const date = new Date(rec.date)
+
+    if (
+      date.getMonth() === month &&
+      date.getFullYear() === year
+    ) {
+      const day = date.getDate() - 1
+
+      if (rec.status === 'Present')
+        presentByDay[day]++
+
+      if (rec.status === 'Absent')
+        absentByDay[day]++
+    }
+  })
+
+  return {
+    labels,
     datasets: [
       {
         label: 'Present',
@@ -488,8 +542,6 @@ const HRPage = () => {
         backgroundColor: 'rgba(34, 197, 94, 0.1)',
         fill: true,
         tension: 0.4,
-        pointRadius: 4,
-        pointHoverRadius: 6,
       },
       {
         label: 'Absent',
@@ -498,66 +550,70 @@ const HRPage = () => {
         backgroundColor: 'rgba(239, 68, 68, 0.05)',
         fill: true,
         tension: 0.4,
-        pointRadius: 4,
-        pointHoverRadius: 6,
       },
     ],
   }
-
+}, [attendanceRecords])
   // ── Department Distribution ──
-  const deptLabels = departments.length ? departments.map((d) => d.name) : ['Engineering', 'Marketing', 'Sales', 'Operations']
-  const deptData = departments.length
-    ? departments.map((d) => employees.filter((e) => e.department_name === d.name).length)
-    : [8, 5, 6, 4]
+  const departmentChartData = useMemo(() => {
+    const deptLabels = departments.length ? departments.map((d) => d.name) : ['Engineering', 'Marketing', 'Sales', 'Operations']
+    const deptData = departments.length
+      ? departments.map((d) => employees.filter((e) => e.department_name === d.name).length)
+      : [8, 5, 6, 4]
 
-  const departmentChartData = {
-    labels: deptLabels,
-    datasets: [
-      {
-        data: deptData,
-        backgroundColor: ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6'],
-        borderWidth: 0,
-        hoverOffset: 8,
-      },
-    ],
-  }
+    return {
+      labels: deptLabels,
+      datasets: [
+        {
+          data: deptData,
+          backgroundColor: ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6'],
+          borderWidth: 0,
+          hoverOffset: 8,
+        },
+      ],
+    }
+  }, [departments, employees])
 
   // ── Leave Status ──
-  const leavePending = leaves.filter((l) => l.status === 'Pending').length
-  const leaveApproved = leaves.filter((l) => l.status === 'Approved').length
-  const leaveRejected = leaves.filter((l) => l.status === 'Rejected').length
+  const leaveChartData = useMemo(() => {
+    const leavePending = leaves.filter((l) => l.status === 'Pending').length
+    const leaveApproved = leaves.filter((l) => l.status === 'Approved').length
+    const leaveRejected = leaves.filter((l) => l.status === 'Rejected').length
 
-  const leaveChartData = {
-    labels: ['Pending', 'Approved', 'Rejected'],
-    datasets: [
-      {
-        data: [leavePending, leaveApproved, leaveRejected],
-        backgroundColor: ['#f59e0b', '#22c55e', '#ef4444'],
-        borderWidth: 0,
-        hoverOffset: 8,
-      },
-    ],
-  }
+    return {
+      labels: ['Pending', 'Approved', 'Rejected'],
+      datasets: [
+        {
+          data: [leavePending, leaveApproved, leaveRejected],
+          backgroundColor: ['#f59e0b', '#22c55e', '#ef4444'],
+          borderWidth: 0,
+          hoverOffset: 8,
+        },
+      ],
+    }
+  }, [leaves])
 
-  const chartOptions = (showLegend = false) => ({
+  // ════════════════════════════════════════════════
+  //  CHART OPTIONS (memoized per theme)
+  // ════════════════════════════════════════════════
+
+  const { text: tc, grid: gc, tooltipBg, tooltipTitle, tooltipBody, tooltipBorder } = chartColors
+
+  const lineOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    resizeDelay: 200,
     plugins: {
       legend: {
-        display: showLegend,
+        display: true,
         position: 'bottom',
-        labels: {
-          color: tc,
-          padding: 12,
-          usePointStyle: true,
-          font: { size: 11 },
-        },
+        labels: { color: tc, padding: 12, usePointStyle: true, font: { size: 11 } },
       },
       tooltip: {
-        backgroundColor: isDark() ? '#1e293b' : '#ffffff',
-        titleColor: isDark() ? '#e2e8f0' : '#1e293b',
-        bodyColor: isDark() ? '#cbd5e1' : '#475569',
-        borderColor: isDark() ? '#334155' : '#e2e8f0',
+        backgroundColor: tooltipBg,
+        titleColor: tooltipTitle,
+        bodyColor: tooltipBody,
+        borderColor: tooltipBorder,
         borderWidth: 1,
         cornerRadius: 8,
         padding: 10,
@@ -574,34 +630,30 @@ const HRPage = () => {
         beginAtZero: true,
       },
     },
-  })
+  }), [tc, gc, tooltipBg, tooltipTitle, tooltipBody, tooltipBorder])
 
-  const doughnutOptions = (showLegend = true) => ({
+  const doughnutChartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    resizeDelay: 200,
     cutout: '65%',
     plugins: {
       legend: {
-        display: showLegend,
+        display: true,
         position: 'bottom',
-        labels: {
-          color: tc,
-          padding: 12,
-          usePointStyle: true,
-          font: { size: 11 },
-        },
+        labels: { color: tc, padding: 12, usePointStyle: true, font: { size: 11 } },
       },
       tooltip: {
-        backgroundColor: isDark() ? '#1e293b' : '#ffffff',
-        titleColor: isDark() ? '#e2e8f0' : '#1e293b',
-        bodyColor: isDark() ? '#cbd5e1' : '#475569',
-        borderColor: isDark() ? '#334155' : '#e2e8f0',
+        backgroundColor: tooltipBg,
+        titleColor: tooltipTitle,
+        bodyColor: tooltipBody,
+        borderColor: tooltipBorder,
         borderWidth: 1,
         cornerRadius: 8,
         padding: 10,
       },
     },
-  })
+  }), [tc, tooltipBg, tooltipTitle, tooltipBody, tooltipBorder])
 
   // ════════════════════════════════════════════════
   //  RENDER
@@ -826,16 +878,6 @@ const HRPage = () => {
         </div>
       )}
 
-      {/* ── Roles Tab ── */}
-      {activeTab === 'roles' && (
-        <div className="page-section">
-          <div className="section-header">
-            <h3>Role Tags</h3>
-          </div>
-          <RoleTable roles={roles} loading={rolesLoading} onRefresh={fetchRoles} />
-        </div>
-      )}
-
       {/* ── Departments Tab ── */}
       {activeTab === 'departments' && (
         <div className="page-section">
@@ -877,8 +919,6 @@ const HRPage = () => {
             onSave={handleSaveEmployee}
             initialData={editingEmployee}
             users={authUsers}
-            departments={departments}
-            roles={roles}
           />
         </div>
       )}
@@ -935,6 +975,7 @@ const HRPage = () => {
             <RecruitmentKanban
               candidates={candidates}
               loading={candidatesLoading}
+              departments={departments}
               onMoveStage={handleMoveStage}
               onViewDetails={handleViewCandidate}
               onConvertToEmployee={handleConvertToEmployee}
@@ -952,7 +993,7 @@ const HRPage = () => {
                 </Button>
               </div>
               <p style={{ color: '#64748b', fontSize: '0.85rem', fontStyle: 'italic' }}>
-                Configure which recruitment stages each role should have. Click "Manage Pipeline Templates" to view and edit.
+                Configure recruitment pipeline stages. Click "Manage Pipeline Templates" to view and edit.
               </p>
             </div>
           )}
@@ -976,9 +1017,11 @@ const HRPage = () => {
                       <tr>
                         <th>Name</th>
                         <th>Email</th>
-                        <th>Position</th>
-                        <th>Experience</th>
+                        <th>Phone</th>
+                        <th>Department</th>
                         <th>Stage</th>
+                        <th>Status</th>
+                        <th>Created</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -998,12 +1041,24 @@ const HRPage = () => {
                           <tr key={c.id}>
                             <td className="name-cell">{c.full_name}</td>
                             <td>{c.email}</td>
-                            <td>{c.position_applied}</td>
-                            <td>{c.experience_years} yrs</td>
+                            <td>{c.phone || '—'}</td>
+                            <td>{c.department_name || 'N/A'}</td>
                             <td>
                               <span className="status-badge" style={{ backgroundColor: stageColors[c.current_stage] || '#6b7280' }}>
                                 {c.current_stage}
                               </span>
+                            </td>
+                            <td>
+                              <span style={{
+                                fontSize: '0.78rem',
+                                fontWeight: 600,
+                                color: c.status === 'converted' ? '#3b82f6' : c.status === 'rejected' ? '#ef4444' : c.status === 'onboarded' ? '#14b8a6' : '#64748b',
+                              }}>
+                                {c.status}
+                              </span>
+                            </td>
+                            <td style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                              {c.created_at ? new Date(c.created_at).toLocaleDateString() : '—'}
                             </td>
                             <td className="actions-cell">
                               <button className="action-btn view" onClick={() => handleViewCandidate(c)} title="View details">
@@ -1015,11 +1070,7 @@ const HRPage = () => {
                               <button className="action-btn delete" onClick={() => handleDeleteCandidate(c)} title="Delete candidate">
                                 <Trash2 size={16} />
                               </button>
-                              {c.current_stage === 'Onboarded' && !c.converted_to_employee && (
-                                <button className="action-btn approve" onClick={() => handleConvertToEmployee(c)} title="Convert to employee">
-                                  <UserPlus size={16} />
-                                </button>
-                              )}
+
                             </td>
                           </tr>
                         )
@@ -1036,6 +1087,7 @@ const HRPage = () => {
             isOpen={pipelineManagerOpen}
             onClose={() => setPipelineManagerOpen(false)}
             onSaved={handlePipelinesSaved}
+            departments={departments}
           />
 
           <CandidateModal
@@ -1043,8 +1095,9 @@ const HRPage = () => {
               onClose={handleCandidateModalClose}
               onSave={handleSaveCandidate}
               initialData={editingCandidate}
-              roles={roles}
-            />
+              departments={departments}
+              pipelineTemplates={pipelineTemplates}
+          />
 
           <CandidateDetail
             candidate={selectedCandidate}
@@ -1052,12 +1105,11 @@ const HRPage = () => {
           />
 
           <ConvertToEmployeeModal
+            key={candidateToConvert?.id || 'convert'}
             isOpen={convertModalOpen}
             onClose={() => { setConvertModalOpen(false); setCandidateToConvert(null) }}
-            onConvert={handleDoConvert}
             candidate={candidateToConvert}
-            departments={departments}
-            roles={roles}
+            onConverted={handleConverted}
           />
         </div>
       )}
@@ -1085,6 +1137,27 @@ const HRPage = () => {
           />
         </div>
       )}
+
+      {/* ── AI Insights Tab ── */}
+      {activeTab === 'ai-insights' && (
+        <div className="page-section">
+          <div className="section-header">
+            <h3>AI HR Insights</h3>
+          </div>
+          <div style={{ maxWidth: 768, margin: '0 auto' }}>
+            <AIInsights
+              variant="page"
+              onGenerate={async () => {
+                const res = await hrAiAPI.getInsights()
+                return res
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* HR Chatbot — floating assistant */}
+      <HRChatBot />
     </div>
   )
 }

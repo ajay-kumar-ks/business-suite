@@ -31,12 +31,6 @@ const RecruitmentDashboard = ({ stats, loading }) => {
 
   if (!stats) return null
 
-  // Compute open_positions from by_position data
-  const enrichedStats = {
-    ...stats,
-    open_positions: stats.by_position?.length || 0,
-  }
-
   return (
     <>
       <div className="dashboard-cards">
@@ -48,7 +42,7 @@ const RecruitmentDashboard = ({ stats, loading }) => {
                 <IconComp size={22} />
               </div>
               <div className="card-info">
-                <span className="card-value">{enrichedStats[card.key] ?? 0}</span>
+                <span className="card-value">{stats[card.key] ?? 0}</span>
                 <span className="card-label">{card.label}</span>
               </div>
             </div>
@@ -84,15 +78,15 @@ const RecruitmentDashboard = ({ stats, loading }) => {
             </div>
           </div>
           <div className="chart-card">
-            <h4>Open Positions</h4>
+            <h4>Candidates by Department</h4>
             <div style={{ padding: '12px 0' }}>
-              {(stats.by_position || []).map((item, idx) => (
+              {(stats.by_department || []).map((item, idx) => (
                 <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.85rem' }}>
-                  <span style={{ color: '#475569' }}>{item.position}</span>
+                  <span style={{ color: '#475569' }}>{item.department}</span>
                   <span style={{ fontWeight: 600, color: '#1e293b' }}>{item.count}</span>
                 </div>
               ))}
-              {(!stats.by_position || stats.by_position.length === 0) && (
+              {(!stats.by_department || stats.by_department.length === 0) && (
                 <div style={{ color: '#94a3b8', textAlign: 'center', padding: 12, fontSize: '0.85rem' }}>No data yet</div>
               )}
             </div>

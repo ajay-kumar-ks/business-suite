@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { X, ArrowLeftRight, CheckCircle2, Trash2, Sparkles, Mail, Calendar, ArrowRightCircle } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Loader from '../../../components/ui/Loader'
-import api, { crmAPI } from '../../../services/api'
+import api from '../../../services/api'
 import '../styles/LeadsView.css'
 
 const URGENCY_ICONS = {
@@ -218,53 +218,23 @@ const LeadDetailModal = ({
           </div>
         </div>
 
-        <div className="lead-detail-tabs">
-          <button
-            type="button"
-            className={`lead-detail-tab ${activeTab === 'details' ? 'active' : ''}`}
-            onClick={() => setActiveTab('details')}
-          >
-            Details
-          </button>
-          <button
-            type="button"
-            className={`lead-detail-tab ${activeTab === 'logs' ? 'active' : ''}`}
-            onClick={() => setActiveTab('logs')}
-          >
-            Logs
-          </button>
-          <button
-            type="button"
-            className={`lead-detail-tab ${activeTab === 'remarks' ? 'active' : ''}`}
-            onClick={() => setActiveTab('remarks')}
-          >
-            Remarks
-          </button>
+        <div className="lead-detail-block">
+          <h4>Notes</h4>
+          <p>{lead.notes || 'No notes added yet.'}</p>
         </div>
 
-        <div className="lead-detail-tab-panel">
-          {activeTab === 'details' && (
-            <>
-              <div className="lead-detail-block">
-                <h4>Notes</h4>
-                <p>{lead.notes || 'No notes added yet.'}</p>
-              </div>
-
-              <div className="lead-detail-block">
-                <h4>Timeline</h4>
-                {history.length === 0 ? (
-                  <p>No timeline events yet.</p>
-                ) : (
-                  <div className="lead-timeline">
-                    {history.map((event, index) => (
-                      <div key={index} className="timeline-item">
-                        <div className="timeline-dot" />
-                        <div>
-                          <div className="timeline-message">{event.message || event.type}</div>
-                          <div className="timeline-meta">{new Date(event.timestamp).toLocaleString()}</div>
-                        </div>
-                      </div>
-                    ))}
+        <div className="lead-detail-block">
+          <h4>Timeline</h4>
+          {history.length === 0 ? (
+            <p>No timeline events yet.</p>
+          ) : (
+            <div className="lead-timeline">
+              {history.map((event, index) => (
+                <div key={index} className="timeline-item">
+                  <div className="timeline-dot" />
+                  <div>
+                    <div className="timeline-message">{event.message || event.type}</div>
+                    <div className="timeline-meta">{new Date(event.timestamp).toLocaleString()}</div>
                   </div>
                 )}
               </div>
@@ -422,6 +392,8 @@ const LeadDetailModal = ({
                   </div>
                 )}
               </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

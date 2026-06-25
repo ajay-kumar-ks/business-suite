@@ -11,7 +11,7 @@ import {
 import Button from '../../../components/ui/Button'
 import { recruitmentAPI } from '../services/recruitmentApi'
 
-const PipelineManager = ({ isOpen, onClose, onSaved }) => {
+const PipelineManager = ({ isOpen, onClose, onSaved, departments = [] }) => {
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState(null)
@@ -19,6 +19,8 @@ const PipelineManager = ({ isOpen, onClose, onSaved }) => {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [saving, setSaving] = useState(false)
+  const [selectedDeptId, setSelectedDeptId] = useState('')
+  const [newDeptStages, setNewDeptStages] = useState(['Applied', 'Screening', 'Interview', 'HR Interview', 'Selected', 'Onboarded'])
 
   useEffect(() => {
     if (isOpen) {
@@ -42,12 +44,55 @@ const PipelineManager = ({ isOpen, onClose, onSaved }) => {
   const handleSeedPipelines = async () => {
     try {
       await recruitmentAPI.seedPipelines()
-      setSuccess('Default pipeline templates created for roles!')
+      setSuccess('Default pipeline templates created for departments!')
       fetchTemplates()
       setTimeout(() => setSuccess(''), 3000)
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to seed pipelines')
     }
+  }
+
+  const handleCreatePipeline = async () => {
+    if (!selectedDeptId) {
+      setError('Please select a department')
+      return
+    }
+    if (newDeptStages.some((s) => !s.trim())) {
+      setError('All stage names must be non-empty')
+      return
+    }
+    if (newDeptStages[0] !== 'Applied') {
+      setError('First stage must be "Applied"')
+      return
+    }
+    if (newDeptStages[newDeptStages.length - 1] !== 'Onboarded') {
+      setError('Last stage must be "Onboarded"')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+    try {
+      await recruitmentAPI.createPipelineTemplate({
+        department_id: parseInt(selectedDeptId, 10),
+        stages: newDeptStages,
+      })
+      setSuccess('Pipeline template created!')
+      setSelectedDeptId('')
+      setNewDeptStages(['Applied', 'Screening', 'Interview', 'HR Interview', 'Selected', 'Onboarded'])
+      fetchTemplates()
+      if (onSaved) onSaved()
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to create pipeline')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const getDeptsWithTemplates = () => {
+    const templateDeptIds = new Set(templates.map((t) => t.department_id))
+    return departments.filter((d) => !templateDeptIds.has(d.id))
   }
 
   const startEditing = (template) => {
@@ -82,7 +127,6 @@ const PipelineManager = ({ isOpen, onClose, onSaved }) => {
   }
 
   const savePipeline = async (templateId) => {
-    // Validate
     if (editStages.some((s) => !s.trim())) {
       setError('All stage names must be non-empty')
       return
@@ -112,13 +156,28 @@ const PipelineManager = ({ isOpen, onClose, onSaved }) => {
     }
   }
 
+  const addNewStageItem = () => {
+    setNewDeptStages([...newDeptStages, ''])
+  }
+
+  const removeNewStageItem = (idx) => {
+    if (newDeptStages.length <= 2) return
+    setNewDeptStages(newDeptStages.filter((_, i) => i !== idx))
+  }
+
+  const updateNewStageItem = (idx, value) => {
+    const updated = [...newDeptStages]
+    updated[idx] = value
+    setNewDeptStages(updated)
+  }
+
   if (!isOpen) return null
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 650 }}>
         <div className="modal-header">
-          <h3>Pipeline Templates</h3>
+          <h3>Department Pipeline Templates</h3>
           <button className="modal-close" onClick={onClose} type="button" title="Close">
             <X size={18} />
           </button>
@@ -143,9 +202,71 @@ const PipelineManager = ({ isOpen, onClose, onSaved }) => {
               Auto-Create Defaults
             </Button>
             <span style={{ fontSize: '0.78rem', color: '#64748b', alignSelf: 'center' }}>
-              Create pipeline templates for all roles without one
+              Create default pipeline templates for all departments
             </span>
           </div>
+
+          {/* Create new pipeline for department */}
+          {getDeptsWithTemplates().length > 0 && (
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: 10,
+              padding: 16,
+              marginBottom: 16,
+            }}>
+              <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', color: '#1e293b' }}>
+                Create Pipeline for Department
+              </h4>
+              <div style={{ marginBottom: 12 }}>
+                <select
+                  value={selectedDeptId}
+                  onChange={(e) => setSelectedDeptId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  <option value="">Select a department...</option>
+                  {getDeptsWithTemplates().map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+              {selectedDeptId && (
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                    {newDeptStages.map((stage, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#94a3b8', minWidth: 24 }}>{idx + 1}.</span>
+                        <input
+                          type="text"
+                          value={stage}
+                          onChange={(e) => updateNewStageItem(idx, e.target.value)}
+                          style={{ flex: 1, padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: '0.85rem' }}
+                        />
+                        <button onClick={() => removeNewStageItem(idx)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 4 }} title="Remove stage">
+                          <Trash2 size={14} />
+                        </button>
+                        {idx === newDeptStages.length - 1 && (
+                          <button onClick={addNewStageItem} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', padding: 4 }} title="Add stage">
+                            <Plus size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <Button size="sm" variant="primary" onClick={handleCreatePipeline} disabled={saving}>
+                    <Plus size={14} style={{ marginRight: 4 }} />
+                    {saving ? 'Creating...' : 'Create Pipeline'}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
 
           {loading ? (
             <div className="table-status">
@@ -155,7 +276,7 @@ const PipelineManager = ({ isOpen, onClose, onSaved }) => {
           ) : templates.length === 0 ? (
             <div className="table-status empty">
               <Settings size={24} style={{ opacity: 0.4 }} />
-              <span>No pipeline templates found. Click "Auto-Create Defaults" to generate them from roles.</span>
+              <span>No pipeline templates found. Select a department above to create one.</span>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -171,7 +292,7 @@ const PipelineManager = ({ isOpen, onClose, onSaved }) => {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>{template.role_name || `Role #${template.role_id}`}</strong>
+                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>{template.department_name || `Dept #${template.department_id}`}</strong>
                       <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: 8 }}>
                         ({template.stages.length} stages)
                       </span>
@@ -195,48 +316,18 @@ const PipelineManager = ({ isOpen, onClose, onSaved }) => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {editStages.map((stage, idx) => (
                         <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.72rem', color: '#94a3b8', minWidth: 24 }}>
-                            {idx + 1}.
-                          </span>
+                          <span style={{ fontSize: '0.72rem', color: '#94a3b8', minWidth: 24 }}>{idx + 1}.</span>
                           <input
                             type="text"
                             value={stage}
                             onChange={(e) => updateStage(idx, e.target.value)}
-                            style={{
-                              flex: 1,
-                              padding: '6px 10px',
-                              border: '1px solid #d1d5db',
-                              borderRadius: 6,
-                              fontSize: '0.85rem',
-                            }}
+                            style={{ flex: 1, padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: '0.85rem' }}
                           />
-                          <button
-                            onClick={() => removeStage(idx)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: '#ef4444',
-                              cursor: 'pointer',
-                              padding: 4,
-                              borderRadius: 4,
-                            }}
-                            title="Remove stage"
-                          >
+                          <button onClick={() => removeStage(idx)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 4 }} title="Remove stage">
                             <Trash2 size={14} />
                           </button>
                           {idx === editStages.length - 1 && (
-                            <button
-                              onClick={addStage}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                color: '#2563eb',
-                                cursor: 'pointer',
-                                padding: 4,
-                                borderRadius: 4,
-                              }}
-                              title="Add stage"
-                            >
+                            <button onClick={addStage} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', padding: 4 }} title="Add stage">
                               <Plus size={14} />
                             </button>
                           )}

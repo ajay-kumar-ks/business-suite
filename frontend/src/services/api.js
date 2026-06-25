@@ -117,6 +117,15 @@ export const accountsAPI = {
   getTrialBalance: () => api.get('/accounts/reports/trial-balance'),
   getProfitLoss: () => api.get('/accounts/reports/profit-loss'),
   getBalanceSheet: () => api.get('/accounts/reports/balance-sheet'),
+  getAIInsights: () => api.get('/accounts/ai/insights'),
+}
+
+export const paymentsAPI = {
+  createOrder: (data) => api.post('/payments/create-order', data),
+  verifyPayment: (data) => api.post('/payments/verify', data),
+  listPayments: (params = {}) => api.get('/payments/', { params }),
+  getPayment: (id) => api.get(`/payments/${id}`),
+  getRazorpayKey: () => api.get('/payments/key'),
 }
 
 export const crmAPI = {

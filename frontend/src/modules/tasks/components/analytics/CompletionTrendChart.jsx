@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef, useEffect } from 'react'
 import { Bar } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
@@ -27,6 +27,15 @@ ChartJS.register(
 )
 
 const CompletionTrendChart = ({ data, period, onPeriodChange, loading }) => {
+  const chartRef = useRef(null)
+
+  useEffect(() => {
+    if (chartRef.current) {
+      const raf = requestAnimationFrame(() => chartRef.current.resize())
+      return () => cancelAnimationFrame(raf)
+    }
+  }, [data])
+
   if (loading) {
     return <div className="chart-skeleton" style={{ height: 300 }} />
   }
@@ -139,7 +148,7 @@ const CompletionTrendChart = ({ data, period, onPeriodChange, loading }) => {
         </div>
       </div>
       <div className="chart-body">
-        <Bar data={chartData} options={options} />
+        <Bar ref={chartRef} data={chartData} options={options} />
       </div>
     </div>
   )

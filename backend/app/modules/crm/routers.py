@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import joinedload
+from sqlalchemy.orm.attributes import flag_modified
 import uuid
 from datetime import datetime
 from typing import List, Optional
@@ -433,17 +434,56 @@ async def get_lead(lead_id: str, db: Session = Depends(get_db)):
     return lead
 
 
+def _normalize_lead_log_entry(entry: dict) -> dict:
+    if not isinstance(entry, dict):
+        entry = {}
+    normalized = dict(entry)
+    normalized['log_type'] = normalized.get('log_type') or normalized.get('type')
+    normalized['title'] = normalized.get('title') or normalized.get('message') or normalized['log_type'] or 'Log entry'
+    normalized['description'] = normalized.get('description') or normalized.get('message') or ''
+    normalized['meta_data'] = normalized.get('meta_data') or normalized.get('metaData') or {}
+    normalized['created_at'] = normalized.get('created_at') or normalized.get('timestamp') or datetime.utcnow().isoformat()
+    normalized['created_by'] = normalized.get('created_by') or normalized.get('created_by_name') or None
+    if 'id' not in normalized:
+        normalized['id'] = str(uuid.uuid4())
+    return normalized
+
+
+@leads_router.get("/{lead_id}/logs")
+async def get_lead_logs(lead_id: str, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    history = (lead.extra_data or {}).get('history', [])
+    if not isinstance(history, list):
+        history = []
+
+    logs = [
+        _normalize_lead_log_entry(entry)
+        for entry in history
+        if isinstance(entry, dict)
+    ]
+    logs.sort(key=lambda item: item.get('created_at', ''), reverse=True)
+    return logs
+
+
 @leads_router.put("/{lead_id}", response_model=LeadSchema)
-async def update_lead(lead_id: str, lead_data: LeadUpdateSchema, db: Session = Depends(get_db)):
+async def update_lead(
+    lead_id: str,
+    lead_data: LeadUpdateSchema,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     lead = db.query(Lead).filter(Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     update_data = lead_data.dict(exclude_unset=True)
     old_assignee = lead.assignee
-    new_assignee = update_data.get('assignee', old_assignee)
     old_extra_data = lead.extra_data or {}
     old_remark = old_extra_data.get('current_remark')
 
+    new_assignee = update_data.get('assignee')
     for key, value in update_data.items():
         setattr(lead, key, value)
     db.add(lead)
@@ -454,59 +494,58 @@ async def update_lead(lead_id: str, lead_data: LeadUpdateSchema, db: Session = D
         new_extra_data = update_data.get('extra_data') or {}
         new_remark = new_extra_data.get('current_remark')
         if new_remark is not None and old_remark != new_remark:
-            try:
-                current_user_name = getattr(current_user, 'full_name', None) or getattr(current_user, 'username', None) or str(getattr(current_user, 'id', ''))
-                if old_remark is None:
-                    log_payload = LogEntryCreateSchema(
-                        log_type='remark',
-                        title='Remark added',
-                        description='Initial remark added',
-                        remarks=new_remark,
-                        created_by=current_user_name,
-                        meta_data={
-                            'current_remark': new_remark,
-                        },
-                    )
-                else:
-                    log_payload = LogEntryCreateSchema(
-                        log_type='remark',
-                        title='Remark updated',
-                        description=f'Remark updated by {current_user_name}',
-                        remarks=old_remark,
-                        created_by=current_user_name,
-                        meta_data={
-                            'old_remark': old_remark,
-                            'new_remark': new_remark,
-                        },
-                    )
-                _create_log_entry(db, 'lead', lead.id, log_payload)
+            current_user_name = getattr(current_user, 'full_name', None) or getattr(current_user, 'username', None) or str(getattr(current_user, 'id', ''))
+            lead.extra_data = dict(lead.extra_data or {})
+            history = lead.extra_data.get('history', [])
+            if not isinstance(history, list):
+                history = []
 
-                lead.extra_data = lead.extra_data or {}
-                lead.extra_data['current_remark_updated_by'] = current_user_name
-                lead.extra_data['current_remark_updated_at'] = datetime.utcnow().isoformat()
-                db.add(lead)
-                db.commit()
-                db.refresh(lead)
-            except Exception:
-                pass
+            history.append({
+                'type': 'remark',
+                'log_type': 'remark',
+                'title': 'Remark added' if old_remark is None else 'Remark updated',
+                'description': 'Initial remark added' if old_remark is None else f'Remark updated by {current_user_name}',
+                'remarks': new_remark,
+                'meta_data': {
+                    'old_remark': old_remark,
+                    'new_remark': new_remark,
+                },
+                'created_by': current_user_name,
+                'created_at': datetime.utcnow().isoformat(),
+            })
+            lead.extra_data['history'] = history
+            lead.extra_data['current_remark_updated_by'] = current_user_name
+            lead.extra_data['current_remark_updated_at'] = datetime.utcnow().isoformat()
+            flag_modified(lead, 'extra_data')
+            db.add(lead)
+            db.commit()
+            db.refresh(lead)
 
     if 'assignee' in update_data and old_assignee != new_assignee:
-        try:
-            current_user_name = getattr(current_user, 'full_name', None) or getattr(current_user, 'username', None) or str(getattr(current_user, 'id', ''))
-            log_payload = LogEntryCreateSchema(
-                log_type='assignee_changed',
-                title=f"Assignee changed from {old_assignee or 'Unassigned'} to {new_assignee or 'Unassigned'}",
-                description=f"Lead assignee changed from {old_assignee or 'Unassigned'} to {new_assignee or 'Unassigned'}",
-                remarks=None,
-                created_by=current_user_name,
-                meta_data={
-                    'from_assignee': old_assignee,
-                    'to_assignee': new_assignee,
-                },
-            )
-            _create_log_entry(db, 'lead', lead.id, log_payload)
-        except Exception:
-            pass
+        current_user_name = getattr(current_user, 'full_name', None) or getattr(current_user, 'username', None) or str(getattr(current_user, 'id', ''))
+        lead.extra_data = dict(lead.extra_data or {})
+        history = lead.extra_data.get('history', [])
+        if not isinstance(history, list):
+            history = []
+
+        history.append({
+            'type': 'assignee_changed',
+            'log_type': 'assignee_changed',
+            'title': f"Assignee changed from {old_assignee or 'Unassigned'} to {new_assignee or 'Unassigned'}",
+            'description': f"Lead assignee changed from {old_assignee or 'Unassigned'} to {new_assignee or 'Unassigned'}",
+            'remarks': None,
+            'created_by': current_user_name,
+            'meta_data': {
+                'from_assignee': old_assignee,
+                'to_assignee': new_assignee,
+            },
+            'created_at': datetime.utcnow().isoformat(),
+        })
+        lead.extra_data['history'] = history
+        flag_modified(lead, 'extra_data')
+        db.add(lead)
+        db.commit()
+        db.refresh(lead)
 
     return lead
 
@@ -521,7 +560,12 @@ async def delete_lead(lead_id: str, db: Session = Depends(get_db)):
 
 
 @leads_router.put("/{lead_id}/move")
-async def move_lead(lead_id: str, phase_id: str = Query(...), db: Session = Depends(get_db)):
+async def move_lead(
+    lead_id: str,
+    phase_id: str = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     lead = db.query(Lead).filter(Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -533,18 +577,36 @@ async def move_lead(lead_id: str, phase_id: str = Query(...), db: Session = Depe
 
     old_phase_id = lead.phase_id
     lead.phase_id = phase_id
-    extra_data = lead.extra_data or {}
+    extra_data = dict(lead.extra_data or {})
     history = extra_data.get('history', [])
+    if not isinstance(history, list):
+        history = []
+
+    old_phase_name = None
+    if old_phase_id:
+        old_phase = db.query(Phase).filter(Phase.id == old_phase_id).first()
+        old_phase_name = old_phase.name if old_phase else None
+    new_phase_name = destination_phase.name
+
+    current_user_name = getattr(current_user, 'full_name', None) or getattr(current_user, 'username', None) or str(getattr(current_user, 'id', ''))
     history.append({
         'type': 'phase_changed',
-        'message': f"Moved from {old_phase_id or 'None'} to {phase_id}",
-        'from_phase_id': old_phase_id,
-        'to_phase_id': phase_id,
-        'timestamp': datetime.utcnow().isoformat(),
+        'log_type': 'phase_changed',
+        'title': f"Moved from {old_phase_name or old_phase_id or 'None'} to {new_phase_name or phase_id}",
+        'description': f"Lead moved from {old_phase_name or old_phase_id or 'None'} to {new_phase_name or phase_id}",
+        'meta_data': {
+            'from_phase_id': old_phase_id,
+            'to_phase_id': phase_id,
+            'from_phase_name': old_phase_name,
+            'to_phase_name': new_phase_name,
+        },
+        'created_by': current_user_name,
+        'created_at': datetime.utcnow().isoformat(),
     })
     extra_data['history'] = history
     extra_data['converted'] = destination_phase.creates_client
     lead.extra_data = extra_data
+    flag_modified(lead, 'extra_data')
 
     db.add(lead)
     db.flush()
@@ -579,7 +641,7 @@ async def move_lead(lead_id: str, phase_id: str = Query(...), db: Session = Depe
 
 
 @leads_router.post("/{lead_id}/convert")
-async def convert_lead(lead_id: str, db: Session = Depends(get_db)):
+async def convert_lead(lead_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     lead = db.query(Lead).filter(Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -587,10 +649,17 @@ async def convert_lead(lead_id: str, db: Session = Depends(get_db)):
     # Update lead history
     extra_data = lead.extra_data or {}
     history = extra_data.get('history', [])
+    if not isinstance(history, list):
+        history = []
+
+    current_user_name = getattr(current_user, 'full_name', None) or getattr(current_user, 'username', None) or str(getattr(current_user, 'id', ''))
     history.append({
-        'type': 'converted',
-        'message': 'Lead converted to Client',
-        'timestamp': datetime.utcnow().isoformat(),
+        'type': 'conversion',
+        'log_type': 'conversion',
+        'title': 'Lead converted to Client',
+        'description': 'Lead converted to Client',
+        'created_by': current_user_name,
+        'created_at': datetime.utcnow().isoformat(),
     })
     extra_data['history'] = history
     extra_data['converted'] = True

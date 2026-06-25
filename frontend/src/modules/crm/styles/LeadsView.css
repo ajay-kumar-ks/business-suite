@@ -1408,8 +1408,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 30;
+  z-index: 10050;
   padding: 20px;
+  overflow-y: auto;
 }
 
 .lead-detail-modal {
@@ -1417,8 +1418,12 @@
   border: 1px solid var(--border);
   border-radius: 20px;
   width: min(900px, 100%);
+  max-height: calc(100vh - 60px);
   padding: 24px;
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.15);
+  overflow-y: auto;
+  position: relative;
+  z-index: 10060;
 }
 
 .lead-detail-header {
@@ -1427,6 +1432,34 @@
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 20px;
+}
+
+.lead-detail-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.lead-detail-tab {
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--background);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.lead-detail-tab:hover {
+  background: var(--background-secondary, #f3f4f6);
+}
+
+.lead-detail-tab.active {
+  background: var(--button-primary-background, #2563eb);
+  color: var(--button-primary-text, #ffffff);
+  border-color: transparent;
 }
 
 .lead-detail-status {
@@ -1459,6 +1492,26 @@
   max-height: 60vh;
   overflow: auto;
 }
+
+.lead-detail-modal::-webkit-scrollbar,
+.modal-overlay::-webkit-scrollbar,
+.lead-detail-block::-webkit-scrollbar {
+  width: 10px;
+}
+
+.lead-detail-modal::-webkit-scrollbar-thumb,
+.modal-overlay::-webkit-scrollbar-thumb,
+.lead-detail-block::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+}
+
+.lead-detail-modal::-webkit-scrollbar-track,
+.modal-overlay::-webkit-scrollbar-track,
+.lead-detail-block::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .log-list {
   display: grid;
   gap: 14px;
@@ -1532,6 +1585,32 @@
   line-height: 1.4;
 }
 
+.remark-card {
+  padding: 22px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.remark-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.remark-card-header h4 {
+  margin: 0;
+}
+
+.remark-card-subtitle {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.94rem;
+  line-height: 1.4;
+}
+
 .remark-add {
   display: grid;
   gap: 12px;
@@ -1540,35 +1619,36 @@
 
 .remark-add textarea {
   width: 100%;
-  min-height: 120px;
+  min-height: 140px;
   resize: vertical;
-  padding: 14px;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--background);
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .remark-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  margin-top: 12px;
 }
 
 .remark-view {
   display: grid;
   gap: 14px;
-  padding: 16px;
-  border-radius: 16px;
-  background: var(--background);
-  border: 1px solid var(--border);
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .remark-text {
   color: var(--text);
-  font-size: 0.98rem;
-  line-height: 1.6;
+  font-size: 1rem;
+  line-height: 1.7;
   white-space: pre-wrap;
 }
 
@@ -1577,7 +1657,7 @@
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
-  padding-top: 8px;
+  padding-top: 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-secondary);
   font-size: 0.92rem;
@@ -1587,6 +1667,54 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.remark-history {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.remark-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.remark-history-header h5 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.remark-history-header span {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+.remark-history-entry {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 12px;
+}
+
+.remark-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+.remark-history-text {
+  color: var(--text);
+  font-size: 0.96rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 
 .log-loading,

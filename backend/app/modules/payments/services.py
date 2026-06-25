@@ -1,4 +1,10 @@
-import razorpay
+try:
+    import razorpay
+    RAZORPAY_AVAILABLE = True
+except ImportError:
+    razorpay = None
+    RAZORPAY_AVAILABLE = False
+
 import hmac
 import hashlib
 import logging
@@ -12,6 +18,10 @@ class PaymentService:
     """Service for handling Razorpay payment operations."""
 
     def __init__(self):
+        if not RAZORPAY_AVAILABLE:
+            raise ImportError(
+                "razorpay package is not installed. Install it with: pip install razorpay"
+            )
         self.key_id = settings.RAZORPAY_KEY_ID
         self.key_secret = settings.RAZORPAY_KEY_SECRET
         self.client = razorpay.Client(auth=(self.key_id, self.key_secret))
@@ -58,5 +68,5 @@ class PaymentService:
         return self.key_id
 
 
-# Singleton instance
-payment_service = PaymentService()
+# Singleton instance — will only raise at runtime when first used
+payment_service = None if not RAZORPAY_AVAILABLE else PaymentService()

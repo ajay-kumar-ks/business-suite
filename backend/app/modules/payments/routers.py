@@ -22,6 +22,15 @@ from .services import payment_service
 router = APIRouter(tags=["payments"])
 
 
+def _require_payment_service():
+    if payment_service is None:
+        raise HTTPException(
+            status_code=501,
+            detail="Payment service is not available. Install the 'razorpay' package and restart the server.",
+        )
+    return payment_service
+
+
 @router.post("/create-order", response_model=CreateOrderResponse)
 async def create_order(
     data: CreateOrderRequest,
@@ -32,12 +41,15 @@ async def create_order(
     # Create order with Razorpay
     receipt_id = f"rcpt_{uuid.uuid4().hex[:12]}"
     try:
-        razorpay_order = payment_service.create_order(
+        svc = _require_payment_service()
+        razorpay_order = svc.create_order(
             amount=data.amount,
             currency=data.currency,
             receipt_id=receipt_id,
             notes={"customer_name": data.customer_name, "description": data.description},
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create payment order: {str(e)}")
 
@@ -63,7 +75,7 @@ async def create_order(
         razorpay_order_id=razorpay_order["id"],
         amount=data.amount,
         currency=data.currency,
-        key_id=payment_service.get_key_id(),
+        key_id=_require_payment_service().get_key_id(),
     )
 
 
@@ -83,7 +95,7 @@ async def verify_payment(
         raise HTTPException(status_code=404, detail="Payment order not found")
 
     # Verify signature
-    is_valid = payment_service.verify_payment(
+    is_valid = _require_payment_service().verify_payment(
         order_id=data.razorpay_order_id,
         payment_id=data.razorpay_payment_id,
         signature=data.razorpay_signature,
@@ -178,4 +190,4 @@ async def get_razorpay_key(
     current_user: User = Depends(get_current_user),
 ):
     """Return the Razorpay key ID for frontend checkout initialization."""
-    return {"key_id": payment_service.get_key_id()}
+    return {"key_id": _require_payment_service().get_key_id()}

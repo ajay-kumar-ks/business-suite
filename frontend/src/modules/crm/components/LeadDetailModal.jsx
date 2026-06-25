@@ -24,6 +24,15 @@ const LeadDetailModal = ({
 }) => {
   const [aiAction, setAiAction] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState('details')
+  const [leadLogs, setLeadLogs] = useState([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [logsError, setLogsError] = useState(null)
+  const [newRemark, setNewRemark] = useState('')
+  const [savingRemark, setSavingRemark] = useState(false)
+  const [editingRemark, setEditingRemark] = useState(false)
+  const [lastUpdatedBy, setLastUpdatedBy] = useState('')
+  const [lastUpdatedAt, setLastUpdatedAt] = useState('')
 
   useEffect(() => {
     if (!lead?.id) return
@@ -41,6 +50,74 @@ const LeadDetailModal = ({
     }, 300)
     return () => clearTimeout(timer)
   }, [lead?.id])
+
+  useEffect(() => {
+    if (!lead?.id) return
+    setActiveTab('details')
+    setLogsError(null)
+    setEditingRemark(false)
+    setNewRemark(lead.extra_data?.current_remark || '')
+    setLastUpdatedBy(lead.extra_data?.current_remark_updated_by || '')
+    setLastUpdatedAt(lead.extra_data?.current_remark_updated_at || '')
+    fetchLeadLogs()
+  }, [lead?.id])
+
+  const fetchLeadLogs = async () => {
+    if (!lead?.id) return
+    setLogsLoading(true)
+    setLogsError(null)
+    try {
+      const res = await crmAPI.getLeadLogs(lead.id)
+      if (Array.isArray(res.data)) {
+        setLeadLogs(res.data)
+      } else {
+        setLeadLogs([])
+      }
+    } catch (error) {
+      console.error('Unable to fetch lead logs:', error)
+      setLogsError('Unable to load lead logs.')
+      setLeadLogs([])
+    } finally {
+      setLogsLoading(false)
+    }
+  }
+
+  const handleSaveRemark = async () => {
+    const trimmed = newRemark.trim()
+    if (!lead?.id) return
+
+    setSavingRemark(true)
+    try {
+      const response = await crmAPI.updateLead(lead.id, {
+        extra_data: {
+          ...lead.extra_data,
+          current_remark: trimmed,
+        },
+      })
+      const updatedLead = response.data
+      setNewRemark(updatedLead.extra_data?.current_remark || '')
+      setLastUpdatedBy(updatedLead.extra_data?.current_remark_updated_by || '')
+      setLastUpdatedAt(updatedLead.extra_data?.current_remark_updated_at || '')
+      await fetchLeadLogs()
+      setEditingRemark(false)
+      setActiveTab('remarks')
+    } catch (error) {
+      console.error('Failed to save remark:', error)
+    } finally {
+      setSavingRemark(false)
+    }
+  }
+
+  const handleEditRemark = () => {
+    setEditingRemark(true)
+  }
+
+  const handleCancelEditRemark = () => {
+    setEditingRemark(false)
+    setNewRemark(lead.extra_data?.current_remark || '')
+  }
+
+  const remarkHistory = leadLogs.filter((entry) => entry.log_type === 'remark')
 
   if (!lead) return null
 
@@ -159,6 +236,162 @@ const LeadDetailModal = ({
                     <div className="timeline-message">{event.message || event.type}</div>
                     <div className="timeline-meta">{new Date(event.timestamp).toLocaleString()}</div>
                   </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {activeTab === 'logs' && (
+            <div className="lead-detail-block">
+              <h4>Lead Logs</h4>
+              {logsLoading ? (
+                <div className="log-loading">
+                  <Loader size={16} />
+                  <span>Loading logs…</span>
+                </div>
+              ) : logsError ? (
+                <p className="error-text">{logsError}</p>
+              ) : leadLogs.length === 0 ? (
+                <p>No logs have been added yet.</p>
+              ) : (
+                <div className="log-list">
+                  {leadLogs.map((entry) => {
+                    const meta = entry.meta_data || {}
+                    const fromId = meta.from_phase_id || meta.fromPhaseId || meta.from || null
+                    const toId = meta.to_phase_id || meta.toPhaseId || meta.to || null
+                    const fromName = meta.from_phase_name || meta.fromPhaseName || pipelinePhases.find(p => p.id === fromId)?.name
+                    const toName = meta.to_phase_name || meta.toPhaseName || pipelinePhases.find(p => p.id === toId)?.name
+                    const fromAssignee = meta.from_assignee || meta.fromAssignee || null
+                    const toAssignee = meta.to_assignee || meta.toAssignee || null
+                    const when = entry.created_at ? new Date(entry.created_at).toLocaleString() : ''
+                    const actor = entry.created_by || entry.created_by_name || ''
+
+                    // Build a human-readable primary message
+                    const formatPhaseChange = () => {
+                      const a = fromName || fromId || 'Unknown'
+                      const b = toName || toId || 'Unknown'
+                      return `${a} → ${b}`
+                    }
+
+                    const formatAssigneeChange = () => {
+                      const a = fromAssignee || 'Unassigned'
+                      const b = toAssignee || 'Unassigned'
+                      return `Assigned from ${a} to ${b}`
+                    }
+
+                    const replaceIdsWithNames = (text) => {
+                      if (!text) return text
+                      let out = text
+                      if (fromId && fromName) out = out.split(fromId).join(fromName)
+                      if (toId && toName) out = out.split(toId).join(toName)
+                      return out
+                    }
+
+                    const getPrimaryTitle = () => {
+                      if (entry.log_type === 'assignee_changed' || /assignee/i.test(entry.title || '') || /assignee/i.test(entry.description || '')) {
+                        return formatAssigneeChange()
+                      }
+                      if (entry.log_type === 'phase_changed' || /moved/i.test(entry.title || '') || /moved/i.test(entry.description || '')) {
+                        return formatPhaseChange()
+                      }
+                      if (entry.log_type === 'conversion' || /convert/i.test(entry.title || '') || /convert/i.test(entry.description || '')) {
+                        // try to make conversion messages readable
+                        const raw = entry.title || entry.description || 'Conversion'
+                        return replaceIdsWithNames(raw)
+                      }
+                      return entry.title || entry.log_type || 'Log entry'
+                    }
+
+                    const title = getPrimaryTitle()
+                    const description = replaceIdsWithNames(entry.description)
+
+                    return (
+                      <div key={entry.id} className="log-entry">
+                        <div className="log-entry-header">
+                          <span className="log-entry-type">{(entry.log_type || 'log').replace('_', ' ')}</span>
+                          <span className="log-entry-time">{when}</span>
+                        </div>
+                        <div className="log-entry-title">{title}</div>
+                        {description && <div className="log-entry-description">{description}</div>}
+                        {entry.remarks && <div className="log-entry-remarks">{entry.remarks}</div>}
+                        <div className="log-entry-meta">{actor ? `By ${actor}` : ''}{actor && when ? ' • ' : ''}{when}</div>
+                        {meta && Object.keys(meta).length > 0 && (
+                          <details style={{marginTop:8}}>
+                            <summary style={{cursor:'pointer', color:'var(--text-secondary)'}}>Details</summary>
+                            <pre style={{whiteSpace:'pre-wrap',fontSize:'0.9rem',marginTop:8}}>{JSON.stringify(meta, null, 2)}</pre>
+                          </details>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'remarks' && (
+            <div className="lead-detail-block">
+              <div className="remark-card">
+                <div className="remark-card-header">
+                  <div>
+                    <h4>Remark</h4>
+                    <p className="remark-card-subtitle">
+                      This panel shows the current remark. Previous remarks are stored in the log history.
+                    </p>
+                  </div>
+                  {lead.extra_data?.current_remark && !editingRemark && (
+                    <Button variant="secondary" onClick={handleEditRemark}>
+                      Edit remark
+                    </Button>
+                  )}
+                </div>
+
+                {editingRemark || !lead.extra_data?.current_remark ? (
+                  <>
+                    <div className="remark-add">
+                      <textarea
+                        value={newRemark}
+                        onChange={(event) => setNewRemark(event.target.value)}
+                        placeholder="Add or update lead remark..."
+                        rows={4}
+                      />
+                    </div>
+                    <div className="remark-actions">
+                      <Button
+                        variant="primary"
+                        onClick={handleSaveRemark}
+                        disabled={savingRemark || newRemark.trim() === lead.extra_data?.current_remark?.trim()}
+                      >
+                        {savingRemark ? 'Saving…' : lead.extra_data?.current_remark ? 'Save remark' : 'Add remark'}
+                      </Button>
+                      {lead.extra_data?.current_remark && (
+                        <Button variant="secondary" onClick={handleCancelEditRemark} disabled={savingRemark}>
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="remark-view">
+                    <div className="remark-text">
+                      {lead.extra_data?.current_remark || 'No remark has been added yet.'}
+                    </div>
+                  </div>
+                )}
+
+                {(lastUpdatedBy || lastUpdatedAt) && (
+                  <div className="remark-last-updated">
+                    {lastUpdatedBy && (
+                      <span>
+                        Last updated by <strong>{lastUpdatedBy}</strong>
+                      </span>
+                    )}
+                    {lastUpdatedAt && (
+                      <span>{new Date(lastUpdatedAt).toLocaleString()}</span>
+                    )}
+                  </div>
+                )}
+              </div>
                 </div>
               ))}
             </div>

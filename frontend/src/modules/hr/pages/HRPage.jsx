@@ -263,6 +263,79 @@ const HRPage = () => {
     fetchPipelineTemplates()
   }, [fetchUsers, fetchDepartments, fetchEmployees, fetchAttendance, fetchLeaves, fetchDashboard, fetchCandidates, fetchRecruitmentStats, fetchPipelineTemplates])
 
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const weekLabels = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
+  const today = new Date()
+  const currentYear = today.getFullYear()
+  const currentMonth = today.getMonth()
+
+  const getAttendanceTrendLabels = useCallback(() => {
+    if (attendanceTrendPeriod === 'monthly') {
+      if (attendanceTrendMonthlyMode === 'datewise') {
+        const end = new Date(currentYear, currentMonth + 1, 0)
+        return Array.from({ length: end.getDate() }, (_, i) => `${i + 1}`)
+      }
+      return weekLabels
+    }
+    if (attendanceTrendPeriod === 'yearly') return monthNames
+    return dayNames
+  }, [attendanceTrendPeriod, attendanceTrendMonthlyMode, currentYear, currentMonth, weekLabels, monthNames, dayNames])
+
+  const attendanceTrendData = useMemo(() => {
+    const labels = getAttendanceTrendLabels()
+
+    const present = Array(labels.length).fill(0)
+    const absent = Array(labels.length).fill(0)
+
+    attendanceRecords.forEach((rec) => {
+      if (!rec.date) return
+      const date = new Date(rec.date)
+      if (Number.isNaN(date.getTime())) return
+
+      let index = -1
+      if (attendanceTrendPeriod === 'weekly') {
+        index = date.getDay()
+      } else if (attendanceTrendPeriod === 'monthly') {
+        if (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth) return
+        if (attendanceTrendMonthlyMode === 'datewise') {
+          index = date.getDate() - 1
+        } else {
+          index = Math.min(4, Math.floor((date.getDate() - 1) / 7))
+        }
+      } else {
+        if (date.getFullYear() !== currentYear) return
+        index = date.getMonth()
+      }
+
+      if (index < 0 || index >= labels.length) return
+      if (rec.status === 'Present') present[index]++
+      else if (rec.status === 'Absent') absent[index]++
+    })
+
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Present',
+          data: present,
+          borderColor: '#22c55e',
+          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+          fill: true,
+          tension: 0.4,
+        },
+        {
+          label: 'Absent',
+          data: absent,
+          borderColor: '#ef4444',
+          backgroundColor: 'rgba(239, 68, 68, 0.05)',
+          fill: true,
+          tension: 0.4,
+        },
+      ],
+    }
+  }, [attendanceRecords, attendanceTrendPeriod, attendanceTrendMonthlyMode, getAttendanceTrendLabels, currentYear, currentMonth])
+
   // ── Employee handlers ──
   const handleAddEmployee = () => {
     setEditingEmployee(null)
@@ -444,85 +517,9 @@ const HRPage = () => {
   //  CHART DATA (memoized)
   // ════════════════════════════════════════════════
 
- const attendanceTrendData = useMemo(() => {
-  // derive labels for current selection
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const weekLabels = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
-  // ── Attendance Trend helpers (hoisted so JSX can use them too) ──
-  const today = new Date()
-  const currentYear = today.getFullYear()
-  const currentMonth = today.getMonth()
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const weekLabels = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
-
-  const getAttendanceTrendLabels = useCallback(() => {
-    if (attendanceTrendPeriod === 'monthly') {
-      if (attendanceTrendMonthlyMode === 'datewise') {
-        const end = new Date(currentYear, currentMonth + 1, 0)
-        return Array.from({ length: end.getDate() }, (_, i) => `${i + 1}`)
-      }
-      return weekLabels
-    }
-    if (attendanceTrendPeriod === 'yearly') return monthNames
-    return dayNames
-  }, [attendanceTrendPeriod, attendanceTrendMonthlyMode, currentYear, currentMonth, weekLabels, monthNames, dayNames])
-
-  const attendanceTrendData = useMemo(() => {
-    const labels = getAttendanceTrendLabels()
-
-    const present = Array(labels.length).fill(0)
-    const absent = Array(labels.length).fill(0)
-
-    attendanceRecords.forEach((rec) => {
-      if (!rec.date) return
-      const date = new Date(rec.date)
-      if (Number.isNaN(date.getTime())) return
-
-      let index = -1
-      if (attendanceTrendPeriod === 'weekly') {
-        index = date.getDay()
-      } else if (attendanceTrendPeriod === 'monthly') {
-        if (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth) return
-        if (attendanceTrendMonthlyMode === 'datewise') {
-          index = date.getDate() - 1
-        } else {
-          index = Math.min(4, Math.floor((date.getDate() - 1) / 7))
-        }
-      } else {
-        if (date.getFullYear() !== currentYear) return
-        index = date.getMonth()
-      }
-
-      if (index < 0 || index >= labels.length) return
-      if (rec.status === 'Present') present[index]++
-      else if (rec.status === 'Absent') absent[index]++
-    })
-
-    return {
-      labels,
-      datasets: [
-        {
-          label: 'Present',
-          data: present,
-          borderColor: '#22c55e',
-          backgroundColor: 'rgba(34, 197, 94, 0.1)',
-          fill: true,
-          tension: 0.4,
-        },
-        {
-          label: 'Absent',
-          data: absent,
-          borderColor: '#ef4444',
-          backgroundColor: 'rgba(239, 68, 68, 0.05)',
-          fill: true,
-          tension: 0.4,
-        },
-      ],
-    }
-  }, [attendanceRecords, attendanceTrendPeriod, attendanceTrendMonthlyMode, getAttendanceTrendLabels, currentYear, currentMonth])
-  // ── Department Distribution ──
+  // ════════════════════════════════════════════════
+  //  Department Distribution
+  // ════════════════════════════════════════════════
   const departmentChartData = useMemo(() => {
     const deptLabels = departments.length ? departments.map((d) => d.name) : ['Engineering', 'Marketing', 'Sales', 'Operations']
     const deptData = departments.length

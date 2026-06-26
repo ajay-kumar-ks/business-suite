@@ -5,11 +5,17 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import List, Optional
 
-from app.core.database import get_db
+from app.core.database import commit_or_rollback, get_db
 from app.modules.auth.models import User
 from app.modules.auth.routers import get_current_user
+from app.modules.accounts.models import ChartOfAccount
+from app.modules.accounts.transaction_models import Income
+from app.modules.accounts.transaction_services import create_income_journal
+from app.modules.payments.db_models import Payment
+from app.modules.payments.services import payment_service
 from .db_models import Contact, Tag, Activity, Lead, Pipeline, Phase, Client, PipelineAssignment
 from .schemas import (
     ContactCreateSchema,
@@ -432,6 +438,358 @@ async def get_lead(lead_id: str, db: Session = Depends(get_db)):
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
+
+
+def _normalize_lead_payment_entries(lead: Lead) -> list[dict]:
+    payments = (lead.extra_data or {}).get("payments", [])
+    if not isinstance(payments, list):
+        return []
+    return [entry for entry in payments if isinstance(entry, dict)]
+
+
+def _build_lead_payment_entry(lead: Lead, payload: dict) -> dict:
+    now = datetime.utcnow().isoformat()
+    return {
+        "id": payload.get("id") or str(uuid.uuid4()),
+        "lead_id": lead.id,
+        "lead_title": lead.title,
+        "amount": payload.get("amount"),
+        "currency": payload.get("currency") or "INR",
+        "status": payload.get("status") or "created",
+        "provider": payload.get("provider") or "manual",
+        "description": payload.get("description"),
+        "customer_name": payload.get("customer_name"),
+        "customer_email": payload.get("customer_email"),
+        "customer_phone": payload.get("customer_phone"),
+        "payment_reference": payload.get("payment_reference"),
+        "payment_date": payload.get("payment_date"),
+        "notes": payload.get("notes"),
+        "razorpay_order_id": payload.get("razorpay_order_id"),
+        "razorpay_payment_id": payload.get("razorpay_payment_id"),
+        "razorpay_signature": payload.get("razorpay_signature"),
+        "created_at": payload.get("created_at") or now,
+        "updated_at": payload.get("updated_at") or now,
+    }
+
+
+def _build_shared_payment_payload(lead: Lead, payload: dict, order_id: str) -> dict:
+    return {
+        "id": payload.get("id") or str(uuid.uuid4()),
+        "razorpay_order_id": order_id,
+        "amount": payload.get("amount"),
+        "currency": payload.get("currency") or "INR",
+        "status": payload.get("status") or "created",
+        "customer_name": payload.get("customer_name"),
+        "customer_email": payload.get("customer_email"),
+        "customer_phone": payload.get("customer_phone"),
+        "description": payload.get("description") or f"Lead payment for {lead.title}",
+        "notes": {
+            **(payload.get("notes") or {}),
+            "lead_id": lead.id,
+            "lead_title": lead.title,
+            "provider": payload.get("provider") or "manual",
+        },
+        "created_at": payload.get("created_at"),
+        "updated_at": payload.get("updated_at"),
+    }
+
+
+def _persist_lead_payment_to_shared_table(db: Session, lead: Lead, payload: dict, order_id: str) -> Payment:
+    shared_payload = _build_shared_payment_payload(lead, payload, order_id)
+    payment = Payment(
+        id=shared_payload["id"],
+        razorpay_order_id=shared_payload["razorpay_order_id"],
+        amount=shared_payload["amount"],
+        currency=shared_payload["currency"],
+        status=shared_payload["status"],
+        customer_name=shared_payload["customer_name"],
+        customer_email=shared_payload["customer_email"],
+        customer_phone=shared_payload["customer_phone"],
+        description=shared_payload["description"],
+        notes=shared_payload["notes"],
+        receipt_id=payload.get("receipt_id"),
+        created_at=shared_payload.get("created_at"),
+        updated_at=shared_payload.get("updated_at"),
+    )
+    db.add(payment)
+    return payment
+
+
+def _get_revenue_account_id(db: Session) -> int:
+    account = db.query(ChartOfAccount.id).filter(ChartOfAccount.account_code == "4000").first()
+    if account:
+        return account[0]
+
+    account = db.query(ChartOfAccount.id).filter(ChartOfAccount.account_type.ilike("revenue")).first()
+    if account:
+        return account[0]
+
+    raise ValueError("No revenue account found in the chart of accounts.")
+
+
+def _parse_payment_date(payment_date: Optional[str]) -> datetime:
+    if not payment_date:
+        return datetime.utcnow()
+    try:
+        return datetime.fromisoformat(payment_date)
+    except ValueError:
+        return datetime.utcnow()
+
+
+def _create_lead_income_transaction(db: Session, lead: Lead, payment_entry: dict) -> int | None:
+    if payment_entry.get("accounting_journal_id"):
+        return payment_entry["accounting_journal_id"]
+
+    if payment_entry.get("status") != "paid":
+        return None
+
+    amount = payment_entry.get("amount")
+    if amount is None:
+        return None
+
+    income_amount = Decimal(str(amount)) / Decimal("100")
+    if income_amount <= Decimal("0"):
+        return None
+
+    revenue_account_id = _get_revenue_account_id(db)
+    income = Income(
+        description=payment_entry.get("description") or f"Lead payment received for {lead.title}",
+        amount=income_amount,
+        income_date=_parse_payment_date(payment_entry.get("payment_date")),
+        account_id=revenue_account_id,
+        reference=payment_entry.get("payment_reference") or payment_entry.get("razorpay_order_id") or f"LEADPAY-{lead.id}-{payment_entry['id']}",
+    )
+    db.add(income)
+    db.flush()
+
+    journal = create_income_journal(db, income)
+    income.journal_id = journal.id
+    commit_or_rollback(db)
+    db.refresh(income)
+
+    payment_entry["accounting_journal_id"] = journal.id
+    return journal.id
+
+
+@leads_router.get("/{lead_id}/payments")
+async def get_lead_payments(lead_id: str, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    payments = _normalize_lead_payment_entries(lead)
+    payments.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+    return payments
+
+
+@leads_router.post("/{lead_id}/payments/request")
+async def create_lead_payment_request(
+    lead_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if payment_service is None:
+        raise HTTPException(status_code=501, detail="Payment service is not available")
+
+    amount = int(payload.get("amount") or 0)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+
+    receipt_id = f"lead_{lead.id[:8]}_{uuid.uuid4().hex[:8]}"
+    razorpay_order = payment_service.create_order(
+        amount=amount,
+        currency=payload.get("currency") or "INR",
+        receipt_id=receipt_id,
+        notes={
+            "lead_id": lead.id,
+            "lead_title": lead.title,
+            "customer_name": payload.get("customer_name") or lead.title,
+            "description": payload.get("description") or f"Payment request for {lead.title}",
+        },
+    )
+
+    extra_data = dict(lead.extra_data or {})
+    payments = _normalize_lead_payment_entries(lead)
+    payment_entry = _build_lead_payment_entry(lead, {
+        "amount": amount,
+        "currency": payload.get("currency") or "INR",
+        "status": "created",
+        "provider": "razorpay",
+        "description": payload.get("description") or f"Payment request for {lead.title}",
+        "customer_name": payload.get("customer_name"),
+        "customer_email": payload.get("customer_email"),
+        "customer_phone": payload.get("customer_phone"),
+        "razorpay_order_id": razorpay_order.get("id"),
+        "notes": {
+            "lead_id": lead.id,
+            "lead_title": lead.title,
+            "requested_by": getattr(current_user, 'full_name', None) or getattr(current_user, 'username', None) or str(getattr(current_user, 'id', '')),
+        },
+    })
+    _persist_lead_payment_to_shared_table(db, lead, payment_entry, razorpay_order.get("id"))
+    payments.append(payment_entry)
+    extra_data["payments"] = payments
+    history = extra_data.get("history", [])
+    if not isinstance(history, list):
+        history = []
+    history.append({
+        "type": "payment_requested",
+        "log_type": "payment_requested",
+        "title": "Payment request created",
+        "description": f"Razorpay payment request created for {lead.title}",
+        "created_by": getattr(current_user, 'full_name', None) or getattr(current_user, 'username', None) or str(getattr(current_user, 'id', '')),
+        "meta_data": {
+            "amount": amount,
+            "provider": "razorpay",
+            "razorpay_order_id": razorpay_order.get("id"),
+        },
+        "created_at": datetime.utcnow().isoformat(),
+    })
+    extra_data["history"] = history
+    lead.extra_data = extra_data
+    flag_modified(lead, "extra_data")
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    return {
+        "success": True,
+        "payment": payment_entry,
+        "razorpay_order_id": razorpay_order.get("id"),
+        "amount": amount,
+        "currency": payload.get("currency") or "INR",
+        "key_id": payment_service.get_key_id(),
+    }
+
+
+@leads_router.post("/{lead_id}/payments/manual")
+async def create_lead_manual_payment(
+    lead_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    amount = int(payload.get("amount") or 0)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+
+    extra_data = dict(lead.extra_data or {})
+    payments = _normalize_lead_payment_entries(lead)
+    payment_entry = _build_lead_payment_entry(lead, {
+        "amount": amount,
+        "currency": payload.get("currency") or "INR",
+        "status": "paid",
+        "provider": "manual",
+        "description": payload.get("description") or f"Manual payment for {lead.title}",
+        "customer_name": payload.get("customer_name"),
+        "customer_email": payload.get("customer_email"),
+        "customer_phone": payload.get("customer_phone"),
+        "payment_reference": payload.get("payment_reference"),
+        "payment_date": payload.get("payment_date"),
+        "notes": payload.get("notes"),
+    })
+    _persist_lead_payment_to_shared_table(db, lead, payment_entry, f"manual_{lead.id[:8]}_{uuid.uuid4().hex[:8]}")
+    _create_lead_income_transaction(db, lead, payment_entry)
+    payments.append(payment_entry)
+    extra_data["payments"] = payments
+    history = extra_data.get("history", [])
+    if not isinstance(history, list):
+        history = []
+    history.append({
+        "type": "payment_recorded",
+        "log_type": "payment_recorded",
+        "title": "Manual payment recorded",
+        "description": f"Manual payment recorded for {lead.title}",
+        "created_by": getattr(current_user, 'full_name', None) or getattr(current_user, 'username', None) or str(getattr(current_user, 'id', '')),
+        "meta_data": {
+            "amount": amount,
+            "provider": "manual",
+            "payment_reference": payload.get("payment_reference"),
+        },
+        "created_at": datetime.utcnow().isoformat(),
+    })
+    extra_data["history"] = history
+    lead.extra_data = extra_data
+    flag_modified(lead, "extra_data")
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    return {"success": True, "payment": payment_entry}
+
+
+@leads_router.post("/{lead_id}/payments/verify")
+async def verify_lead_payment(
+    lead_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if payment_service is None:
+        raise HTTPException(status_code=501, detail="Payment service is not available")
+
+    payments = _normalize_lead_payment_entries(lead)
+    payment_entry = next(
+        (item for item in payments if item.get("razorpay_order_id") == payload.get("razorpay_order_id")),
+        None,
+    )
+    if not payment_entry:
+        raise HTTPException(status_code=404, detail="Lead payment not found")
+
+    is_valid = payment_service.verify_payment(
+        order_id=payload.get("razorpay_order_id"),
+        payment_id=payload.get("razorpay_payment_id") or "",
+        signature=payload.get("razorpay_signature") or "",
+    )
+    if not is_valid:
+        payment_entry["status"] = "failed"
+        payment_entry["razorpay_payment_id"] = payload.get("razorpay_payment_id")
+        payment_entry["razorpay_signature"] = payload.get("razorpay_signature")
+        payment_entry["updated_at"] = datetime.utcnow().isoformat()
+    else:
+        payment_entry["status"] = "paid"
+        payment_entry["razorpay_payment_id"] = payload.get("razorpay_payment_id")
+        payment_entry["razorpay_signature"] = payload.get("razorpay_signature")
+        payment_entry["updated_at"] = datetime.utcnow().isoformat()
+
+    shared_payment = db.query(Payment).filter(Payment.razorpay_order_id == payload.get("razorpay_order_id")).first()
+    if shared_payment:
+        shared_payment.status = payment_entry["status"]
+        shared_payment.razorpay_payment_id = payment_entry.get("razorpay_payment_id")
+        shared_payment.razorpay_signature = payment_entry.get("razorpay_signature")
+        shared_payment.updated_at = datetime.utcnow()
+        shared_payment.description = shared_payment.description or payment_entry.get("description")
+        shared_payment.notes = shared_payment.notes or {}
+        if isinstance(shared_payment.notes, dict):
+            shared_payment.notes.update({
+                "lead_id": lead.id,
+                "lead_title": lead.title,
+                "provider": payment_entry.get("provider") or "razorpay",
+            })
+
+    if is_valid:
+        _create_lead_income_transaction(db, lead, payment_entry)
+
+    extra_data = dict(lead.extra_data or {})
+    extra_data["payments"] = payments
+    lead.extra_data = extra_data
+    flag_modified(lead, "extra_data")
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    return {"success": is_valid, "payment": payment_entry}
 
 
 def _normalize_lead_log_entry(entry: dict) -> dict:

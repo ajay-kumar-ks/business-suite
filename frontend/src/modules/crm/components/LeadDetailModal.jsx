@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { X, ArrowLeftRight, CheckCircle2, Trash2, Sparkles, Mail, Calendar, ArrowRightCircle } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { X, ArrowLeftRight, CheckCircle2, Trash2, Sparkles, Mail, Calendar, ArrowRightCircle, CreditCard, PlusCircle } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Loader from '../../../components/ui/Loader'
 import api, { crmAPI } from '../../../services/api'
@@ -9,6 +9,20 @@ const URGENCY_ICONS = {
   high: <ArrowRightCircle size={14} />,
   medium: <Calendar size={14} />,
   low: <Mail size={14} />,
+}
+
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      resolve(true)
+      return
+    }
+    const script = document.createElement('script')
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    script.onload = () => resolve(true)
+    script.onerror = () => resolve(false)
+    document.body.appendChild(script)
+  })
 }
 
 const LeadDetailModal = ({
@@ -34,6 +48,20 @@ const LeadDetailModal = ({
   const [editingRemark, setEditingRemark] = useState(false)
   const [lastUpdatedBy, setLastUpdatedBy] = useState('')
   const [lastUpdatedAt, setLastUpdatedAt] = useState('')
+  const [leadPayments, setLeadPayments] = useState([])
+  const [paymentsLoading, setPaymentsLoading] = useState(false)
+  const [paymentForm, setPaymentForm] = useState({
+    amount: '',
+    description: '',
+    customer_name: '',
+    customer_email: '',
+    customer_phone: '',
+    payment_reference: '',
+    notes: '',
+  })
+  const [manualPaymentSubmitting, setManualPaymentSubmitting] = useState(false)
+  const [requestPaymentSubmitting, setRequestPaymentSubmitting] = useState(false)
+  const [paymentMessage, setPaymentMessage] = useState('')
 
   useEffect(() => {
     if (!lead?.id) return
@@ -70,6 +98,11 @@ const LeadDetailModal = ({
     fetchLeadLogs()
   }, [lead?.id, lead?.phase_id, activeTab])
 
+  useEffect(() => {
+    if (!lead?.id || activeTab !== 'payments') return
+    fetchLeadPayments()
+  }, [lead?.id, activeTab])
+
   const fetchLeadLogs = async () => {
     if (!lead?.id) return
     setLogsLoading(true)
@@ -87,6 +120,21 @@ const LeadDetailModal = ({
       setLeadLogs([])
     } finally {
       setLogsLoading(false)
+    }
+  }
+
+  const fetchLeadPayments = async () => {
+    if (!lead?.id) return
+    setPaymentsLoading(true)
+    setPaymentMessage('')
+    try {
+      const res = await crmAPI.getLeadPayments(lead.id)
+      setLeadPayments(Array.isArray(res.data) ? res.data : [])
+    } catch (error) {
+      console.error('Unable to fetch lead payments:', error)
+      setLeadPayments([])
+    } finally {
+      setPaymentsLoading(false)
     }
   }
 
@@ -126,7 +174,129 @@ const LeadDetailModal = ({
     setNewRemark(currentRemark)
   }
 
+  const handleRequestLeadPayment = async () => {
+    const amount = Number(paymentForm.amount)
+    if (!lead?.id || !amount || amount <= 0) {
+      setPaymentMessage('Please enter a valid amount.')
+      return
+    }
+
+    setRequestPaymentSubmitting(true)
+    setPaymentMessage('')
+    try {
+      const payload = {
+        amount: Math.round(amount * 100),
+        currency: 'INR',
+        description: paymentForm.description || `Payment request for ${lead.title}`,
+        customer_name: paymentForm.customer_name || contact?.name || '',
+        customer_email: paymentForm.customer_email || '',
+        customer_phone: paymentForm.customer_phone || '',
+      }
+      const response = await crmAPI.requestLeadPayment(lead.id, payload)
+      const orderId = response.data?.razorpay_order_id
+      const keyId = response.data?.key_id
+      const amountInPaise = response.data?.amount
+      if (orderId && keyId) {
+        const loaded = await loadRazorpayScript()
+        if (!loaded) {
+          setPaymentMessage('Razorpay checkout could not be loaded.')
+          return
+        }
+        const options = {
+          key: keyId,
+          amount: amountInPaise,
+          currency: 'INR',
+          name: 'Business Suite',
+          description: payload.description || 'Lead payment request',
+          order_id: orderId,
+          prefill: {
+            name: payload.customer_name || '',
+            email: payload.customer_email || '',
+            contact: payload.customer_phone || '',
+          },
+          theme: { color: '#2563eb' },
+          handler: async (paymentResponse) => {
+            try {
+              const verifyRes = await crmAPI.verifyLeadPayment(lead.id, {
+                razorpay_order_id: paymentResponse.razorpay_order_id,
+                razorpay_payment_id: paymentResponse.razorpay_payment_id,
+                razorpay_signature: paymentResponse.razorpay_signature,
+              })
+              if (verifyRes.data?.success) {
+                setPaymentMessage('Payment completed successfully.')
+                setPaymentForm((prev) => ({ ...prev, amount: '', description: '', customer_name: '', customer_email: '', customer_phone: '' }))
+                await fetchLeadPayments()
+              } else {
+                setPaymentMessage('Payment verification failed.')
+              }
+            } catch (error) {
+              console.error('Failed to verify lead payment:', error)
+              setPaymentMessage(error?.response?.data?.detail || 'Payment verification failed.')
+            }
+          },
+          modal: {
+            ondismiss: async () => {
+              setPaymentMessage('Payment request was closed without completion.')
+              await fetchLeadPayments()
+            },
+          },
+        }
+        const rzp = new window.Razorpay(options)
+        rzp.on('payment.failed', async (error) => {
+          setPaymentMessage(error?.error?.description || 'Payment failed.')
+          await fetchLeadPayments()
+        })
+        rzp.open()
+      }
+    } catch (error) {
+      console.error('Failed to request lead payment:', error)
+      setPaymentMessage(error?.response?.data?.detail || 'Unable to create payment request.')
+    } finally {
+      setRequestPaymentSubmitting(false)
+    }
+  }
+
+  const handleRecordManualPayment = async () => {
+    const amount = Number(paymentForm.amount)
+    if (!lead?.id || !amount || amount <= 0) {
+      setPaymentMessage('Please enter a valid amount.')
+      return
+    }
+
+    setManualPaymentSubmitting(true)
+    setPaymentMessage('')
+    try {
+      await crmAPI.createLeadManualPayment(lead.id, {
+        amount: Math.round(amount * 100),
+        currency: 'INR',
+        description: paymentForm.description || `Manual payment for ${lead.title}`,
+        customer_name: paymentForm.customer_name || contact?.name || '',
+        customer_email: paymentForm.customer_email || '',
+        customer_phone: paymentForm.customer_phone || '',
+        payment_reference: paymentForm.payment_reference || '',
+        notes: paymentForm.notes || '',
+      })
+      setPaymentMessage('Manual payment recorded successfully.')
+      setPaymentForm((prev) => ({ ...prev, amount: '', description: '', customer_name: '', customer_email: '', customer_phone: '', payment_reference: '', notes: '' }))
+      await fetchLeadPayments()
+    } catch (error) {
+      console.error('Failed to record manual payment:', error)
+      setPaymentMessage(error?.response?.data?.detail || 'Unable to record payment.')
+    } finally {
+      setManualPaymentSubmitting(false)
+    }
+  }
+
   const remarkHistory = leadLogs.filter((entry) => entry.log_type === 'remark')
+  const paymentSummary = useMemo(() => {
+    const payments = Array.isArray(leadPayments) ? leadPayments : []
+    const totalPaid = payments.filter((entry) => entry.status === 'paid').reduce((sum, entry) => sum + Number(entry.amount || 0), 0)
+    return {
+      count: payments.length,
+      totalPaid,
+      pending: payments.filter((entry) => entry.status !== 'paid').length,
+    }
+  }, [leadPayments])
 
   if (!lead) return null
 
@@ -168,6 +338,7 @@ const LeadDetailModal = ({
           {[
             { id: 'details', label: 'Details' },
             { id: 'logs', label: 'Logs' },
+            { id: 'payments', label: 'Payments' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -177,6 +348,9 @@ const LeadDetailModal = ({
                 setActiveTab(tab.id)
                 if (tab.id === 'logs') {
                   fetchLeadLogs()
+                }
+                if (tab.id === 'payments') {
+                  fetchLeadPayments()
                 }
               }}
             >
@@ -330,6 +504,118 @@ const LeadDetailModal = ({
               )}
             </div>
           </>
+        )}
+
+        {activeTab === 'payments' && (
+          <div className="lead-detail-block">
+            <div className="lead-detail-block payment-section">
+              <div className="payment-summary-card">
+                <div>
+                  <h4>Lead Payments</h4>
+                  <p className="remark-card-subtitle">Create a Razorpay request for this lead or record a manual payment if the lead has already paid directly.</p>
+                </div>
+                <div className="payment-summary-stats">
+                  <div>
+                    <span className="label">Requests</span>
+                    <strong>{paymentSummary.count}</strong>
+                  </div>
+                  <div>
+                    <span className="label">Paid</span>
+                    <strong>₹{(paymentSummary.totalPaid / 100).toLocaleString('en-IN')}</strong>
+                  </div>
+                  <div>
+                    <span className="label">Pending</span>
+                    <strong>{paymentSummary.pending}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {paymentMessage && <div className="payment-message">{paymentMessage}</div>}
+
+              <div className="payment-form-grid">
+                <div className="lead-detail-block payment-card">
+                  <h5><CreditCard size={16} /> Send payment request</h5>
+                  <div className="payment-form-row">
+                    <label>
+                      Amount (₹)
+                      <input type="number" min="1" step="0.01" value={paymentForm.amount} onChange={(event) => setPaymentForm((prev) => ({ ...prev, amount: event.target.value }))} />
+                    </label>
+                    <label>
+                      Description
+                      <input type="text" value={paymentForm.description} onChange={(event) => setPaymentForm((prev) => ({ ...prev, description: event.target.value }))} placeholder="Plan / service fee" />
+                    </label>
+                  </div>
+                  <div className="payment-form-row">
+                    <label>
+                      Customer Name
+                      <input type="text" value={paymentForm.customer_name} onChange={(event) => setPaymentForm((prev) => ({ ...prev, customer_name: event.target.value }))} placeholder={contact?.name || 'Lead name'} />
+                    </label>
+                    <label>
+                      Email
+                      <input type="email" value={paymentForm.customer_email} onChange={(event) => setPaymentForm((prev) => ({ ...prev, customer_email: event.target.value }))} placeholder="lead@example.com" />
+                    </label>
+                  </div>
+                  <div className="payment-form-row">
+                    <label>
+                      Phone
+                      <input type="text" value={paymentForm.customer_phone} onChange={(event) => setPaymentForm((prev) => ({ ...prev, customer_phone: event.target.value }))} placeholder="Phone number" />
+                    </label>
+                  </div>
+                  <Button variant="primary" onClick={handleRequestLeadPayment} disabled={requestPaymentSubmitting}>
+                    {requestPaymentSubmitting ? 'Creating request…' : 'Send Razorpay request'}
+                  </Button>
+                </div>
+
+                <div className="lead-detail-block payment-card">
+                  <h5><PlusCircle size={16} /> Record direct payment</h5>
+                  <div className="payment-form-row">
+                    <label>
+                      Amount (₹)
+                      <input type="number" min="1" step="0.01" value={paymentForm.amount} onChange={(event) => setPaymentForm((prev) => ({ ...prev, amount: event.target.value }))} />
+                    </label>
+                    <label>
+                      Reference
+                      <input type="text" value={paymentForm.payment_reference} onChange={(event) => setPaymentForm((prev) => ({ ...prev, payment_reference: event.target.value }))} placeholder="UTR / transaction ID" />
+                    </label>
+                  </div>
+                  <div className="payment-form-row">
+                    <label>
+                      Notes
+                      <textarea rows={3} value={paymentForm.notes} onChange={(event) => setPaymentForm((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Payment notes" />
+                    </label>
+                  </div>
+                  <Button variant="secondary" onClick={handleRecordManualPayment} disabled={manualPaymentSubmitting}>
+                    {manualPaymentSubmitting ? 'Saving…' : 'Record manual payment'}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="lead-detail-block payment-history-card">
+                <h5>Payment history</h5>
+                {paymentsLoading ? (
+                  <div className="log-loading"><Loader size={16} /><span>Loading payments…</span></div>
+                ) : leadPayments.length === 0 ? (
+                  <p>No payment activity yet.</p>
+                ) : (
+                  <div className="log-list">
+                    {leadPayments.map((entry) => (
+                      <div key={entry.id} className="log-entry">
+                        <div className="log-entry-header">
+                          <div>
+                            <div className="log-entry-title">{entry.description || 'Lead payment'}</div>
+                            <div className="log-entry-description">{entry.provider === 'razorpay' ? 'Razorpay request' : 'Manual payment'} • {entry.payment_reference || entry.razorpay_order_id || 'No reference'}</div>
+                          </div>
+                          <div className="log-entry-time">{entry.created_at ? new Date(entry.created_at).toLocaleString() : ''}</div>
+                        </div>
+                        <div className="log-entry-meta">Amount: ₹{((entry.amount || 0) / 100).toLocaleString('en-IN')} • Status: {entry.status || 'unknown'}</div>
+                        {entry.customer_name && <div className="log-entry-meta">Customer: {entry.customer_name}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
         {activeTab === 'logs' && (

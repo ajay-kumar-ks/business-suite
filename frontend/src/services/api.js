@@ -190,6 +190,10 @@ export const crmAPI = {
   // Lead / Client Logs
   getLeadLogs: (id, params = {}) => api.get(`/crm/leads/${id}/logs`, { params }),
   createLeadLog: (id, data) => api.post(`/crm/leads/${id}/logs`, data),
+  getLeadPayments: (id) => api.get(`/crm/leads/${id}/payments`),
+  requestLeadPayment: (id, data) => api.post(`/crm/leads/${id}/payments/request`, data),
+  createLeadManualPayment: (id, data) => api.post(`/crm/leads/${id}/payments/manual`, data),
+  verifyLeadPayment: (id, data) => api.post(`/crm/leads/${id}/payments/verify`, data),
   getClientLogs: (id, params = {}) => api.get(`/crm/clients/${id}/logs`, { params }),
   createClientLog: (id, data) => api.post(`/crm/clients/${id}/logs`, data),
 }

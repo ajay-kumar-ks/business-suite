@@ -4,17 +4,18 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 from app.core.event_bus import event_bus
 from app.modules.accounts.models import JournalEntry, JournalLine
+from app.modules.accounts.account_lookups import get_account_id_by_code, get_cash_account_id
 from app.core.database import commit_or_rollback
 
 
 def create_bill_journal(db: Session, bill) -> JournalEntry:
     """
     Create a journal entry for a bill.
-    Debit: Expense (account_id 5000)
-    Credit: Accounts Payable (account_id 2000)
+    Debit: Expense (account_code 5000)
+    Credit: Accounts Payable (account_code 2000)
     """
-    expense_account_id = 7
-    ap_account_id = 4
+    expense_account_id = get_account_id_by_code(db, "5000")
+    ap_account_id = get_account_id_by_code(db, "2000")
 
     journal = JournalEntry(
         reference=bill.bill_number,
@@ -63,11 +64,11 @@ def create_bill_journal(db: Session, bill) -> JournalEntry:
 def create_vendor_payment_journal(db: Session, payment, bill) -> JournalEntry:
     """
     Create a journal entry for a vendor payment.
-    Debit: Accounts Payable (account_id 2000)
-    Credit: Cash (account_id 1000)
+    Debit: Accounts Payable (account_code 2000)
+    Credit: Cash (account_code 1000)
     """
-    ap_account_id = 4
-    cash_account_id = 1
+    ap_account_id = get_account_id_by_code(db, "2000")
+    cash_account_id = get_cash_account_id(db)
 
     journal = JournalEntry(
         reference=payment.reference or f"VPY-{payment.id}",

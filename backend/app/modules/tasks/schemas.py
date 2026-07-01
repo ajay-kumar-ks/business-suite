@@ -221,3 +221,22 @@ class TaskNotificationResponse(BaseModel):
             "task_title": getattr(obj, "task_title", None),
         }
         return cls(**data)
+
+
+# ──────────────────────────────────────────────
+# Task Chatbot Schemas
+# ──────────────────────────────────────────────
+
+
+class ChatbotMessage(BaseModel):
+    role: str = "user"  # user, assistant
+    content: str
+
+
+class ChatbotRequest(BaseModel):
+    message: str
+    history: list[ChatbotMessage] = []
+
+
+class ChatbotResponse(BaseModel):
+    reply: str

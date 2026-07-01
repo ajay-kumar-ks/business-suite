@@ -22,6 +22,7 @@ from app.modules.tasks.schemas import (
     TaskActivityResponse,
     TaskDependencyCreate, TaskDependencyResponse,
     SubTaskCreate, SubTaskUpdate, SubTaskResponse,
+    ChatbotRequest, ChatbotResponse,
     Priority, Status,
 )
 from app.modules.tasks.db_models import Task, TaskActivity, TaskDependency, SubTask
@@ -977,6 +978,147 @@ async def ai_task_suggestions_for_existing(
         description=task.description,
     )
     return suggestions
+
+
+# ══════════════════════════════════════════════
+# Task Chatbot Endpoint
+# ══════════════════════════════════════════════
+
+
+@router.post("/ai/chat")
+async def task_chatbot(
+    data: ChatbotRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Task Chatbot: Answers user questions about task data.
+    Uses AI with full task context to provide intelligent responses.
+    Only answers questions related to task content.
+    """
+    from app.modules.tasks.task_chatbot_service import task_chatbot as ai_chat
+    from app.modules.tasks.db_models import TaskComment, TaskActivity, SubTask, TaskDependency, TaskNotification
+    from app.modules.hr.db_models import Employee
+
+    # Fetch all task data
+    tasks = get_tasks(db)
+    employees = db.query(Employee).all()
+    activities = db.query(TaskActivity).order_by(TaskActivity.created_at.desc()).limit(100).all()
+    comments = db.query(TaskComment).order_by(TaskComment.created_at.desc()).limit(100).all()
+    subtasks = db.query(SubTask).all()
+    dependencies_raw = db.query(TaskDependency).all()
+    notifications = db.query(TaskNotification).order_by(TaskNotification.created_at.desc()).limit(50).all()
+
+    # Convert to dicts for the AI service
+    employees_data = []
+    for emp in employees:
+        d = {
+            "id": emp.id,
+            "name": emp.user.full_name if emp.user else None,
+            "email": emp.user.email if emp.user else None,
+            "department": emp.department.name if emp.department else None,
+            "employee_code": emp.employee_code,
+        }
+        employees_data.append(d)
+
+    comments_data = []
+    for c in comments:
+        d = {
+            "id": c.id,
+            "task_id": str(c.task_id),
+            "user_id": c.user_id,
+            "content": c.content,
+            "user_name": getattr(c, "user_name", None),
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        }
+        comments_data.append(d)
+
+    activities_data = []
+    for a in activities:
+        d = {
+            "id": a.id,
+            "task_id": str(a.task_id),
+            "user_id": a.user_id,
+            "user_name": getattr(a, "user_name", None),
+            "action": a.action,
+            "field_name": a.field_name,
+            "old_value": a.old_value,
+            "new_value": a.new_value,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        activities_data.append(d)
+
+    subtasks_data = []
+    for s in subtasks:
+        d = {
+            "id": s.id,
+            "task_id": str(s.task_id),
+            "title": s.title,
+            "completed": bool(s.completed),
+        }
+        subtasks_data.append(d)
+
+    # Build dependencies dict
+    dependencies_data = {"blocked_by": [], "blocking": []}
+    for dep in dependencies_raw:
+        d = {
+            "id": dep.id,
+            "task_id": str(dep.task_id),
+            "depends_on_task_id": str(dep.depends_on_task_id),
+            "title": getattr(dep, "depends_on_title", None),
+            "status": getattr(dep, "depends_on_status", None),
+        }
+        dependencies_data["blocked_by"].append(d)
+        # Note: blocking would require separate query, simplified here
+
+    notifications_data = []
+    for n in notifications:
+        d = {
+            "id": n.id,
+            "user_id": n.user_id,
+            "task_id": str(n.task_id),
+            "type": n.type,
+            "message": n.message,
+            "actor_name": getattr(n, "actor_name", None),
+            "task_title": getattr(n, "task_title", None),
+            "read": bool(n.read),
+            "created_at": n.created_at.isoformat() if n.created_at else None,
+        }
+        notifications_data.append(d)
+
+    # Convert tasks to dicts
+    tasks_data = []
+    for t in tasks:
+        d = {
+            "id": str(t.id),
+            "title": t.title,
+            "description": t.description,
+            "status": t.status.value if t.status else None,
+            "priority": t.priority.value if t.priority else None,
+            "assignee": t.assignee_name,
+            "assignee_id": t.assignee_id,
+            "due_date": t.due_date.isoformat() if t.due_date else None,
+            "reason_note": t.reason_note,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+            "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+        }
+        tasks_data.append(d)
+
+    history = [{"role": m.role, "content": m.content} for m in data.history]
+
+    reply = ai_chat(
+        message=data.message,
+        history=history,
+        tasks=tasks_data,
+        employees=employees_data,
+        activities=activities_data,
+        comments=comments_data,
+        subtasks=subtasks_data,
+        dependencies=dependencies_data,
+        notifications=notifications_data,
+    )
+
+    return ChatbotResponse(reply=reply)
 
 
 # ──────────────────────────────────────────────

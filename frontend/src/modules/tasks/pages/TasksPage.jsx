@@ -13,6 +13,8 @@ import { useAuth } from '../../../context/AuthContext'
 import { useTaskNotifications } from '../../../context/TaskNotificationContext'
 import '../styles/TasksPage.css'
 import '../styles/TasksAnalytics.css'
+import '../styles/TaskChatBot.css'
+import TaskChatBot from '../components/TaskChatBot'
 
 const DEFAULT_FILTERS = {
   status: '',
@@ -437,6 +439,9 @@ const TasksPage = () => {
           onCancel={handleProofCancel}
         />
       )}
+
+      {/* Task Chatbot */}
+      <TaskChatBot />
     </div>
   )
 }

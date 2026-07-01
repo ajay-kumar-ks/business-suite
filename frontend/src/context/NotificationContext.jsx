@@ -3,14 +3,104 @@ import { taskApi } from '../modules/tasks/services/taskApi'
 
 const NotificationContext = createContext()
 
-const POLL_INTERVAL = 15000 // 15 seconds
+const FALLBACK_POLL_INTERVAL = 120000 // 2 minutes (only if WebSocket disconnects)
+const RECONNECT_DELAY = 3000 // 3 seconds before reconnecting
 
 export const NotificationProvider = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState(0)
   const [notifications, setNotifications] = useState([])
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [wsConnected, setWsConnected] = useState(false)
+  const wsRef = useRef(null)
   const intervalRef = useRef(null)
+  const reconnectTimerRef = useRef(null)
+
+  // ── WebSocket connection ──
+  const connectWebSocket = useCallback(() => {
+    // Don't reconnect if already connected or connecting
+    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+      return
+    }
+
+    const token = localStorage.getItem('access_token')
+    if (!token) return
+
+    // Determine WS URL: use VITE_WS_URL if provided, otherwise derive from current location
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsBase = import.meta.env.VITE_WS_URL || `${protocol}//${window.location.host}`
+    const wsUrl = `${wsBase}/ws/notifications?token=${encodeURIComponent(token)}`
+
+    try {
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        setWsConnected(true)
+        setError(null)
+        // Clear fallback polling while WebSocket is connected
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current)
+          intervalRef.current = null
+        }
+      }
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          if (data.type === 'notification' && data.notification) {
+            const notif = data.notification
+            // Prepend the new notification to the list
+            setNotifications((prev) => [notif, ...prev].slice(0, 50))
+            if (!notif.read) {
+              setUnreadCount((prev) => prev + 1)
+            }
+          } else if (data.type === 'pong') {
+            // Heartbeat response — do nothing
+          }
+        } catch (err) {
+          console.error('Failed to parse WebSocket message:', err)
+        }
+      }
+
+      ws.onclose = () => {
+        setWsConnected(false)
+        wsRef.current = null
+        // Start fallback polling when WebSocket disconnects
+        startFallbackPolling()
+        // Attempt to reconnect after a delay
+        if (!reconnectTimerRef.current) {
+          reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null
+            connectWebSocket()
+          }, RECONNECT_DELAY)
+        }
+      }
+
+      ws.onerror = () => {
+        // onerror will be followed by onclose, so we handle reconnection there
+      }
+    } catch (err) {
+      console.error('Failed to create WebSocket connection:', err)
+      setWsConnected(false)
+      startFallbackPolling()
+    }
+  }, [])
+
+  // ── Fallback polling (used when WebSocket is not connected) ──
+  const startFallbackPolling = useCallback(() => {
+    if (intervalRef.current) return
+    intervalRef.current = setInterval(() => {
+      fetchUnreadCount()
+    }, FALLBACK_POLL_INTERVAL)
+  }, [])
+
+  const stopFallbackPolling = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+  }, [])
 
   const fetchUnreadCount = useCallback(async () => {
     try {
@@ -45,22 +135,28 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [])
 
-  // Start polling when component mounts, stop on unmount
+  // ── Lifecycle ──
   useEffect(() => {
     // Initial fetch
     fetchUnreadCount()
 
-    // Poll for unread count
-    intervalRef.current = setInterval(() => {
-      fetchUnreadCount()
-    }, POLL_INTERVAL)
+    // Connect WebSocket
+    connectWebSocket()
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
+      // Cleanup WebSocket
+      if (wsRef.current) {
+        wsRef.current.close()
+        wsRef.current = null
+      }
+      // Cleanup timers
+      stopFallbackPolling()
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
       }
     }
-  }, [fetchUnreadCount])
+  }, [connectWebSocket, fetchUnreadCount, stopFallbackPolling])
 
   const markAsRead = useCallback(async (notificationId) => {
     try {
@@ -92,6 +188,7 @@ export const NotificationProvider = ({ children }) => {
     notifications,
     notificationsLoading,
     error,
+    wsConnected,
     fetchNotifications,
     fetchUnreadCount,
     markAsRead,

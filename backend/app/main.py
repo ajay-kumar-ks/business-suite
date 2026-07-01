@@ -29,7 +29,7 @@ from app.services.vector import EmbeddingService, VectorSearchService
 from app.services.vector.reindex_hooks import register_vector_reindex_hooks
 from app.services.vector.router import router as vector_router
 
-app = FastAPI(title="Business Suite Backend", version="0.1.0")
+git = FastAPI(title="Business Suite Backend", version="0.1.0")
 
 logger = logging.getLogger(__name__)
 

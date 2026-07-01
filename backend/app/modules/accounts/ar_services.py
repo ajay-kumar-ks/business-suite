@@ -3,16 +3,17 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 from app.core.event_bus import event_bus
 from app.modules.accounts.models import JournalEntry, JournalLine
+from app.modules.accounts.account_lookups import get_account_id_by_code, get_cash_account_id
 from app.core.database import commit_or_rollback
 
 
 def create_invoice_journal(db: Session, invoice) -> JournalEntry:
     """Create a journal entry for an invoice.
-    Debit: Accounts Receivable (account_id 1200)
-    Credit: Revenue (account_id 4000)
+    Debit: Accounts Receivable (account_code 1200)
+    Credit: Revenue (account_code 4000)
     """
-    ar_account_id = 3
-    revenue_account_id = 6
+    ar_account_id = get_account_id_by_code(db, "1200")
+    revenue_account_id = get_account_id_by_code(db, "4000")
 
     journal = JournalEntry(
         reference=invoice.invoice_number,
@@ -60,11 +61,11 @@ def create_invoice_journal(db: Session, invoice) -> JournalEntry:
 
 def create_payment_journal(db: Session, payment, invoice) -> JournalEntry:
     """Create a journal entry for a customer payment.
-    Debit: Cash (account_id 1000)
-    Credit: Accounts Receivable (account_id 1200)
+    Debit: Cash (account_code 1000)
+    Credit: Accounts Receivable (account_code 1200)
     """
-    cash_account_id = 1
-    ar_account_id = 3
+    cash_account_id = get_cash_account_id(db)
+    ar_account_id = get_account_id_by_code(db, "1200")
 
     journal = JournalEntry(
         reference=payment.reference or f"PMT-{payment.id}",

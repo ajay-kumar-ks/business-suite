@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Enum, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.core.base import BaseModel
+from app.modules.auth.db_models import User
 import enum
 
 
@@ -114,7 +115,7 @@ class Employee(BaseModel):
         nullable=False,
     )
 
-    user = relationship("User")
+    user = relationship(User, foreign_keys=[user_id])
     department = relationship("Department", back_populates="employees")
 
     def __repr__(self):

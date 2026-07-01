@@ -26,7 +26,7 @@ from app.modules.recruitment.routers import router as recruitment_router
 from app.modules.payments.routers import router as payments_router
 from app.modules.accounts.salary_event_handlers import register_salary_event_handlers
 
-app = FastAPI(title="Business Suite Backend", version="0.1.0")
+git = FastAPI(title="Business Suite Backend", version="0.1.0")
 
 logger = logging.getLogger(__name__)
 

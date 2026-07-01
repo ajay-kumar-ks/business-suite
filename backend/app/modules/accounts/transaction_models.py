@@ -16,7 +16,12 @@ class Expense(BaseModel):
     journal_id = Column(Integer, ForeignKey('journal_entries.id'), nullable=True)
     status = Column(String(50), default="draft", nullable=False)
 
-    journal = relationship('JournalEntry')
+    # Lazy-load relationship to avoid circular imports
+    journal = relationship(
+        'JournalEntry',
+        foreign_keys=[journal_id],
+        viewonly=True
+    )
 
 
 class Income(BaseModel):
@@ -31,4 +36,9 @@ class Income(BaseModel):
     journal_id = Column(Integer, ForeignKey('journal_entries.id'), nullable=True)
     status = Column(String(50), default="draft", nullable=False)
 
-    journal = relationship('JournalEntry')
+    # Lazy-load relationship to avoid circular imports
+    journal = relationship(
+        'JournalEntry',
+        foreign_keys=[journal_id],
+        viewonly=True
+    )

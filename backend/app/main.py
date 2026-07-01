@@ -25,10 +25,16 @@ from app.modules.tasks.event_handlers import register_handlers
 from app.modules.recruitment.routers import router as recruitment_router
 from app.modules.payments.routers import router as payments_router
 from app.modules.accounts.salary_event_handlers import register_salary_event_handlers
+from app.services.vector import EmbeddingService, VectorSearchService
+from app.services.vector.reindex_hooks import register_vector_reindex_hooks
+from app.services.vector.router import router as vector_router
 
 git = FastAPI(title="Business Suite Backend", version="0.1.0")
 
 logger = logging.getLogger(__name__)
+
+embedding_service = EmbeddingService()
+vector_search_service = VectorSearchService()
 
 
 @app.middleware("http")
@@ -82,6 +88,7 @@ app.include_router(crm_clients_router, prefix="/api/crm", tags=["crm"])
 app.include_router(crm_ai_router, prefix="/api/crm", tags=["crm"])
 app.include_router(payments_router, prefix="/payments", tags=["payments"])
 app.include_router(payments_router, prefix="/api/payments", tags=["payments"])
+app.include_router(vector_router, prefix="/api", tags=["vector"])
 
 # Serve uploaded files
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads")
@@ -108,8 +115,37 @@ async def startup_event():
         print(f"[WARN] Database connection warning: {str(e)[:100]}")
         print("[OK] Server started (database connection failed - check your DATABASE_URL credentials in .env)")
 
+    register_vector_reindex_hooks()
     register_event_handlers()
     register_salary_event_handlers()
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS search_documents (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                organization_id UUID NOT NULL,
+                entity_type TEXT NOT NULL,
+                entity_id UUID NOT NULL,
+                source_table TEXT,
+                source_field TEXT,
+                chunk_index INTEGER NOT NULL DEFAULT 0,
+                chunk_type TEXT,
+                content TEXT NOT NULL,
+                metadata JSONB DEFAULT '{}'::jsonb,
+                embedding VECTOR(1536),
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                embedding_model TEXT DEFAULT 'text-embedding-3-small'
+            )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_search_documents_org ON search_documents(organization_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_search_documents_entity ON search_documents(entity_type, entity_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_search_documents_updated ON search_documents(updated_at DESC)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_search_documents_embedding_hnsw ON search_documents USING hnsw (embedding vector_cosine_ops)"))
+    except Exception as init_err:
+        logger.warning("Vector schema initialization skipped: %s", init_err)
 
     # Seed default chart of accounts if missing (e.g. Salary Payable 2100)
     from app.core.database import SessionLocal as _SeedSession

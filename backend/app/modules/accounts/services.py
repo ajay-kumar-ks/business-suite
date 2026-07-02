@@ -63,6 +63,46 @@ def validate_journal_lines(lines: List[JournalLine]) -> None:
         raise ValueError("Journal entry cannot contain only zero values.")
 
 
+def ensure_account_table_sequences(db: Session) -> None:
+    """Ensure PostgreSQL identity sequences exist for Accounts tables that rely on auto-generated IDs."""
+    tables = (
+        "chart_of_accounts",
+        "journal_entries",
+        "journal_lines",
+        "ledger_entries",
+        "expenses",
+        "income",
+        "budgets",
+        "budget_lines",
+    )
+
+    for table_name in tables:
+        db.execute(text(f"""
+            DO $$
+            DECLARE
+                seq_name text := '{table_name}_id_seq';
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE c.relkind = 'S' AND n.nspname = current_schema() AND c.relname = seq_name
+                ) THEN
+                    EXECUTE format('CREATE SEQUENCE %I OWNED BY %I.id', seq_name, '{table_name}');
+                END IF;
+
+                EXECUTE format('ALTER TABLE %I ALTER COLUMN id SET DEFAULT nextval(%L)', '{table_name}', seq_name);
+                EXECUTE format('SELECT setval(%L, COALESCE((SELECT MAX(id) + 1 FROM %I), 1), false)', seq_name, '{table_name}');
+            END $$;
+        """))
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+
 def _ensure_ledger_entry_sequence(db: Session) -> None:
     """Ensure PostgreSQL can auto-generate ledger entry IDs for posting."""
     try:

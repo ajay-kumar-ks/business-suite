@@ -8,6 +8,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 
 const BudgetsPage = () => {
   const { department, canPerformAction, loading } = useAccountsPermissions()
+  const today = new Date().toISOString().split('T')[0]
   if (loading) return <div className="module-page"><p>Loading...</p></div>
   if (!isPageAllowed(department, 'budgets')) {
     return (
@@ -19,7 +20,7 @@ const BudgetsPage = () => {
   }
   const [budgets, setBudgets] = useState([])
   const [accounts, setAccounts] = useState([])
-  const [form, setForm] = useState({ name: '', fiscal_year: new Date().getFullYear(), total_amount: 0, start_date: '', end_date: '', status: 'draft' })
+  const [form, setForm] = useState({ name: '', fiscal_year: new Date().getFullYear(), total_amount: 0, start_date: today, end_date: today, status: 'draft' })
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('success')
   const [expandedId, setExpandedId] = useState(null)
@@ -58,11 +59,17 @@ const BudgetsPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const payload = {
+      ...form,
+      start_date: form.start_date || today,
+      end_date: form.end_date || today,
+    }
     try {
-      await accountsAPI.createBudget(form)
+      const response = await accountsAPI.createBudget(payload)
+      const createdBudget = response.data
+      setBudgets(prev => [createdBudget, ...prev])
       showMessage('Budget created successfully!')
-      setForm({ name: '', fiscal_year: new Date().getFullYear(), total_amount: 0, start_date: '', end_date: '', status: 'draft' })
-      loadBudgets()
+      setForm({ name: '', fiscal_year: new Date().getFullYear(), total_amount: 0, start_date: today, end_date: today, status: 'draft' })
     } catch (err) {
       showMessage(getAPIErrorMessage(err, 'Unable to create budget'), 'error')
     }

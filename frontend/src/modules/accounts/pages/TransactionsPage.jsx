@@ -33,22 +33,24 @@ const TransactionsPage = () => {
     }
   }, [])
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const [expenseResponse, incomeResponse] = await Promise.all([
-          accountsAPI.listExpenses(),
-          accountsAPI.listIncome(),
-        ])
-        setExpenses(expenseResponse.data)
-        setIncome(incomeResponse.data)
-      } catch (err) {
-        setError(getAPIErrorMessage(err, 'Unable to load transactions'))
-      }
+  const refreshTransactions = useCallback(async () => {
+    try {
+      const [expenseResponse, incomeResponse] = await Promise.all([
+        accountsAPI.listExpenses(),
+        accountsAPI.listIncome(),
+      ])
+      setExpenses(expenseResponse.data || [])
+      setIncome(incomeResponse.data || [])
+      setError('')
+    } catch (err) {
+      setError(getAPIErrorMessage(err, 'Unable to load transactions'))
     }
-    loadData()
+  }, [])
+
+  useEffect(() => {
+    refreshTransactions()
     loadAccounts()
-  }, [loadAccounts])
+  }, [loadAccounts, refreshTransactions])
 
   const getAccountName = (id) => {
     const acct = accounts.find(a => a.id === Number(id))
@@ -57,13 +59,14 @@ const TransactionsPage = () => {
 
   const handleExpenseSubmit = async (e) => {
     e.preventDefault()
+    setError('')
+    setSuccess('')
     try {
-      await accountsAPI.createExpense(expenseForm)
+      const response = await accountsAPI.createExpense(expenseForm)
+      const createdExpense = response.data
+      setExpenses(prev => [createdExpense, ...prev])
       setSuccess('Expense recorded successfully!')
-      setError('')
       setExpenseForm({ description: '', amount: 0, account_id: '', reference: '' })
-      const response = await accountsAPI.listExpenses()
-      setExpenses(response.data)
     } catch (err) {
       setError(getAPIErrorMessage(err, 'Unable to record expense'))
       setSuccess('')
@@ -72,13 +75,14 @@ const TransactionsPage = () => {
 
   const handleIncomeSubmit = async (e) => {
     e.preventDefault()
+    setError('')
+    setSuccess('')
     try {
-      await accountsAPI.createIncome(incomeForm)
+      const response = await accountsAPI.createIncome(incomeForm)
+      const createdIncome = response.data
+      setIncome(prev => [createdIncome, ...prev])
       setSuccess('Income recorded successfully!')
-      setError('')
       setIncomeForm({ description: '', amount: 0, account_id: '', reference: '' })
-      const response = await accountsAPI.listIncome()
-      setIncome(response.data)
     } catch (err) {
       setError(getAPIErrorMessage(err, 'Unable to record income'))
       setSuccess('')

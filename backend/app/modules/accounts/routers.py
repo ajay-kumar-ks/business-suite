@@ -19,6 +19,7 @@ from app.modules.accounts.schemas import (
     LedgerEntryRead,
 )
 from app.modules.accounts.services import (
+    ensure_account_table_sequences,
     post_journal_entry,
     validate_journal_lines,
 )
@@ -76,6 +77,7 @@ def create_coa_entry(
     data: ChartOfAccountCreate,
     db: Session = Depends(get_db),
 ):
+    ensure_account_table_sequences(db)
     account = ChartOfAccount(
         account_code=data.account_code,
         account_name=data.account_name,
@@ -99,6 +101,7 @@ def create_journal_entry(
     data: JournalEntryCreate,
     db: Session = Depends(get_db),
 ):
+    ensure_account_table_sequences(db)
     account_ids = [line.account_id for line in data.lines]
     valid_accounts = {id for (id,) in db.query(ChartOfAccount.id).filter(ChartOfAccount.id.in_(account_ids))}
 
@@ -246,6 +249,7 @@ def create_expense(
     data: ExpenseCreate,
     db: Session = Depends(get_db),
 ):
+    ensure_account_table_sequences(db)
     expense = Expense(
         description=data.description,
         amount=Decimal(str(data.amount)),
@@ -286,6 +290,7 @@ def create_income(
     data: IncomeCreate,
     db: Session = Depends(get_db),
 ):
+    ensure_account_table_sequences(db)
     income = Income(
         description=data.description,
         amount=Decimal(str(data.amount)),
@@ -506,6 +511,7 @@ def create_budget(
     data: BudgetCreate,
     db: Session = Depends(get_db),
 ):
+    ensure_account_table_sequences(db)
     budget = Budget(
         name=data.name,
         fiscal_year=data.fiscal_year,
@@ -541,6 +547,7 @@ def create_budget_line(
     data: BudgetLineCreate,
     db: Session = Depends(get_db),
 ):
+    ensure_account_table_sequences(db)
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
     if not budget:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found.")

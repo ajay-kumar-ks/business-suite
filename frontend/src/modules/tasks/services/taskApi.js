@@ -90,4 +90,9 @@ export const taskApi = {
 
   markAllNotificationsRead: () =>
     api.post('/tasks/notifications/read-all'),
+
+  // ── Chatbot ──
+
+  sendChatMessage: (message, history) =>
+    api.post('/tasks/ai/chat', { message, history }),
 }

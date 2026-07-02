@@ -1,18 +1,22 @@
 import os
 import asyncio
-from fastapi import FastAPI
+import json
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from jose import jwt, JWTError
 from sqlalchemy import inspect, text
 from sqlalchemy.types import NullType
 from app.core.config import settings
 from app.core.event_bus import event_bus
 from app.core.event_handlers import register_event_handlers
-from app.core.database import engine
+from app.core.database import engine, SessionLocal
 from app.core.base import Base
+from app.core.websocket_manager import ws_manager
 
 import logging
 import time
+from app.modules.auth.db_models import User as UserDB
 from app.modules.auth.routers import router as auth_router
 from app.modules.hr.routers import router as hr_router
 from app.modules.hr.upload import router as hr_upload_router
@@ -99,6 +103,53 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok", "environment": settings.ENVIRONMENT}
+
+
+# ──────────────────────────────────────────────
+# WebSocket endpoint for real-time notifications
+# ──────────────────────────────────────────────
+
+
+@app.websocket("/ws/notifications")
+async def websocket_notifications(
+    ws: WebSocket,
+    token: str = Query(...),
+):
+    """WebSocket endpoint for real-time notifications.
+
+    Clients connect with their JWT token as a query parameter:
+      ws://host/ws/notifications?token=<jwt_token>
+
+    The server authenticates the token, registers the connection,
+    and pushes new notifications to the client as they are created.
+    """
+    # Authenticate the token
+    user_id = None
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        user_id = payload.get("sub")
+        if user_id is None:
+            await ws.close(code=4001, reason="Invalid token: missing sub")
+            return
+        user_id = int(user_id)
+    except (JWTError, ValueError, TypeError):
+        await ws.close(code=4001, reason="Invalid or expired token")
+        return
+
+    await ws_manager.connect(user_id, ws)
+    try:
+        while True:
+            # Keep the connection alive by reading messages
+            # Clients can send "ping" to which we reply "pong"
+            data = await ws.receive_text()
+            if data == "ping":
+                await ws.send_text(json.dumps({"type": "pong"}))
+            elif data.startswith("ping:"):
+                await ws.send_text(json.dumps({"type": "pong"}))
+    except WebSocketDisconnect:
+        pass
+    finally:
+        ws_manager.disconnect(user_id, ws)
 
 
 @app.on_event("startup")
@@ -305,30 +356,26 @@ async def _run_database_migrations():
             print(f"[WARN] Startup migration issue: {err_msg}")
             print("[OK] Server started (database tables may be incomplete)")
 
+    # Seeding and remaining startup steps are wrapped in try/except
+    # so a temporary DB outage doesn't kill the server
+    try:
+        from app.core.database import SessionLocal as _SeedSession
+        from app.modules.accounts.services import seed_default_chart_of_accounts
+        _seed_db = _SeedSession()
+        try:
+            seed_default_chart_of_accounts(_seed_db)
+        finally:
+            _seed_db.close()
+    except Exception as e:
+        print(f"[WARN] Seed chart of accounts error: {str(e)[:100]}")
+
     register_event_handlers()
     register_salary_event_handlers()
-
-    # Seed default chart of accounts if missing (e.g. Salary Payable 2100)
-    from app.core.database import SessionLocal as _SeedSession
-    from app.modules.accounts.services import seed_default_chart_of_accounts
-    _seed_db = _SeedSession()
-    try:
-        seed_default_chart_of_accounts(_seed_db)
-    finally:
-        _seed_db.close()
-
     event_bus.connect()
-
-    # Register tasks module event handlers
     register_handlers()
-
-    # Start overdue task scheduler
     asyncio.create_task(run_overdue_scheduler())
 
-    # NOTE: Removed accidental indented block that caused IndentationError.
-    # Any additional background migration logic should live inside _run_database_migrations().
 
-    
 @app.on_event("shutdown")
 async def shutdown_event():
     event_bus.disconnect()

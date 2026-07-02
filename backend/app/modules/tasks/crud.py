@@ -453,7 +453,11 @@ def create_notification(
     message: str,
     actor_id: int,
 ) -> TaskNotification:
-    """Create a notification for a user about a task event."""
+    """Create a notification for a user about a task event.
+
+    After persisting to the database, pushes the notification in real-time
+    to the user via WebSocket (if they are connected).
+    """
     notification = TaskNotification(
         user_id=user_id,
         task_id=task_id,
@@ -465,7 +469,75 @@ def create_notification(
     db.add(notification)
     db.commit()
     db.refresh(notification)
+
+    # Push notification in real-time via WebSocket (fire-and-forget)
+    _push_notification_via_websocket(notification)
+
     return notification
+
+
+def _push_notification_via_websocket(notification: TaskNotification) -> None:
+    """Push a notification to the user in real-time via WebSocket.
+
+    Enriches the notification with actor name and task title, then sends
+    it to the user's active WebSocket connections.
+    Runs as a fire-and-forget task so it doesn't block the request.
+    """
+    import asyncio
+    from app.core.websocket_manager import ws_manager
+
+    # Enrich with actor name and task title for the push payload
+    actor_name = None
+    task_title = None
+
+    try:
+        from app.core.database import SessionLocal
+        from app.modules.auth.db_models import User as UserDB
+        from app.modules.tasks.db_models import Task
+
+        db = SessionLocal()
+        try:
+            # Fetch actor name
+            if notification.actor_id:
+                actor = db.query(UserDB).filter(UserDB.id == notification.actor_id).first()
+                if actor:
+                    actor_name = actor.full_name or actor.username
+
+            # Fetch task title
+            if notification.task_id:
+                task = db.query(Task).filter(Task.id == notification.task_id).first()
+                if task:
+                    task_title = task.title
+        finally:
+            db.close()
+    except Exception:
+        # Enrichment is best-effort — notification will still be delivered
+        pass
+
+    notification_data = {
+        "type": "notification",
+        "notification": {
+            "id": notification.id,
+            "user_id": notification.user_id,
+            "task_id": str(notification.task_id),
+            "type": notification.type,
+            "message": notification.message,
+            "actor_id": notification.actor_id,
+            "actor_name": actor_name,
+            "task_title": task_title,
+            "read": bool(notification.read),
+            "created_at": notification.created_at.isoformat() if notification.created_at else None,
+        },
+    }
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.ensure_future(
+                ws_manager.send_to_user(notification.user_id, notification_data)
+            )
+    except RuntimeError:
+        # No event loop running — skip WebSocket send
+        pass
 
 
 def get_notifications_for_user(

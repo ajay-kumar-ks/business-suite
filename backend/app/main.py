@@ -320,30 +320,26 @@ async def _run_database_migrations():
             print(f"[WARN] Startup migration issue: {err_msg}")
             print("[OK] Server started (database tables may be incomplete)")
 
+    # Seeding and remaining startup steps are wrapped in try/except
+    # so a temporary DB outage doesn't kill the server
+    try:
+        from app.core.database import SessionLocal as _SeedSession
+        from app.modules.accounts.services import seed_default_chart_of_accounts
+        _seed_db = _SeedSession()
+        try:
+            seed_default_chart_of_accounts(_seed_db)
+        finally:
+            _seed_db.close()
+    except Exception as e:
+        print(f"[WARN] Seed chart of accounts error: {str(e)[:100]}")
+
     register_event_handlers()
     register_salary_event_handlers()
-
-    # Seed default chart of accounts if missing (e.g. Salary Payable 2100)
-    from app.core.database import SessionLocal as _SeedSession
-    from app.modules.accounts.services import seed_default_chart_of_accounts
-    _seed_db = _SeedSession()
-    try:
-        seed_default_chart_of_accounts(_seed_db)
-    finally:
-        _seed_db.close()
-
     event_bus.connect()
-
-    # Register tasks module event handlers
     register_handlers()
-
-    # Start overdue task scheduler
     asyncio.create_task(run_overdue_scheduler())
 
-    # NOTE: Removed accidental indented block that caused IndentationError.
-    # Any additional background migration logic should live inside _run_database_migrations().
 
-    
 @app.on_event("shutdown")
 async def shutdown_event():
     event_bus.disconnect()

@@ -104,6 +104,28 @@ def _build_prompt(metrics: dict) -> str:
     return "\n".join(lines)
 
 
+def _build_fallback_response(metrics: dict) -> dict:
+    if not any(
+        isinstance(value, (int, float)) and value > 0
+        for value in metrics.values()
+    ):
+        return {
+            "summary": "There is not enough financial activity yet to generate AI insights.",
+            "insights": [],
+        }
+
+    return {
+        "summary": "AI insights are temporarily unavailable. The latest financial data is still available in the Accounts module.",
+        "insights": [
+            {
+                "title": "Service temporarily unavailable",
+                "message": "The AI insights service could not be reached right now. Please try again shortly.",
+                "severity": "info",
+            }
+        ],
+    }
+
+
 def get_financial_insights(db: Session) -> dict:
     total_accounts = db.query(ChartOfAccount).count()
     total_journals = db.query(JournalEntry).count()
@@ -151,20 +173,30 @@ def get_financial_insights(db: Session) -> dict:
         "total_budgets": total_budgets,
     }
 
-    prompt = _build_prompt(metrics)
-    client = _get_client()
-    response = client.chat.completions.create(
-        model="openai/gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0.3,
-        max_tokens=700,
-    )
+    if not any(
+        isinstance(value, (int, float)) and value > 0
+        for value in metrics.values()
+    ):
+        return _build_fallback_response(metrics)
 
-    raw = response.choices[0].message.content or ""
-    result = _parse_ai_response(raw)
+    try:
+        prompt = _build_prompt(metrics)
+        client = _get_client()
+        response = client.chat.completions.create(
+            model="openai/gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=700,
+        )
+
+        raw = response.choices[0].message.content or ""
+        result = _parse_ai_response(raw)
+    except Exception as exc:
+        logger.warning("AI insights generation failed: %s", exc)
+        return _build_fallback_response(metrics)
 
     if not isinstance(result.get("summary"), str):
         result["summary"] = "Could not generate a summary from the current financial data."

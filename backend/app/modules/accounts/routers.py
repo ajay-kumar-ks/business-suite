@@ -585,10 +585,14 @@ def balance_sheet_report(db: Session = Depends(get_db)):
 def ai_insights(db: Session = Depends(get_db)):
     try:
         return get_financial_insights(db)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate financial insights: {str(exc)[:200]}"
-        )
+    except Exception:
+        return {
+            "summary": "AI insights are temporarily unavailable. Please try again shortly.",
+            "insights": [
+                {
+                    "title": "Service temporarily unavailable",
+                    "message": "The financial insights service could not be completed right now.",
+                    "severity": "info",
+                }
+            ],
+        }

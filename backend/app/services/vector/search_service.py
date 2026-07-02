@@ -5,7 +5,9 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import SessionLocal
+from app.services.vector.embedding_service import EmbeddingService
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +81,17 @@ class VectorSearchService:
             session.commit()
 
     def search_similar(self, query: str, organization_id: Optional[str] = None, limit: int = 15) -> List[Dict[str, Any]]:
+        embedding_service = EmbeddingService(
+            api_key=settings.ACCOUNTS_OPENROUTER_API_KEY or settings.OPENROUTER_API_KEY,
+            base_url=settings.OPENROUTER_BASE_URL,
+        )
+        embedding = embedding_service.embed_texts([query])[0]
+        embedding = embedding[: settings.EMBEDDING_DIMENSIONS]
+        if len(embedding) < settings.EMBEDDING_DIMENSIONS:
+            embedding = embedding + [0.0] * (settings.EMBEDDING_DIMENSIONS - len(embedding))
+
         with self.session_factory() as session:
-            params: Dict[str, Any] = {"query": query, "limit": limit}
+            params: Dict[str, Any] = {"query": embedding, "limit": limit}
             where_clause = ""
             if organization_id:
                 where_clause = "and organization_id = :organization_id"
@@ -91,10 +102,10 @@ class VectorSearchService:
                     f"""
                     select id, organization_id, entity_type, entity_id, source_table, source_field,
                            chunk_index, chunk_type, content, metadata, created_at, updated_at,
-                           1 - (embedding <=> :query::vector) as similarity
+                           1 - (embedding <=> CAST(:query AS vector)) as similarity
                     from search_documents
                     where embedding is not null {where_clause}
-                    order by embedding <=> :query::vector
+                    order by embedding <=> CAST(:query AS vector)
                     limit :limit
                     """
                 ),

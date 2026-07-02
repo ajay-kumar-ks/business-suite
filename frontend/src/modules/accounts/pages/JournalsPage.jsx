@@ -89,7 +89,7 @@ const JournalsPage = () => {
       else if (action === 'post') await accountsAPI.postJournal(id)
       setSuccess(`Journal ${action}d successfully!`)
       setError('')
-      fetchJournals()
+      await fetchJournals()
     } catch (err) {
       setError(getAPIErrorMessage(err, `Failed to ${action} journal`))
       setSuccess('')

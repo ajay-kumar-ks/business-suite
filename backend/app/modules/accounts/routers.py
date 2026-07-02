@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from decimal import Decimal
 from typing import List
@@ -52,8 +53,12 @@ from app.modules.accounts.reports_services import TrialBalance, ProfitLoss, Bala
 from app.modules.accounts.reports_schemas import TrialBalanceReport, ProfitLossReport, BalanceSheetReport
 from app.modules.accounts.ai_service import get_financial_insights
 from app.modules.accounts.ai_schemas import FinancialInsightsResponse
+from app.modules.accounts.chat_schemas import AccountsChatRequest, AccountsChatResponse
+from app.modules.accounts.chat_service import accounts_chatbot
+from app.modules.accounts.vector_indexer import index_accounts_documents
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/")
@@ -211,6 +216,9 @@ def post_journal_entry_endpoint(
         posted = post_journal_entry(db, journal)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except Exception:
+        logger.exception("Unexpected failure while posting journal %s", journal_id)
+        raise
 
     _load_journal_lines(db, posted)
     return posted
@@ -596,3 +604,16 @@ def ai_insights(db: Session = Depends(get_db)):
                 }
             ],
         }
+
+
+@router.post("/ai/chat", response_model=AccountsChatResponse)
+def accounts_chat(data: AccountsChatRequest):
+    history = [{"role": item.role, "content": item.content} for item in data.history]
+    reply = accounts_chatbot(data.message, history)
+    return AccountsChatResponse(reply=reply)
+
+
+@router.post("/ai/index-documents")
+def index_accounts_vectors(db: Session = Depends(get_db)):
+    indexed = index_accounts_documents(db)
+    return {"status": "ok", "indexed": indexed}

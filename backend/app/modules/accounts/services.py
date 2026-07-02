@@ -1,10 +1,14 @@
+import logging
 from datetime import datetime
 from decimal import Decimal
 from typing import List
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.core.event_bus import event_bus
 from app.modules.accounts.models import ChartOfAccount, JournalEntry, JournalLine, LedgerEntry
 from app.core.database import commit_or_rollback
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_COA_ENTRIES = [
     {"account_code": "1000", "account_name": "Cash", "account_type": "Asset"},
@@ -59,6 +63,32 @@ def validate_journal_lines(lines: List[JournalLine]) -> None:
         raise ValueError("Journal entry cannot contain only zero values.")
 
 
+def _ensure_ledger_entry_sequence(db: Session) -> None:
+    """Ensure PostgreSQL can auto-generate ledger entry IDs for posting."""
+    try:
+        db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE c.relkind = 'S' AND n.nspname = current_schema() AND c.relname = 'ledger_entries_id_seq'
+                ) THEN
+                    CREATE SEQUENCE ledger_entries_id_seq OWNED BY ledger_entries.id;
+                END IF;
+
+                ALTER TABLE ledger_entries
+                ALTER COLUMN id SET DEFAULT nextval('ledger_entries_id_seq');
+
+                PERFORM setval('ledger_entries_id_seq', COALESCE((SELECT MAX(id) + 1 FROM ledger_entries), 1), false);
+            END $$;
+        """))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
 
 def post_journal_entry(db: Session, journal_entry: JournalEntry) -> JournalEntry:
     if journal_entry.status != "approved":
@@ -71,6 +101,8 @@ def post_journal_entry(db: Session, journal_entry: JournalEntry) -> JournalEntry
     )
     if existing_ledger_entry:
         raise ValueError("This journal entry has already been posted to the ledger.")
+
+    _ensure_ledger_entry_sequence(db)
 
     # Query lines explicitly since relationship was removed
     lines = db.query(JournalLine).filter(
@@ -89,7 +121,11 @@ def post_journal_entry(db: Session, journal_entry: JournalEntry) -> JournalEntry
 
     journal_entry.status = "posted"
     journal_entry.posted_at = datetime.utcnow()
-    commit_or_rollback(db)
+    try:
+        commit_or_rollback(db)
+    except Exception:
+        logger.exception("Failed to post journal entry %s", journal_entry.id)
+        raise
     db.refresh(journal_entry)
 
     event_bus.publish(

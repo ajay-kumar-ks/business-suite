@@ -117,6 +117,7 @@ export const accountsAPI = {
   getProfitLoss: () => api.get('/accounts/reports/profit-loss'),
   getBalanceSheet: () => api.get('/accounts/reports/balance-sheet'),
   getAIInsights: () => api.get('/accounts/ai/insights'),
+  chat: (message, history = []) => api.post('/accounts/ai/chat', { message, history }),
 }
 
 export const paymentsAPI = {

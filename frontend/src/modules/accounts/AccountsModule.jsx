@@ -11,6 +11,7 @@ import APPage from './pages/APPage'
 import BudgetsPage from './pages/BudgetsPage'
 import ReportsPage from './pages/ReportsPage'
 import AIInsightsPage from './pages/AIInsightsPage'
+import AccountsChatBot from './components/AccountsChatBot'
 import Loader from '../../components/ui/Loader'
 import '../../styles/AccountsTheme.css'
 import '../../styles/AccountsModule.css'
@@ -78,6 +79,8 @@ const AccountsModuleContent = () => {
           <p>No Accounts pages are available for your department yet.</p>
         </div>
       )}
+
+      <AccountsChatBot />
     </div>
   )
 }
